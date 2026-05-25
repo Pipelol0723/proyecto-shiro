@@ -28,7 +28,7 @@ export type LogContext = Record<string, unknown>;
  * Cualquier otro valor (o ausente) cae a 'info' silenciosamente.
  */
 function readEnvLevel(): LogLevel {
-  const raw = process.env['LOG_LEVEL']?.toLowerCase();
+  const raw = process.env.LOG_LEVEL?.toLowerCase();
   if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') {
     return raw;
   }

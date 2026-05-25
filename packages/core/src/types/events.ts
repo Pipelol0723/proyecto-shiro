@@ -16,14 +16,14 @@
  * automáticamente type-safe en `bus.emit` y `bus.on`.
  */
 
-export type EventMap = {
+export interface EventMap {
   /**
    * Se emite una sola vez en el arranque, cuando el EventBus termina
    * de instanciarse y registrarse en el Orchestrator. Útil como
    * heartbeat inicial y para tests de smoke.
    */
   'bus:ready': { startedAt: string };
-};
+}
 
 /**
  * Helper: el conjunto de nombres de evento válidos como union de strings.

@@ -26,7 +26,7 @@ export type Unsubscribe = () => void;
  *
  * Ver ADR 0001 (event-driven) y ADR 0005 (string literals + EventMap).
  */
-export interface IEventBus<TMap extends Record<string, unknown> = EventMap> {
+export interface IEventBus<TMap extends object = EventMap> {
   /**
    * Emite un evento. Devuelve una promesa que resuelve cuando todos los
    * handlers han terminado (los handlers async se esperan en paralelo).
