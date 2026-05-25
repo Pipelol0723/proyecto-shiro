@@ -1,0 +1,87 @@
+# Configuración de módulos activos
+# Cambia el campo "active" para swappear implementaciones sin tocar código.
+# Cada slot referencia una clase concreta en src/modules/<slot>/
+
+version: 1
+
+modules:
+  # ─────────────────────────────────────────────────────────────
+  # LLM — modelo de lenguaje
+  # Local: Ollama + Qwen 2.5 (gratis, privado)
+  # Cloud: Claude Sonnet (Anthropic, mejor calidad)
+  # ─────────────────────────────────────────────────────────────
+  llm:
+    local:
+      active: OllamaLLM
+      config:
+        # Cambiar a "qwen2.5:14b" cuando haya 16+ GB de VRAM disponible
+        model: 'qwen2.5:7b'
+        host: 'http://localhost:11434'
+        temperature: 0.7
+    cloud:
+      active: AnthropicLLM
+      config:
+        model: 'claude-sonnet-4-6'
+        # api_key se lee de ANTHROPIC_API_KEY en .env (NUNCA hardcodear)
+        max_tokens: 1024
+
+  # ─────────────────────────────────────────────────────────────
+  # Router — decide qué LLM usa cada mensaje
+  # ─────────────────────────────────────────────────────────────
+  router:
+    active: HybridRouter
+    config:
+      classifier_model: 'qwen2.5:7b'
+      # Umbral de complejidad: 0.0 (todo a local) - 1.0 (todo a cloud)
+      cloud_threshold: 0.6
+
+  # ─────────────────────────────────────────────────────────────
+  # STT — voz → texto
+  # ─────────────────────────────────────────────────────────────
+  stt:
+    active: WhisperSTT
+    config:
+      service_url: 'http://localhost:8765'
+      language: 'es'
+      vad_silence_ms: 800
+
+  # ─────────────────────────────────────────────────────────────
+  # TTS — texto → voz (con cadena de fallbacks)
+  # Si el primero falla, el siguiente se activa.
+  # ─────────────────────────────────────────────────────────────
+  tts:
+    active: ElevenLabsTTS
+    fallback_chain:
+      - KokoroTTS
+      - SystemTTS
+    config:
+      voice_id: '' # rellenar con voice_id de ElevenLabs
+      model: 'eleven_multilingual_v2'
+      stability: 0.5
+      similarity_boost: 0.75
+
+  # ─────────────────────────────────────────────────────────────
+  # Memory — memoria persistente
+  # ─────────────────────────────────────────────────────────────
+  memory:
+    active: LettaMemory
+    fallback_chain:
+      - LocalMemory
+    config:
+      letta_url: 'http://localhost:8283'
+      local_db_path: './data/memory.db'
+
+  # ─────────────────────────────────────────────────────────────
+  # Avatar — render visual
+  # ─────────────────────────────────────────────────────────────
+  avatar:
+    active: Live2DAvatar
+    config:
+      model_path: './assets/avatars/default/model.model3.json'
+      idle_animation: true
+
+# ─────────────────────────────────────────────────────────────
+# Personaje activo
+# ─────────────────────────────────────────────────────────────
+character:
+  file: 'src/character/characters/default.yaml'

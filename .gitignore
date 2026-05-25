@@ -20,6 +20,9 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
+# Claude Code (configuración personal de cada dev)
+.claude/settings.local.json
+
 # Tauri
 src-tauri/target/
 
