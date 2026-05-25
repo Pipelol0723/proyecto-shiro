@@ -1,0 +1,19 @@
+{
+  "name": "@proyecto-shiro/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cerebro headless de Proyecto Shiro. EventBus, Orchestrator, ModuleLoader e implementaciones de módulos.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  }
+}

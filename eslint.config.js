@@ -4,15 +4,16 @@ import prettierConfig from 'eslint-config-prettier';
 export default tseslint.config(
   {
     ignores: [
-      'dist/**',
-      'node_modules/**',
-      'coverage/**',
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/coverage/**',
       '**/*.d.ts',
       // Config files at root run in Node directly, no need for type-aware linting.
       'eslint.config.js',
       'vitest.config.ts',
-      '*.config.js',
-      '*.config.ts',
+      'vitest.workspace.ts',
+      '**/*.config.js',
+      '**/*.config.ts',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -21,6 +22,8 @@ export default tseslint.config(
     files: ['**/*.ts'],
     languageOptions: {
       parserOptions: {
+        // projectService autodetecta el tsconfig.json más cercano,
+        // útil en monorepo para que cada paquete use su propio tsconfig.
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
@@ -35,7 +38,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['tests/**/*.ts', '**/*.test.ts'],
+    files: ['**/tests/**/*.ts', '**/*.test.ts'],
     rules: {
       '@typescript-eslint/no-unused-expressions': 'off',
     },

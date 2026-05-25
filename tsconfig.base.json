@@ -4,7 +4,6 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
-    "outDir": "./dist",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -20,15 +19,6 @@
     "declarationMap": true,
     "sourceMap": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "baseUrl": ".",
-    "paths": {
-      "@core/*": ["src/core/*"],
-      "@interfaces/*": ["src/interfaces/*"],
-      "@modules/*": ["src/modules/*"],
-      "@character/*": ["src/character/*"]
-    }
-  },
-  "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
+    "verbatimModuleSyntax": true
+  }
 }

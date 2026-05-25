@@ -1,0 +1,10 @@
+{
+  "name": "@proyecto-shiro/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cliente Tauri para Proyecto Shiro. Skeleton: implementación llega en Fase 7.",
+  "dependencies": {
+    "@proyecto-shiro/core": "*"
+  }
+}
