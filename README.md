@@ -50,17 +50,17 @@ npm test
 
 ## Scripts disponibles
 
-| Comando | Descripción |
-|---------|-------------|
-| `npm run build` | Compila TypeScript a `dist/` |
-| `npm run typecheck` | Verifica tipos sin emitir archivos |
-| `npm test` | Ejecuta tests con Vitest |
-| `npm run test:watch` | Tests en modo watch |
-| `npm run test:coverage` | Tests con reporte de cobertura |
-| `npm run lint` | Lintea con ESLint |
-| `npm run lint:fix` | Lintea y arregla lo automatizable |
-| `npm run format` | Formatea con Prettier |
-| `npm run format:check` | Verifica formato sin escribir |
+| Comando                 | Descripción                        |
+| ----------------------- | ---------------------------------- |
+| `npm run build`         | Compila TypeScript a `dist/`       |
+| `npm run typecheck`     | Verifica tipos sin emitir archivos |
+| `npm test`              | Ejecuta tests con Vitest           |
+| `npm run test:watch`    | Tests en modo watch                |
+| `npm run test:coverage` | Tests con reporte de cobertura     |
+| `npm run lint`          | Lintea con ESLint                  |
+| `npm run lint:fix`      | Lintea y arregla lo automatizable  |
+| `npm run format`        | Formatea con Prettier              |
+| `npm run format:check`  | Verifica formato sin escribir      |
 
 ## Estructura del proyecto
 
