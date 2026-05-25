@@ -1,0 +1,39 @@
+# Normaliza line endings: siempre LF en el repo, sin importar el OS del dev.
+# Esto evita que Prettier falle por CRLF cuando se trabaja en Windows.
+
+* text=auto eol=lf
+
+# Archivos binarios (no aplicar normalización)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.flac binary
+*.mp4 binary
+*.webm binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.7z binary
+
+# Modelos / datos pesados (también binarios)
+*.bin binary
+*.gguf binary
+*.moc3 binary
+*.cmo3 binary
+*.model3 binary
+*.physics3 binary
+*.exp3 binary
+
+# Scripts shell siempre LF (críticos)
+*.sh text eol=lf
+
+# Archivos Windows que sí necesitan CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
