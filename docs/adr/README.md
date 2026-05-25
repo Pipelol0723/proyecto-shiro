@@ -1,0 +1,62 @@
+# Architecture Decision Records (ADRs)
+
+Este directorio contiene los **ADRs** del proyecto. Un ADR es un documento
+corto que captura **una decisión arquitectónica importante** junto con su
+contexto y consecuencias.
+
+## ¿Por qué escribir ADRs?
+
+- **Memoria a largo plazo**: dentro de 6 meses no recordarás exactamente
+  por qué elegimos X sobre Y. Un ADR te lo cuenta.
+- **Onboarding**: cualquiera que se sume al proyecto puede entender la
+  historia leyendo los ADRs en orden.
+- **Disciplina**: te obliga a articular el porqué de una decisión, no solo
+  el qué. Si no puedes escribir el ADR, probablemente no entiendes la
+  decisión todavía.
+- **Audit trail**: si revisamos una decisión más adelante (porque cambió
+  el contexto), el ADR original sigue siendo válido como histórico. Se
+  añade un nuevo ADR que lo supersede.
+
+## ¿Cuándo escribir un ADR?
+
+Cuando tomes una decisión que cumpla **alguna** de estas:
+
+- Afecta a más de un módulo o paquete.
+- Es difícil o caro de revertir.
+- Introduce o descarta una dependencia importante.
+- Establece un patrón que otros seguirán.
+- Tu yo de dentro de 3 meses preguntará "¿por qué hicimos esto?".
+
+No hace falta ADR para decisiones pequeñas y locales (nombre de variable,
+estructura de un test). Sí hace falta para cambios estructurales.
+
+## Cómo crear uno nuevo
+
+1. Copia `template.md` a `NNNN-titulo-corto-en-kebab-case.md`, donde `NNNN`
+   es el siguiente número libre con padding de ceros.
+2. Rellena las secciones (Status, Context, Decision, Consequences, etc.).
+3. Commit con `docs: add ADR NNNN — <titulo>`.
+4. Si más adelante se invalida, no lo borres: añade un nuevo ADR que lo
+   supersede y cambia el `Status` del antiguo a `Superseded by NNNN`.
+
+## Estados posibles
+
+| Estado               | Significado                                |
+| -------------------- | ------------------------------------------ |
+| `Proposed`           | Sugerido pero aún no acordado.             |
+| `Accepted`           | Decidido y vigente.                        |
+| `Deprecated`         | Ya no aplica pero no hay reemplazo formal. |
+| `Superseded by NNNN` | Reemplazado por otro ADR.                  |
+
+## Índice
+
+| #                                                     | Título                                  | Estado   |
+| ----------------------------------------------------- | --------------------------------------- | -------- |
+| [0001](0001-arquitectura-modular-event-driven.md)     | Arquitectura modular event-driven       | Accepted |
+| [0002](0002-monorepo-npm-workspaces.md)               | Monorepo con npm workspaces             | Accepted |
+| [0003](0003-transport-abstraction-device-registry.md) | Transport abstraction y Device Registry | Accepted |
+
+## Referencias externas
+
+- [Michael Nygard — Documenting Architecture Decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
+- [adr.github.io](https://adr.github.io/) — colección de ejemplos y plantillas.
