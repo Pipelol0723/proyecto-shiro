@@ -50,11 +50,13 @@ estructura de un test). Sí hace falta para cambios estructurales.
 
 ## Índice
 
-| #                                                     | Título                                  | Estado   |
-| ----------------------------------------------------- | --------------------------------------- | -------- |
-| [0001](0001-arquitectura-modular-event-driven.md)     | Arquitectura modular event-driven       | Accepted |
-| [0002](0002-monorepo-npm-workspaces.md)               | Monorepo con npm workspaces             | Accepted |
-| [0003](0003-transport-abstraction-device-registry.md) | Transport abstraction y Device Registry | Accepted |
+| #                                                     | Título                                           | Estado   |
+| ----------------------------------------------------- | ------------------------------------------------ | -------- |
+| [0001](0001-arquitectura-modular-event-driven.md)     | Arquitectura modular event-driven                | Accepted |
+| [0002](0002-monorepo-npm-workspaces.md)               | Monorepo con npm workspaces                      | Accepted |
+| [0003](0003-transport-abstraction-device-registry.md) | Transport abstraction y Device Registry          | Accepted |
+| [0004](0004-custom-logger.md)                         | Logger custom sin dependencias                   | Accepted |
+| [0005](0005-typed-events-string-literals.md)          | Tipado de eventos con string literals y EventMap | Accepted |
 
 ## Referencias externas
 
