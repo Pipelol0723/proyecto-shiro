@@ -1,0 +1,17 @@
+# Configuración de dispositivos IoT (Fase 11 — post-MVP)
+# Reservado para integración futura con Home Assistant, MQTT, etc.
+
+version: 1
+
+# Por ahora vacío. Estructura ejemplo cuando se implemente:
+# devices:
+#   - id: living-room-light
+#     type: light
+#     protocol: mqtt
+#     topic: home/living/light
+#   - id: temp-sensor
+#     type: sensor
+#     protocol: homeassistant
+#     entity_id: sensor.living_room_temperature
+
+devices: []
