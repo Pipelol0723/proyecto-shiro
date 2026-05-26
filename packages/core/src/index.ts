@@ -3,7 +3,10 @@
  *
  * Cliente típico (futuro `@proyecto-shiro/desktop`, `@proyecto-shiro/mobile`):
  *
- *   import { EventBus, Logger, InProcessTransport } from '@proyecto-shiro/core';
+ *   import {
+ *     ConfigLoader, ModuleLoader, Orchestrator,
+ *     EventBus, InProcessTransport, Logger,
+ *   } from '@proyecto-shiro/core';
  *
  * Las interfaces se exportan como tipos puros (`export type`) para que
  * el cliente pueda implementar módulos propios sin importar runtime extra.
@@ -25,3 +28,13 @@ export { EventBus } from './core/event-bus.js';
 export type { EventBusOptions } from './core/event-bus.js';
 
 export { InProcessTransport } from './core/transports/in-process-transport.js';
+
+// Loader y Orchestrator
+export { ModuleLoader, ModuleLoaderError } from './core/module-loader.js';
+export type { ModuleDeps, ModuleFactory } from './core/module-loader.js';
+
+export { Orchestrator, OrchestratorError } from './core/orchestrator.js';
+export type { LoadedModules, OrchestratorOptions } from './core/orchestrator.js';
+
+// Config (schemas + loader)
+export * from './config/index.js';
