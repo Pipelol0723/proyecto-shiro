@@ -41,6 +41,9 @@ export default tseslint.config(
     files: ['**/tests/**/*.ts', '**/*.test.ts'],
     rules: {
       '@typescript-eslint/no-unused-expressions': 'off',
+      // En tests usamos expect(mock.fn) que ESLint detecta como unbound
+      // method, pero es el patrón canónico de assertions con Vitest.
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
   prettierConfig,
