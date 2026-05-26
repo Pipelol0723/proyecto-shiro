@@ -14,6 +14,8 @@ export default tseslint.config(
       'vitest.workspace.ts',
       '**/*.config.js',
       '**/*.config.ts',
+      // Bundle del diseño exportado por Claude Design — referencia, no codigo.
+      'docs/design-mockup/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
