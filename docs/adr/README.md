@@ -59,6 +59,9 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0005](0005-typed-events-string-literals.md)          | Tipado de eventos con string literals y EventMap | Accepted |
 | [0006](0006-config-validation-zod.md)                 | Validación de configuración con zod              | Accepted |
 | [0007](0007-module-loader-registry.md)                | ModuleLoader con factory registry                | Accepted |
+| [0008](0008-cliente-desktop-vite-react.md)            | Cliente desktop con Vite + React + TypeScript    | Accepted |
+| [0009](0009-orbe-placeholder-avatar.md)               | Orbe SVG como placeholder visual del avatar      | Accepted |
+| [0010](0010-wiring-cliente-core-eventbus.md)          | Wiring del cliente desktop con el EventBus       | Accepted |
 
 ## Referencias externas
 

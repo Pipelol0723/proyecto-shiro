@@ -6,3 +6,6 @@ package-lock.json
 
 # Documento maestro escrito por el autor — no reformatear
 plan-modular-ai-companion.md
+
+# Bundle del diseño exportado por Claude Design — referencia, no codigo
+docs/design-mockup/**
