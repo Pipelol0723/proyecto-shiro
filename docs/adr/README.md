@@ -57,6 +57,8 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0003](0003-transport-abstraction-device-registry.md) | Transport abstraction y Device Registry          | Accepted |
 | [0004](0004-custom-logger.md)                         | Logger custom sin dependencias                   | Accepted |
 | [0005](0005-typed-events-string-literals.md)          | Tipado de eventos con string literals y EventMap | Accepted |
+| [0006](0006-config-validation-zod.md)                 | Validación de configuración con zod              | Accepted |
+| [0007](0007-module-loader-registry.md)                | ModuleLoader con factory registry                | Accepted |
 
 ## Referencias externas
 
