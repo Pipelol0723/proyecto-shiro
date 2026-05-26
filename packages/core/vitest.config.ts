@@ -19,12 +19,4 @@ export default defineConfig({
       },
     },
   },
-  resolve: {
-    alias: {
-      '@core': new URL('./src/core', import.meta.url).pathname,
-      '@interfaces': new URL('./src/interfaces', import.meta.url).pathname,
-      '@modules': new URL('./src/modules', import.meta.url).pathname,
-      '@character': new URL('./src/character', import.meta.url).pathname,
-    },
-  },
 });
