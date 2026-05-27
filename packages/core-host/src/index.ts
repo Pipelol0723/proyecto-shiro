@@ -20,3 +20,18 @@ export const VERSION = '0.1.0';
 
 export { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 export type { WebSocketServerTransportOptions } from './transports/websocket-server-transport.js';
+
+export { bootstrap } from './bootstrap.js';
+export type { BootstrapOptions, BootstrapResult } from './bootstrap.js';
+
+export { wireMockConversationFlow } from './mocks/mock-conversation-flow.js';
+export type { MockConversationFlowOptions } from './mocks/mock-conversation-flow.js';
+
+export {
+  NoopAvatar,
+  NoopLLM,
+  NoopMemory,
+  NoopRouter,
+  NoopSTT,
+  NoopTTS,
+} from './mocks/noop-modules.js';

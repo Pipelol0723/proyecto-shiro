@@ -5,13 +5,15 @@
  *   - El orbe (avatar placeholder) — reactivo al state del companion.
  *   - Subtítulos en vivo (sttLive cuando el usuario habla, subtitle
  *     cuando Shiro habla).
- *   - Input de texto para enviar mensajes manualmente.
- *   - Botón demo que dispara el sample flow simulado.
+ *   - Input de texto para enviar mensajes manualmente → emite
+ *     `user:message` al bus.
+ *   - Botón demo (icono micrófono) que emite un mensaje canned para
+ *     probar el ciclo sin teclear.
  *   - ChatPanel lateral con historial.
  *
- * En PR C todos los datos vienen del reducer alimentado por eventos
- * simulados. Cuando lleguen los módulos reales (LLM, STT, TTS) los
- * eventos serán reales y esta pantalla no cambia.
+ * Toda la lógica del turno (router/llm/tts) vive server-side desde
+ * ADR 0012 — el cliente solo emite `user:message` y consume los
+ * eventos que el server emite de vuelta.
  */
 
 import { useState } from 'react';
@@ -20,34 +22,32 @@ import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
 import { useCompanionState } from '../../state/useCompanionState';
 import { ChatPanel } from './ChatPanel';
-import { runSampleFlow } from './sample-flow';
 import styles from './ConversationScreen.module.css';
 
 const LOCAL_USER_ID = 'me';
+
+/** Mensaje canned que dispara el botón del micrófono (placeholder de STT real). */
+const DEMO_MESSAGE = 'Hola Shiro, ¿cómo estás?';
 
 export function ConversationScreen(): JSX.Element {
   const bus = useBus();
   const [state] = useCompanionState();
   const [draft, setDraft] = useState('');
   const [chatOpen, setChatOpen] = useState(true);
-  const [running, setRunning] = useState(false);
 
-  async function runFlow(userInput?: string): Promise<void> {
-    if (running) return;
-    setRunning(true);
-    try {
-      await runSampleFlow({ bus, userId: LOCAL_USER_ID, userInput });
-    } finally {
-      setRunning(false);
-    }
+  const sending = state.listening || state.thinking || state.speaking;
+
+  async function sendMessage(text: string): Promise<void> {
+    if (sending || !text.trim()) return;
+    await bus.emit('user:message', { text: text.trim(), userId: LOCAL_USER_ID });
   }
 
   function onSubmitText(e: React.FormEvent): void {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || running) return;
+    if (!text || sending) return;
     setDraft('');
-    void runFlow(text);
+    void sendMessage(text);
   }
 
   return (
@@ -81,10 +81,10 @@ export function ConversationScreen(): JSX.Element {
           <button
             type="button"
             className={styles.iconBtn}
-            disabled={running}
-            onClick={() => void runFlow()}
-            title="Probar flujo simulado"
-            aria-label="Probar flujo simulado"
+            disabled={sending}
+            onClick={() => void sendMessage(DEMO_MESSAGE)}
+            title="Enviar mensaje de prueba"
+            aria-label="Enviar mensaje de prueba"
           >
             <IconMic />
           </button>
@@ -93,7 +93,7 @@ export function ConversationScreen(): JSX.Element {
             className={styles.input}
             placeholder="Escribe a Shiro…"
             value={draft}
-            disabled={running}
+            disabled={sending}
             onChange={(e) => {
               setDraft(e.currentTarget.value);
             }}
@@ -101,7 +101,7 @@ export function ConversationScreen(): JSX.Element {
           <button
             type="submit"
             className={`${styles.iconBtn} ${styles.send}`}
-            disabled={running || !draft.trim()}
+            disabled={sending || !draft.trim()}
             aria-label="Enviar"
           >
             <IconSend />
