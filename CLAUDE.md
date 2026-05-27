@@ -49,14 +49,15 @@ Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
 ```
 packages/
 ├── core/      → @proyecto-shiro/core    (cerebro headless: lógica del companion)
-└── desktop/   → @proyecto-shiro/desktop (cliente Vite + React + TS, en construcción)
+└── desktop/   → @proyecto-shiro/desktop (cliente Vite + React + TS)
 
 config/        → modules.config.yaml + devices.config.yaml (runtime)
 docs/          → architecture.md + adr/ + design-mockup/
 ```
 
-Paquetes previstos: `mobile`, `arduino-bridge`, `iot-bridge`. Cuando se
-añadan, todos consumen `@proyecto-shiro/core` como dependencia local.
+Paquetes previstos: `core-host` (servidor Node que arranca el Orchestrator
+y expone WebSocket — entra en el hito LLM), `mobile`, `arduino-bridge`,
+`iot-bridge`. Todos consumen `@proyecto-shiro/core` como dependencia local.
 
 ### Orden de trabajo actualizado
 
@@ -67,8 +68,8 @@ y LLM:
 
 1. **Setup** ✅ — monorepo, CI, ADRs, CLAUDE.md.
 2. **Core** ✅ — EventBus, Orchestrator, ModuleLoader, 9 interfaces, 53 tests.
-3. **Cliente desktop** 🟡 _en curso_ — Vite + React + orbe placeholder + 3 temas.
-4. **LLM** — Ollama + Anthropic + HybridRouter.
+3. **Cliente desktop** ✅ — Vite + React + orbe + 3 temas + 5 pantallas + EventBus wiring in-process.
+4. **LLM** 🟡 _próximo_ — split cliente/server: nuevo paquete `core-host` (proceso Node) con WebSocketTransport, luego Ollama + Anthropic + HybridRouter. El core se mueve a Node-side para que la API key de Anthropic no viva en el bundle del browser.
 5. **Memoria** — Letta + LocalMemory fallback.
 6. **STT** — faster-whisper microservicio Python.
 7. **TTS** — ElevenLabs + Kokoro + SystemTTS.

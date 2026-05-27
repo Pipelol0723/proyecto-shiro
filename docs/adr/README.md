@@ -50,19 +50,21 @@ estructura de un test). Sí hace falta para cambios estructurales.
 
 ## Índice
 
-| #                                                     | Título                                           | Estado   |
-| ----------------------------------------------------- | ------------------------------------------------ | -------- |
-| [0001](0001-arquitectura-modular-event-driven.md)     | Arquitectura modular event-driven                | Accepted |
-| [0002](0002-monorepo-npm-workspaces.md)               | Monorepo con npm workspaces                      | Accepted |
-| [0003](0003-transport-abstraction-device-registry.md) | Transport abstraction y Device Registry          | Accepted |
-| [0004](0004-custom-logger.md)                         | Logger custom sin dependencias                   | Accepted |
-| [0005](0005-typed-events-string-literals.md)          | Tipado de eventos con string literals y EventMap | Accepted |
-| [0006](0006-config-validation-zod.md)                 | Validación de configuración con zod              | Accepted |
-| [0007](0007-module-loader-registry.md)                | ModuleLoader con factory registry                | Accepted |
-| [0008](0008-cliente-desktop-vite-react.md)            | Cliente desktop con Vite + React + TypeScript    | Accepted |
-| [0009](0009-orbe-placeholder-avatar.md)               | Orbe SVG como placeholder visual del avatar      | Accepted |
-| [0010](0010-wiring-cliente-core-eventbus.md)          | Wiring del cliente desktop con el EventBus       | Accepted |
-| [0011](0011-core-split-browser-node.md)               | Split del core en entries browser-safe / Node    | Accepted |
+| #                                                     | Título                                              | Estado   |
+| ----------------------------------------------------- | --------------------------------------------------- | -------- |
+| [0001](0001-arquitectura-modular-event-driven.md)     | Arquitectura modular event-driven                   | Accepted |
+| [0002](0002-monorepo-npm-workspaces.md)               | Monorepo con npm workspaces                         | Accepted |
+| [0003](0003-transport-abstraction-device-registry.md) | Transport abstraction y Device Registry             | Accepted |
+| [0004](0004-custom-logger.md)                         | Logger custom sin dependencias                      | Accepted |
+| [0005](0005-typed-events-string-literals.md)          | Tipado de eventos con string literals y EventMap    | Accepted |
+| [0006](0006-config-validation-zod.md)                 | Validación de configuración con zod                 | Accepted |
+| [0007](0007-module-loader-registry.md)                | ModuleLoader con factory registry                   | Accepted |
+| [0008](0008-cliente-desktop-vite-react.md)            | Cliente desktop con Vite + React + TypeScript       | Accepted |
+| [0009](0009-orbe-placeholder-avatar.md)               | Orbe SVG como placeholder visual del avatar         | Accepted |
+| [0010](0010-wiring-cliente-core-eventbus.md)          | Wiring del cliente desktop con el EventBus          | Accepted |
+| [0011](0011-core-split-browser-node.md)               | Split del core en entries browser-safe / Node       | Accepted |
+| [0012](0012-split-cliente-server-core-host.md)        | Split cliente/server — el core corre en `core-host` | Accepted |
+| [0013](0013-protocolo-websocket-eventbus.md)          | Protocolo WebSocket para el EventBus                | Accepted |
 
 ## Referencias externas
 

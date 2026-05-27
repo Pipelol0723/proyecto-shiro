@@ -4,11 +4,14 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: fases **Setup** y **Core** completas (53 tests, CI verde).
-> Próximo hito: **Cliente desktop** (Vite + React + TS) con orbe placeholder
-> del avatar — empieza ahora, no en Fase 7 como decía el plan original.
-> Ver [`docs/architecture.md`](docs/architecture.md) para arquitectura
-> viva y [`docs/adr/`](docs/adr/) para el historial de decisiones.
+> **Estado**: fases **Setup**, **Core** y **Cliente desktop** completas
+> (71 tests, CI verde). Próximo hito: **LLM** — arranca con el split
+> cliente/server (nuevo paquete `core-host`) para que la API key de
+> Anthropic viva en un proceso Node aparte y no en el bundle del browser.
+> Ver [ADR 0012](docs/adr/0012-split-cliente-server-core-host.md) y
+> [ADR 0013](docs/adr/0013-protocolo-websocket-eventbus.md).
+> Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
+> historial de decisiones en [`docs/adr/`](docs/adr/).
 
 ## 🗺️ Roadmap
 
@@ -18,23 +21,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado          | Notas                                                                 |
-| ------------------- | --------------- | --------------------------------------------------------------------- |
-| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                      |
-| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces, 53 tests          |
-| **Cliente desktop** | 🟡 **en curso** | Vite + React + TS, orbe placeholder, 3 temas (kawaii/cyber/editorial) |
-| **LLM**             | ⏸️ pendiente    | Ollama (Qwen 2.5) + Anthropic SDK + HybridRouter                      |
-| **Memoria**         | ⏸️ pendiente    | Letta self-hosted + LocalMemory SQLite (fallback)                     |
-| **STT**             | ⏸️ pendiente    | faster-whisper microservicio Python (puerto 8765)                     |
-| **TTS**             | ⏸️ pendiente    | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                 |
-| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                    |
-| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                           |
-| **Post-MVP**        |                 |                                                                       |
-| Plugins             | ⏳ futuro       | Sistema de extensiones                                                |
-| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket            |
-| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                    |
-| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                         |
-| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                  |
+| Hito                | Estado          | Notas                                                                              |
+| ------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                   |
+| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces, 53 tests                       |
+| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring (71 tests)          |
+| **LLM**             | 🟡 **en curso** | Split cliente/server (`core-host` + WebSocket) → Ollama + Anthropic + HybridRouter |
+| **Memoria**         | ⏸️ pendiente    | Letta self-hosted + LocalMemory SQLite (fallback)                                  |
+| **STT**             | ⏸️ pendiente    | faster-whisper microservicio Python (puerto 8765)                                  |
+| **TTS**             | ⏸️ pendiente    | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                              |
+| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                 |
+| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                        |
+| **Post-MVP**        |                 |                                                                                    |
+| Plugins             | ⏳ futuro       | Sistema de extensiones                                                             |
+| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                         |
+| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                 |
+| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                      |
+| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                               |
 
 ## Stack
 
@@ -102,25 +105,25 @@ npm test -w @proyecto-shiro/core
 ```
 proyecto-shiro/
 ├── packages/
-│   ├── core/                       ← @proyecto-shiro/core (cerebro headless)
+│   ├── core/                       ← @proyecto-shiro/core (cerebro headless, browser-safe + entry Node)
 │   │   ├── src/
-│   │   │   ├── core/               ← EventBus, Orchestrator, ModuleLoader, Logger
+│   │   │   ├── core/               ← EventBus, Orchestrator, ModuleLoader, Logger, transports
 │   │   │   ├── config/             ← Schemas zod + ConfigLoader
 │   │   │   ├── interfaces/         ← Contratos: ILLMModule, ITTSModule, etc.
 │   │   │   ├── modules/            ← Implementaciones (stt, tts, llm, memory, avatar, router)
 │   │   │   ├── plugins/            ← Features futuras (IoT, devices, etc.)
 │   │   │   ├── character/          ← Definiciones de personaje YAML
 │   │   │   └── types/              ← Emotion, EventMap
-│   │   ├── tests/                  ← Unit + integration (53 tests)
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   ├── tsconfig.build.json
-│   │   └── vitest.config.ts
+│   │   ├── tests/                  ← Unit + integration
+│   │   └── …
 │   │
-│   └── desktop/                    ← @proyecto-shiro/desktop (cliente Vite+React, en construcción)
+│   ├── core-host/                  ← @proyecto-shiro/core-host (server Node, ADR 0012)
+│   │   ├── src/                    ← Bootstrap del Orchestrator + servidor WebSocket
+│   │   └── …
+│   │
+│   └── desktop/                    ← @proyecto-shiro/desktop (cliente Vite+React)
 │       ├── src/                    ← React app: orbe + 5 pantallas + 3 temas
-│       ├── package.json
-│       └── tsconfig.json
+│       └── …
 │
 ├── config/                         ← YAML editable (módulos activos, dispositivos)
 │   ├── modules.config.yaml
@@ -147,7 +150,8 @@ tooling (TS, ESLint, Prettier, Vitest) desde la raíz. Ver
 [ADR 0002](docs/adr/0002-monorepo-npm-workspaces.md).
 
 Futuros paquetes previstos: `@proyecto-shiro/mobile`, `@proyecto-shiro/arduino-bridge`,
-`@proyecto-shiro/iot-bridge`.
+`@proyecto-shiro/iot-bridge`. Todos consumirán el `core` vía interfaces y se
+conectarán al `core-host` por WebSocket (mismo patrón que el cliente desktop).
 
 ## Configuración
 
