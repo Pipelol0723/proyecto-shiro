@@ -4,9 +4,17 @@ export interface LLMRequest {
   /** Texto del usuario que se envía al modelo. */
   text: string;
   /**
-   * Contexto previo (historial de conversación, system prompt del personaje,
-   * datos de memoria semántica). La forma exacta queda a discreción del LLM
-   * que lo consume.
+   * System prompt del personaje. Lo construye `buildSystemPrompt(character)`
+   * a partir del YAML del personaje activo. Persiste turn a turn — el
+   * carácter no cambia.
+   *
+   * Opcional para no forzar a los clientes de test a construirlo.
+   */
+  systemPrompt?: string;
+  /**
+   * Contexto adicional inyectado por turno: historial de conversación
+   * reciente (módulo Memory), datos relevantes de búsqueda semántica.
+   * La forma exacta queda a discreción del LLM que lo consume.
    */
   context?: string;
   userId?: string;
