@@ -1,123 +1,47 @@
 /**
- * App — playground del orbe (PR B del cliente desktop).
+ * App — layout final del cliente desktop.
  *
- * Renderiza el orbe en el centro con controles para forzar emoción y
- * estados (speaking / listening / thinking) + selector de tema.
+ * Sustituye el playground del PR B por la estructura real: BusProvider
+ * envuelve todo, Sidebar elige pantalla, Header muestra título + tema.
+ * Las 5 pantallas conviven; solo se renderiza la activa.
  *
- * Esta UI es temporal — sirve para validar el orbe + temas. En PR C
- * se reemplaza por el layout real (sidebar + header + screens) y los
- * controles desaparecen porque el state vendrá del EventBus.
+ * El reducer + suscripciones al bus viven dentro de
+ * `ConversationScreen` vía `useCompanionState`. Las otras 4 pantallas
+ * son stubs estáticos sin acoplamiento al state del companion.
  */
 
 import { useState } from 'react';
-import { Orb } from './components/Orb';
-import type { Emotion } from './components/Orb';
-import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { BusProvider } from './bus-context';
+import { Sidebar, Header, type ScreenId } from './layout';
+import {
+  ConversationScreen,
+  ModulesScreen,
+  CharacterScreen,
+  AvatarScreen,
+  SetupScreen,
+} from './screens';
 import type { ThemeName } from './themes';
 import styles from './App.module.css';
 
-const EMOTIONS: readonly Emotion[] = [
-  'neutral',
-  'alegre',
-  'pensativa',
-  'sorprendida',
-  'triste',
-  'enojada',
-] as const;
-
-const EMOTION_LABELS: Record<Emotion, string> = {
-  neutral: 'Neutral',
-  alegre: 'Alegre',
-  pensativa: 'Pensativa',
-  sorprendida: 'Sorprendida',
-  triste: 'Triste',
-  enojada: 'Enojada',
-};
-
 export function App(): JSX.Element {
   const [theme, setTheme] = useState<ThemeName>('kawaii');
-  const [emotion, setEmotion] = useState<Emotion>('neutral');
-  const [speaking, setSpeaking] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [thinking, setThinking] = useState(false);
+  const [screen, setScreen] = useState<ScreenId>('chat');
 
   return (
-    <main className={styles.playground}>
-      <header className={styles.header}>
-        <div className={styles.brand}>
-          <h1 className={styles.title}>Shiro</h1>
-          <p className={styles.subtitle}>playground del orbe · PR B</p>
-        </div>
-        <ThemeSwitcher value={theme} onChange={setTheme} />
-      </header>
-
-      <section className={styles.stage}>
-        <Orb
-          emotion={emotion}
-          speaking={speaking}
-          listening={listening}
-          thinking={thinking}
-          size={320}
-        />
-      </section>
-
-      <footer className={styles.controls}>
-        <div className={styles.controlGroup}>
-          <span className={styles.controlLabel}>Emoción</span>
-          <div className={styles.pillRow} role="radiogroup" aria-label="Emoción">
-            {EMOTIONS.map((e) => (
-              <button
-                key={e}
-                type="button"
-                role="radio"
-                aria-checked={emotion === e}
-                className={`${styles.pill} ${emotion === e ? styles.pillActive : ''}`}
-                onClick={() => {
-                  setEmotion(e);
-                }}
-              >
-                {EMOTION_LABELS[e]}
-              </button>
-            ))}
+    <BusProvider>
+      <div className={styles.app}>
+        <Sidebar active={screen} onChange={setScreen} />
+        <main className={styles.main}>
+          <Header screen={screen} theme={theme} onThemeChange={setTheme} />
+          <div className={styles.content}>
+            {screen === 'chat' && <ConversationScreen />}
+            {screen === 'modules' && <ModulesScreen />}
+            {screen === 'character' && <CharacterScreen />}
+            {screen === 'avatar' && <AvatarScreen />}
+            {screen === 'setup' && <SetupScreen />}
           </div>
-        </div>
-
-        <div className={styles.controlGroup}>
-          <span className={styles.controlLabel}>Estado</span>
-          <div className={styles.pillRow}>
-            <button
-              type="button"
-              aria-pressed={speaking}
-              className={`${styles.pill} ${speaking ? styles.pillActive : ''}`}
-              onClick={() => {
-                setSpeaking((v) => !v);
-              }}
-            >
-              speaking
-            </button>
-            <button
-              type="button"
-              aria-pressed={listening}
-              className={`${styles.pill} ${listening ? styles.pillActive : ''}`}
-              onClick={() => {
-                setListening((v) => !v);
-              }}
-            >
-              listening
-            </button>
-            <button
-              type="button"
-              aria-pressed={thinking}
-              className={`${styles.pill} ${thinking ? styles.pillActive : ''}`}
-              onClick={() => {
-                setThinking((v) => !v);
-              }}
-            >
-              thinking
-            </button>
-          </div>
-        </div>
-      </footer>
-    </main>
+        </main>
+      </div>
+    </BusProvider>
   );
 }
