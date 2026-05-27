@@ -3,14 +3,19 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-05-25 (post Fase 0).
+> **Última actualización**: 2026-05-26 — tras mergear los hitos
+> **Setup** y **Core** (Fases 0 + 1A + 1B del plan original) y formalizar
+> el adelanto del **Cliente desktop** vía ADRs 0008-0010.
 
 ## Visión a vista de pájaro
 
-Proyecto Shiro es un AI companion modular que se puede ejecutar como:
+Proyecto Shiro es un AI companion modular que se ejecuta como:
 
-- **App desktop autocontenida** (Tauri) — uso típico hoy.
-- **Servicio headless** con clientes remotos (móvil, Arduino, IoT) — meta a medio plazo.
+- **App desktop** — uso típico hoy. Cliente Vite+React empaquetado con
+  Tauri en el hito Packaging.
+- **Servicio headless** con clientes remotos (móvil, Arduino, IoT) — meta
+  a medio plazo. El cerebro (core) corre como proceso/servicio
+  independiente; cualquier cliente se conecta vía Transport.
 
 Esta dualidad determina la arquitectura: un **cerebro (core)
 independiente** y **clientes ligeros** que se conectan.
@@ -23,8 +28,8 @@ graph TB
         Root[/"raíz<br>tooling compartido"/]
 
         subgraph "packages/"
-            Core["core<br>cerebro headless<br>@proyecto-shiro/core"]
-            Desktop["desktop<br>cliente Tauri<br>@proyecto-shiro/desktop"]
+            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core listos"]
+            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>🟡 en construcción"]
             Mobile["mobile<br>cliente futuro<br>@proyecto-shiro/mobile"]
             Arduino["arduino-bridge<br>puente Serial<br>@proyecto-shiro/arduino-bridge"]
             IoT["iot-bridge<br>MQTT/Home Assistant<br>@proyecto-shiro/iot-bridge"]
@@ -43,6 +48,7 @@ graph TB
     end
 
     style Core fill:#4a9eff,stroke:#333,color:#fff
+    style Desktop fill:#f4b400,stroke:#333,color:#fff
     style Mobile stroke-dasharray: 5 5
     style Arduino stroke-dasharray: 5 5
     style IoT stroke-dasharray: 5 5
@@ -57,13 +63,19 @@ al core** (los clientes consumen el cerebro vía interfaces y eventos).
 graph LR
     subgraph "packages/core/src/"
         subgraph "core/"
-            EventBus[EventBus]
-            Orchestrator[Orchestrator]
-            ModuleLoader[ModuleLoader]
-            Logger[Logger]
+            EventBus[EventBus<br>✅]
+            Orchestrator[Orchestrator<br>✅]
+            ModuleLoader[ModuleLoader<br>✅]
+            Logger[Logger<br>✅]
+            Transports[transports/<br>InProcessTransport ✅]
         end
 
-        subgraph "interfaces/ (contratos)"
+        subgraph "config/"
+            Schemas[schemas.ts<br>zod ✅]
+            ConfigLoader[ConfigLoader<br>✅]
+        end
+
+        subgraph "interfaces/ (contratos ✅)"
             ILLM[ILLMModule]
             ITTS[ITTSModule]
             ISTT[ISTTModule]
@@ -72,9 +84,10 @@ graph LR
             IRou[IRouterModule]
             IDev[IDeviceModule]
             ITrans[ITransport]
+            IBus[IEventBus]
         end
 
-        subgraph "modules/"
+        subgraph "modules/ (pendientes)"
             STT[stt/<br>WhisperSTT]
             TTS[tts/<br>ElevenLabs / Kokoro / SystemTTS]
             LLM[llm/<br>Ollama / Anthropic]
@@ -94,6 +107,9 @@ graph LR
     ModuleLoader --> IAv
     ModuleLoader --> IRou
 
+    ConfigLoader --> Schemas
+    ModuleLoader --> ConfigLoader
+
     ILLM -.implementa.-> LLM
     ITTS -.implementa.-> TTS
     ISTT -.implementa.-> STT
@@ -106,6 +122,7 @@ graph LR
 
     style EventBus fill:#4a9eff,stroke:#333,color:#fff
     style Orchestrator fill:#4a9eff,stroke:#333,color:#fff
+    style ModuleLoader fill:#4a9eff,stroke:#333,color:#fff
 ```
 
 **Claves de lectura:**
@@ -113,39 +130,112 @@ graph LR
 - Las **interfaces** son contratos. Los módulos los implementan; el
   orchestrator y el resto solo conocen los contratos.
 - El **EventBus** no llama directamente a los módulos: emite eventos
-  y los receptores se suscriben. Esto rompe el acoplamiento.
-- El **ModuleLoader** lee `config/modules.config.yaml`, instancia la
-  clase indicada para cada slot y la registra.
+  y los receptores se suscriben. Esto rompe el acoplamiento. Ver
+  [ADR 0001](adr/0001-arquitectura-modular-event-driven.md).
+- El **ModuleLoader** lee `config/modules.config.yaml`, valida con zod,
+  instancia la clase indicada para cada slot y la registra. Ver
+  [ADR 0006](adr/0006-config-validation-zod.md) y
+  [ADR 0007](adr/0007-module-loader-registry.md).
+- El **Orchestrator** ata todo en el arranque, emite `bus:ready` y
+  ofrece un punto de entrada limpio para los clientes.
+
+## Composición del cliente desktop
+
+`@proyecto-shiro/desktop` (Vite + React 18 + TS strict) consume el core
+como dependencia local del workspace. Estructura prevista (ADRs 0008,
+0009, 0010):
+
+```
+packages/desktop/src/
+├── main.tsx                     ← Entry: instancia Logger, EventBus, Orchestrator
+├── bus-context.tsx              ← BusProvider + useBus() + useBusEvent()
+├── state/
+│   └── companion-reducer.ts     ← Reducer alimentado por eventos del bus
+├── components/
+│   ├── Orb/                     ← Placeholder visual del avatar
+│   │   ├── Orb.tsx
+│   │   ├── Orb.module.css
+│   │   └── useOrbAmplitude.ts
+│   ├── Avatar/                  ← Decide Orb vs Live2D (cuando llegue)
+│   ├── Sidebar/
+│   ├── Header/
+│   └── ChatPanel/
+├── screens/
+│   ├── ConversationScreen.tsx
+│   ├── ModulesScreen.tsx        ← UI sobre modules.config.yaml
+│   ├── CharacterScreen.tsx
+│   ├── AvatarScreen.tsx
+│   ├── SetupScreen.tsx
+│   └── OnboardingScreen.tsx
+├── themes/
+│   ├── kawaii.css
+│   ├── cyber.css
+│   └── editorial.css
+└── tweaks/                      ← Panel de configuración runtime
+```
+
+**Tres temas swap-eables** (kawaii pastel / cyberpunk / editorial)
+definidos por CSS vars; el usuario los cambia desde settings sin
+recompilar. Ver el bundle de diseño en
+[`docs/design-mockup/`](design-mockup/).
+
+### Mapeo state ↔ EventBus
+
+El reducer del cliente se alimenta de eventos del core, y dispara
+acciones cuando el usuario actúa:
+
+| Acción del reducer | Origen                               | Evento del EventBus    |
+| ------------------ | ------------------------------------ | ---------------------- |
+| `LISTEN_START`     | `bus.on('stt:listening')` (futuro)   | `stt:listening`        |
+| `STT_PARTIAL`      | `bus.on('stt:partial')`              | `stt:partial`          |
+| `STT_FINAL`        | `bus.on('stt:transcribed')`          | `stt:transcribed`      |
+| `THINK_START`      | `bus.on('router:routed')`            | `router:routed`        |
+| `SHIRO_REPLY`      | `bus.on('llm:responded')`            | `llm:responded`        |
+| `SPEAK_END`        | `bus.on('tts:audio-ended')`          | `tts:audio-ended`      |
+| (usuario escribe)  | `bus.emit('user:message', { text })` | `user:message` (nuevo) |
+
+Convenios documentados en
+[ADR 0010](adr/0010-wiring-cliente-core-eventbus.md).
 
 ## Flujo de una conversación típica
 
 ```mermaid
 sequenceDiagram
     participant User as Usuario
-    participant Mic as Mic (Audio in)
+    participant Client as Cliente desktop<br>(React + EventBus)
+    participant Mic as Micro / Audio in
     participant STT
     participant Bus as EventBus
     participant Router as HybridRouter
     participant LLM as Ollama / Claude
     participant Mem as Memory
     participant TTS
-    participant Avatar
+    participant Avatar as Orbe / Live2D
     participant Speaker as Audio out
 
-    User->>Mic: habla
-    Mic->>STT: audio chunk
-    STT->>Bus: emit("stt:transcribed", { text })
-    Bus->>Router: deliver
-    Bus->>Mem: deliver (registra mensaje)
+    alt Usuario escribe
+        User->>Client: tipea + Enter
+        Client->>Bus: emit("user:message", { text })
+    else Usuario habla
+        User->>Mic: habla
+        Mic->>STT: audio chunk
+        STT->>Bus: emit("stt:transcribed", { text, isFinal: true })
+        Bus->>Client: deliver (UI actualiza subtítulos)
+        STT->>Bus: emit("user:message", { text })
+    end
 
-    Router->>LLM: route(text) → local | cloud
+    Bus->>Router: deliver
+    Bus->>Mem: deliver (registra mensaje user)
+
+    Router->>LLM: route() → local | cloud
     LLM->>Mem: pide contexto reciente
     Mem-->>LLM: contexto
     LLM->>Bus: emit("llm:responded", { text, emotion })
 
+    Bus->>Client: deliver (orbe cambia color, subtítulos)
     Bus->>TTS: deliver
     Bus->>Avatar: deliver (mismo evento → expresión)
-    Bus->>Mem: deliver (registra respuesta)
+    Bus->>Mem: deliver (registra respuesta assistant)
 
     TTS->>Speaker: synth audio
     Avatar->>Speaker: lip sync sincronizado
@@ -154,9 +244,12 @@ sequenceDiagram
 
 **Notas del flujo:**
 
-- Un mismo evento (`llm:responded`) tiene **varios suscriptores**: el TTS
-  lo convierte en audio, el Avatar lo usa para expresión emocional, la
-  Memoria lo persiste. Ninguno sabe de los otros — solo ven el bus.
+- El **cliente es el origen** del evento `user:message` (tanto si el
+  input es texto como si es voz transcrita).
+- Un mismo evento (`llm:responded`) tiene **varios suscriptores**: el
+  cliente actualiza UI, el TTS lo convierte en audio, el Avatar/Orbe
+  lo usa para expresión emocional, la Memoria lo persiste. Ninguno
+  sabe de los otros — solo ven el bus.
 - El `HybridRouter` decide si responde el LLM local (rápido, gratis) o
   el cloud (mejor calidad) según la complejidad estimada del mensaje.
 - La memoria se inserta en dos puntos: lee contexto para el LLM, escribe
@@ -164,23 +257,27 @@ sequenceDiagram
 
 ## Evolución de transportes
 
-Hoy todo corre **in-process** (un solo `node`). Esa es la implementación
-trivial del bus.
+Hoy el cliente desktop comparte el mismo proceso Node del core, así
+que un único `InProcessTransport` cubre el caso. Conforme lleguen
+clientes en otros procesos/dispositivos, se añaden transports nuevos
+**sin tocar los módulos existentes**.
 
 ```mermaid
 graph LR
-    subgraph "Hoy (Fase 1)"
+    subgraph "Hoy"
         Bus1[EventBus] --> IPT1[InProcessTransport]
     end
 
-    subgraph "Mañana (Fase 7 — desktop)"
+    subgraph "Cliente desktop en proceso aparte"
         Bus2[EventBus] --> IPT2[InProcessTransport]
+        Bus2 --> WSDesk[WebSocketTransport]
+        WSDesk -.localhost.-> ClientDesk[Cliente Tauri]
     end
 
-    subgraph "Cuando llegue móvil (Fase 9)"
+    subgraph "Cuando llegue móvil"
         Bus3[EventBus] --> IPT3[InProcessTransport]
-        Bus3 --> WS[WebSocketTransport]
-        WS -.network.-> Mobile[App móvil]
+        Bus3 --> WSMob[WebSocketTransport]
+        WSMob -.network.-> Mobile[App móvil]
     end
 
     subgraph "Cuando llegue Arduino"
@@ -189,7 +286,7 @@ graph LR
         Ser -.USB.-> Ard[Arduino]
     end
 
-    subgraph "Cuando llegue IoT (Fase 11)"
+    subgraph "Cuando llegue IoT"
         Bus5[EventBus] --> IPT5[InProcessTransport]
         Bus5 --> MQTT[MQTTTransport]
         MQTT -.broker.-> HA[Home Assistant]
@@ -208,12 +305,13 @@ Dos archivos YAML en `config/`:
 - **`modules.config.yaml`**: qué implementación se usa en cada slot
   (LLM, TTS, STT, Memory, Avatar, Router). Cadenas de fallback.
 - **`devices.config.yaml`**: catálogo de dispositivos IoT/Arduino
-  controlables (placeholder hoy, se llenará en Fase 11 o antes).
+  controlables (placeholder hoy, se llenará junto con los bridges).
 
-El `ModuleLoader` lee el primero al arrancar. El `DeviceRegistry`
-leerá el segundo.
+El `ModuleLoader` (ya implementado) lee el primero al arrancar y
+valida con **zod**. El `DeviceRegistry` (interfaz definida, sin impl
+todavía) leerá el segundo.
 
-Validación de la forma de los YAML con **zod** (Fase 1).
+Ver [ADR 0006](adr/0006-config-validation-zod.md).
 
 ## Personalidad y personaje
 
@@ -224,24 +322,44 @@ El "carácter" del companion (Shiro) vive en
 - Rasgos de personalidad y estilo de habla.
 - Mapeo de **emociones → parámetros TTS y expresiones del avatar**.
 
-El `CharacterLoader` (Fase 2) inyecta esta info como system prompt en
-cada conversación con el LLM y propaga los parámetros emocionales al
-TTS y al Avatar cuando llega una respuesta.
+El `CharacterLoader` (que se implementará junto al primer LLM real)
+inyectará esta info como system prompt en cada conversación y
+propagará los parámetros emocionales al TTS y al Orbe/Avatar cuando
+llegue una respuesta.
+
+El **orbe placeholder** consume el campo `emotion` del payload de
+`llm:responded` y mapea cada emoción a un gradiente de color via
+CSS vars del tema activo. Ver
+[ADR 0009](adr/0009-orbe-placeholder-avatar.md).
 
 ## Cómo añadir un módulo nuevo (en 5 pasos)
 
 1. Decide qué interfaz implementa (`ILLMModule`, `ITTSModule`, etc.).
    Si no encaja, considera si necesitas una nueva interfaz (escribe un ADR).
 2. Crea la clase en `packages/core/src/modules/<categoría>/MiModulo.ts`.
-3. Implementa los métodos de la interfaz. Comunica via EventBus.
+3. Implementa los métodos de la interfaz. Comunica vía EventBus.
 4. Registra el módulo en `config/modules.config.yaml` (campo `active`
-   del slot correspondiente).
-5. Añade tests en `packages/core/tests/unit/` y opcionalmente integración.
+   del slot correspondiente) y en `ModuleLoader` (registry).
+5. Añade tests en `packages/core/tests/unit/` y opcionalmente
+   integración en `packages/core/tests/integration/`.
 
 Tiempo objetivo: menos de 2 horas para un módulo simple.
 
+## Cómo añadir una pantalla nueva al cliente
+
+1. Crea `packages/desktop/src/screens/MiScreen.tsx`.
+2. Suscríbete a eventos del bus con `useBusEvent` y/o lee state del
+   reducer con `useCompanionState`.
+3. Si necesitas state UI local, usa `useState` en el propio componente.
+4. Añade entrada en el sidebar (`packages/desktop/src/components/Sidebar`).
+5. Tests con Vitest + React Testing Library en
+   `packages/desktop/tests/`.
+
 ## Referencias internas
 
-- [`adr/`](adr/) — historial de decisiones arquitectónicas.
-- [`plan-modular-ai-companion.md`](../plan-modular-ai-companion.md) —
-  visión y plan original.
+- [`adr/`](adr/) — historial completo de decisiones arquitectónicas.
+- [`design-mockup/`](design-mockup/) — bundle del prototipo de Claude
+  Design (referencia visual, no código de producción).
+- [`../plan-modular-ai-companion.md`](../plan-modular-ai-companion.md) —
+  visión y plan original (histórico — conserva la numeración antigua
+  de fases).

@@ -1,5 +1,38 @@
 # 🧩 Plan de Desarrollo: AI Companion — Arquitectura Modular y Escalable
 
+> ⚠️ **DOCUMENTO HISTÓRICO** — Plan original escrito el 2026-05-24 antes
+> de empezar a codear. Se conserva intacto como referencia de "qué
+> pensábamos al principio".
+>
+> **El estado actual del proyecto vive en**:
+>
+> - [`docs/architecture.md`](docs/architecture.md) — arquitectura viva
+>   con diagramas mermaid y mapeo cliente↔core.
+> - [`docs/adr/`](docs/adr/) — todas las decisiones arquitectónicas
+>   tomadas desde entonces (1-10 y subiendo), con su contexto y
+>   alternativas descartadas.
+> - [`README.md`](README.md) — estado de cada hito y roadmap.
+>
+> **Cambios principales respecto a este plan:**
+>
+> - **Numeración de fases → nombres**: el cliente desktop se intercaló
+>   entre Core y LLM, así que pasamos a llamar las fases por su contenido
+>   (Setup, Core, Cliente desktop, LLM, Memoria, STT, TTS, Avatar Live2D,
+>   Packaging Tauri) en lugar de Fase 0–7.
+> - **Cliente desktop adelantado**: ya no es Fase 7. Se construye ahora,
+>   entre Core y LLM, con stack Vite + React + TS (no solo Tauri).
+>   Ver [ADR 0008](docs/adr/0008-cliente-desktop-vite-react.md).
+> - **Orbe placeholder del avatar**: hasta que llegue el hito Avatar
+>   Live2D, el cliente muestra un orbe SVG animado.
+>   Ver [ADR 0009](docs/adr/0009-orbe-placeholder-avatar.md).
+> - **Transports separados del EventBus**: la arquitectura prevé múltiples
+>   transports (in-process, WebSocket, MQTT, Serial) desde el día uno.
+>   Ver [ADR 0003](docs/adr/0003-transport-abstraction-device-registry.md).
+>
+> El texto debajo de este banner permanece sin modificar.
+
+---
+
 ## Visión del Proyecto
 
 Un framework propio para AI companions con avatar animado estilo VTuber, voz en
