@@ -37,10 +37,10 @@ describe('EventBus', () => {
   let bus: EventBus<TestEvents>;
 
   beforeEach(() => {
-    // El bus loguea a stderr cuando un handler o transport falla.
-    // Silenciamos esa salida — los tests verifican comportamiento,
-    // no formato de logs.
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    // El bus loguea con console.error cuando un handler o transport
+    // falla (Logger usa console.* como sink tras ADR 0011). Silenciamos
+    // esa salida — los tests verifican comportamiento, no logs.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     bus = new EventBus<TestEvents>({ logger: silentLogger() });
   });
 

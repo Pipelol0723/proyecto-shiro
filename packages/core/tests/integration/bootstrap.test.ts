@@ -15,8 +15,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  ConfigLoader,
-  ConfigValidationError,
   EventBus,
   Logger,
   ModuleLoader,
@@ -25,6 +23,7 @@ import {
   Orchestrator,
   OrchestratorError,
 } from '../../src/index.js';
+import { ConfigLoader, ConfigValidationError } from '../../src/node.js';
 import type { ModuleDeps } from '../../src/core/module-loader.js';
 import {
   MockAvatar,
@@ -94,9 +93,11 @@ describe('bootstrap completo del core', () => {
   let configLoader: ConfigLoader;
 
   beforeEach(() => {
-    // Silencia stderr para los tests que disparan logs de error
-    // intencionalmente (orchestrator init dos veces, factory faltante).
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    // Silencia console.error/warn para los tests que disparan logs de
+    // error intencionalmente (orchestrator init dos veces, factory
+    // faltante). El Logger ahora usa console.* como sink (ADR 0011).
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     logger = silentLogger();
     bus = new EventBus({ logger });
     loader = new ModuleLoader({ logger });
@@ -236,8 +237,9 @@ modules:
     });
 
     it('register sobrescribe factory existente y loguea warn', () => {
-      const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      // Logger por defecto omite warn pero el spy lo captura igualmente.
+      // El Logger ahora usa console.* como sink (ADR 0011), así que el
+      // spy va sobre console.warn en lugar de process.stderr.
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const verboseLogger = new Logger('warn');
       const verbose = new ModuleLoader({ logger: verboseLogger });
 
@@ -246,7 +248,6 @@ modules:
       verbose.register('MockLLM', first);
       verbose.register('MockLLM', second);
 
-      // El warning debe aparecer en stderr (capturado por el spy).
       expect(warnSpy).toHaveBeenCalled();
     });
   });

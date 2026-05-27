@@ -1,15 +1,14 @@
 /**
- * Tipos locales del Orb.
+ * Tipos del Orb.
  *
- * TODO: Cuando se haga el split browser/node del core (task #18 / ADR
- * pendiente), reemplazar `Emotion` aquí por:
- *   `import type { Emotion } from '@proyecto-shiro/core';`
- *
- * Por ahora se inlinea para evitar pull del barrel del core (que tira
- * de node:fs vía ConfigLoader y rompe el build de Vite).
+ * `Emotion` viene del core (entry browser-safe — ADR 0011). Si el core
+ * añade emociones nuevas al tipo, el orb se entera por TS y podemos
+ * decidir si pintarlas o caer a 'neutral' (ver Orb.tsx).
  */
 
-export type Emotion = 'neutral' | 'alegre' | 'pensativa' | 'sorprendida' | 'triste' | 'enojada';
+import type { Emotion } from '@proyecto-shiro/core';
+
+export type { Emotion };
 
 export interface OrbProps {
   emotion?: Emotion;

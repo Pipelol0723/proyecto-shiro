@@ -2,13 +2,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { Logger } from '../../../src/core/logger.js';
 
+/**
+ * Tests del Logger universal.
+ *
+ * Sink: `console.{debug,info,warn,error}` (ver ADR 0011). En Node los
+ * niveles debug/info van a stdout y warn/error a stderr — pero a nivel
+ * de test lo que validamos es CUÁL método de console se llama, no
+ * dónde escribe. Eso desacopla el test del entorno.
+ */
 describe('Logger', () => {
-  let stdoutWrite: MockInstance<typeof process.stdout.write>;
-  let stderrWrite: MockInstance<typeof process.stderr.write>;
+  let consoleDebug: MockInstance<typeof console.debug>;
+  let consoleInfo: MockInstance<typeof console.info>;
+  let consoleWarn: MockInstance<typeof console.warn>;
+  let consoleError: MockInstance<typeof console.error>;
 
   beforeEach(() => {
-    stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    consoleDebug = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -20,35 +32,39 @@ describe('Logger', () => {
     it('emite un mensaje debug si el threshold es debug', () => {
       const logger = new Logger('debug');
       logger.debug('hello');
-      expect(stdoutWrite).toHaveBeenCalledOnce();
+      expect(consoleDebug).toHaveBeenCalledOnce();
     });
 
     it('filtra debug cuando el threshold es info', () => {
       const logger = new Logger('info');
       logger.debug('hello');
-      expect(stdoutWrite).not.toHaveBeenCalled();
+      expect(consoleDebug).not.toHaveBeenCalled();
     });
 
     it('filtra info cuando el threshold es warn', () => {
       const logger = new Logger('warn');
       logger.info('hello');
-      expect(stdoutWrite).not.toHaveBeenCalled();
+      expect(consoleInfo).not.toHaveBeenCalled();
     });
 
-    it('rutea warn y error a stderr', () => {
+    it('warn y error usan console.warn / console.error', () => {
       const logger = new Logger('debug');
       logger.warn('careful');
       logger.error('boom');
-      expect(stderrWrite).toHaveBeenCalledTimes(2);
-      expect(stdoutWrite).not.toHaveBeenCalled();
+      expect(consoleWarn).toHaveBeenCalledOnce();
+      expect(consoleError).toHaveBeenCalledOnce();
+      expect(consoleDebug).not.toHaveBeenCalled();
+      expect(consoleInfo).not.toHaveBeenCalled();
     });
 
-    it('rutea debug e info a stdout', () => {
+    it('debug e info usan console.debug / console.info', () => {
       const logger = new Logger('debug');
       logger.debug('hello');
       logger.info('hi');
-      expect(stdoutWrite).toHaveBeenCalledTimes(2);
-      expect(stderrWrite).not.toHaveBeenCalled();
+      expect(consoleDebug).toHaveBeenCalledOnce();
+      expect(consoleInfo).toHaveBeenCalledOnce();
+      expect(consoleWarn).not.toHaveBeenCalled();
+      expect(consoleError).not.toHaveBeenCalled();
     });
   });
 
@@ -56,17 +72,16 @@ describe('Logger', () => {
     it('incluye timestamp ISO, nivel y mensaje', () => {
       const logger = new Logger('info');
       logger.info('hello');
-      const line = stdoutWrite.mock.calls[0]?.[0] as string;
+      const line = consoleInfo.mock.calls[0]?.[0] as string;
       expect(line).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(line).toContain('INFO');
       expect(line).toContain('hello');
-      expect(line).toMatch(/\n$/); // termina en newline
     });
 
     it('serializa el payload como JSON', () => {
       const logger = new Logger('info');
       logger.info('event', { foo: 'bar', n: 42 });
-      const line = stdoutWrite.mock.calls[0]?.[0] as string;
+      const line = consoleInfo.mock.calls[0]?.[0] as string;
       expect(line).toContain('"foo":"bar"');
       expect(line).toContain('"n":42');
     });
@@ -74,7 +89,7 @@ describe('Logger', () => {
     it('omite el bloque de contexto si está vacío', () => {
       const logger = new Logger('info');
       logger.info('plain');
-      const line = stdoutWrite.mock.calls[0]?.[0] as string;
+      const line = consoleInfo.mock.calls[0]?.[0] as string;
       // Sin contexto no debe aparecer `[...]` antes del mensaje
       expect(line).not.toMatch(/\[\s*\]/);
     });
@@ -85,14 +100,14 @@ describe('Logger', () => {
       const parent = new Logger('warn');
       const child = parent.child({ module: 'Test' });
       child.info('should not appear');
-      expect(stdoutWrite).not.toHaveBeenCalled();
+      expect(consoleInfo).not.toHaveBeenCalled();
     });
 
     it('añade el contexto al output', () => {
       const parent = new Logger('info');
       const child = parent.child({ module: 'EventBus' });
       child.info('handler registered');
-      const line = stdoutWrite.mock.calls[0]?.[0] as string;
+      const line = consoleInfo.mock.calls[0]?.[0] as string;
       expect(line).toContain('module=EventBus');
     });
 
@@ -100,7 +115,7 @@ describe('Logger', () => {
       const root = new Logger('info', { app: 'shiro' });
       const child = root.child({ module: 'EventBus' });
       child.info('ready');
-      const line = stdoutWrite.mock.calls[0]?.[0] as string;
+      const line = consoleInfo.mock.calls[0]?.[0] as string;
       expect(line).toContain('app=shiro');
       expect(line).toContain('module=EventBus');
     });
@@ -109,7 +124,7 @@ describe('Logger', () => {
       const parent = new Logger('info');
       parent.child({ module: 'Test' });
       parent.info('parent log');
-      const line = stdoutWrite.mock.calls[0]?.[0] as string;
+      const line = consoleInfo.mock.calls[0]?.[0] as string;
       expect(line).not.toContain('module=Test');
     });
   });
@@ -119,14 +134,14 @@ describe('Logger', () => {
       vi.stubEnv('LOG_LEVEL', '');
       const logger = new Logger();
       logger.debug('should not appear');
-      expect(stdoutWrite).not.toHaveBeenCalled();
+      expect(consoleDebug).not.toHaveBeenCalled();
     });
 
     it('respeta LOG_LEVEL=debug', () => {
       vi.stubEnv('LOG_LEVEL', 'debug');
       const logger = new Logger();
       logger.debug('appears');
-      expect(stdoutWrite).toHaveBeenCalledOnce();
+      expect(consoleDebug).toHaveBeenCalledOnce();
     });
 
     it('respeta LOG_LEVEL=error y filtra todo lo demás', () => {
@@ -135,17 +150,18 @@ describe('Logger', () => {
       logger.warn('no');
       logger.info('no');
       logger.error('si');
-      expect(stdoutWrite).not.toHaveBeenCalled();
-      expect(stderrWrite).toHaveBeenCalledOnce();
+      expect(consoleWarn).not.toHaveBeenCalled();
+      expect(consoleInfo).not.toHaveBeenCalled();
+      expect(consoleError).toHaveBeenCalledOnce();
     });
 
     it('cae a info para valores inválidos', () => {
       vi.stubEnv('LOG_LEVEL', 'verbose');
       const logger = new Logger();
       logger.debug('no aparece');
-      expect(stdoutWrite).not.toHaveBeenCalled();
+      expect(consoleDebug).not.toHaveBeenCalled();
       logger.info('si aparece');
-      expect(stdoutWrite).toHaveBeenCalledOnce();
+      expect(consoleInfo).toHaveBeenCalledOnce();
     });
   });
 });

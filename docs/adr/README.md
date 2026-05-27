@@ -62,6 +62,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0008](0008-cliente-desktop-vite-react.md)            | Cliente desktop con Vite + React + TypeScript    | Accepted |
 | [0009](0009-orbe-placeholder-avatar.md)               | Orbe SVG como placeholder visual del avatar      | Accepted |
 | [0010](0010-wiring-cliente-core-eventbus.md)          | Wiring del cliente desktop con el EventBus       | Accepted |
+| [0011](0011-core-split-browser-node.md)               | Split del core en entries browser-safe / Node    | Accepted |
 
 ## Referencias externas
 
