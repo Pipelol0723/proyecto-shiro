@@ -1,15 +1,19 @@
 /**
- * @proyecto-shiro/core — API pública del cerebro.
+ * `@proyecto-shiro/core` — API pública browser-safe del cerebro.
  *
- * Cliente típico (futuro `@proyecto-shiro/desktop`, `@proyecto-shiro/mobile`):
+ * Cliente típico (cliente desktop con Vite, futuro mobile, etc.):
  *
  *   import {
- *     ConfigLoader, ModuleLoader, Orchestrator,
  *     EventBus, InProcessTransport, Logger,
+ *     ModuleLoader, Orchestrator,
  *   } from '@proyecto-shiro/core';
+ *   import type { Emotion, EventMap, IEventBus } from '@proyecto-shiro/core';
  *
- * Las interfaces se exportan como tipos puros (`export type`) para que
- * el cliente pueda implementar módulos propios sin importar runtime extra.
+ * Para utilidades que **dependen de Node** (lectura de YAML del disco
+ * vía `ConfigLoader`), importar de `@proyecto-shiro/core/node`. Ese
+ * entry NO se puede meter en un bundle browser.
+ *
+ * Ver ADR 0011.
  */
 
 export const VERSION = '0.1.0';
@@ -29,12 +33,13 @@ export type { EventBusOptions } from './core/event-bus.js';
 
 export { InProcessTransport } from './core/transports/in-process-transport.js';
 
-// Loader y Orchestrator
+// Loader y Orchestrator (puros — no usan node:fs)
 export { ModuleLoader, ModuleLoaderError } from './core/module-loader.js';
 export type { ModuleDeps, ModuleFactory } from './core/module-loader.js';
 
 export { Orchestrator, OrchestratorError } from './core/orchestrator.js';
 export type { LoadedModules, OrchestratorOptions } from './core/orchestrator.js';
 
-// Config (schemas + loader)
+// Schemas + tipos de config (browser-safe). El ConfigLoader vive en
+// `@proyecto-shiro/core/node`.
 export * from './config/index.js';
