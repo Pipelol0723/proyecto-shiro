@@ -17,6 +17,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@proyecto-shiro/core": "*"
+    "@proyecto-shiro/core": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
   }
 }

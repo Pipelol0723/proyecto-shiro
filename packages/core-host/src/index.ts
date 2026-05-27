@@ -17,3 +17,6 @@
  */
 
 export const VERSION = '0.1.0';
+
+export { WebSocketServerTransport } from './transports/websocket-server-transport.js';
+export type { WebSocketServerTransportOptions } from './transports/websocket-server-transport.js';
