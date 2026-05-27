@@ -1,0 +1,40 @@
+/**
+ * Tema "cyberpunk" — negro profundo + neón cian/magenta, tipografía
+ * geométrica, glow alrededor de elementos. Fuente: Space Grotesk.
+ */
+
+.theme-cyber {
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --bg: #07070d;
+  --bg-grad:
+    radial-gradient(ellipse at 50% -10%, #1a0d2e 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 100%, #062d3a 0%, transparent 55%);
+  --surface: rgba(20, 20, 30, 0.6);
+  --surface-solid: #14141e;
+  --surface-border: rgba(0, 255, 225, 0.16);
+  --surface-hover: rgba(0, 255, 225, 0.06);
+
+  --ink: #e8e8f5;
+  --ink-mute: #8a8aa8;
+  --ink-faint: #4a4a60;
+
+  --accent: #00ffe1;
+  --accent-soft: rgba(0, 255, 225, 0.12);
+  --accent-2: #ff2bb0;
+
+  --neutral-color: #00ffe1;
+  --alegre-color: #ffe14a;
+  --pensativa-color: #b366ff;
+  --sorprendida-color: #ff2bb0;
+  --triste-color: #4a90c9;
+  --enojada-color: #ff3344;
+
+  --shadow-lg: 0 0 60px -10px rgba(0, 255, 225, 0.2), 0 0 1px 1px rgba(0, 255, 225, 0.08) inset;
+  --shadow-md: 0 0 20px -5px rgba(0, 255, 225, 0.15);
+  --backdrop-blur: blur(16px);
+
+  --orb-halo: rgba(0, 255, 225, 0.5);
+}
