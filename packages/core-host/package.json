@@ -1,0 +1,22 @@
+{
+  "name": "@proyecto-shiro/core-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Servidor Node que arranca el Orchestrator del core y expone su EventBus a clientes via WebSocket. Ver ADR 0012.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proyecto-shiro/core": "*"
+  }
+}
