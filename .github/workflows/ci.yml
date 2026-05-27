@@ -30,6 +30,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Construye el core antes de lint/typecheck para que TypeScript pueda
+      # resolver tipos cross-package (e.g. `import type { Emotion } from
+      # '@proyecto-shiro/core'` en el desktop). Sin esto, ESLint type-aware
+      # ve los tipos como `unknown` y dispara reglas no-unsafe-* (ADR 0011).
+      - name: Build core (required for type resolution)
+        run: npm run build -w @proyecto-shiro/core
+
       - name: Format check (Prettier)
         run: npm run format:check
 
