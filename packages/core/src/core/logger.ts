@@ -5,7 +5,12 @@
  * contexto preasignado. `child()` devuelve un nuevo Logger con contexto
  * extendido — sin mutación, sin estado global, sin singletons.
  *
- * Ver ADR 0004 (`docs/adr/0004-custom-logger.md`).
+ * Universal por diseño: funciona en Node (console escribe a stdout/stderr)
+ * y en navegador (console va a DevTools). La lectura de `LOG_LEVEL` desde
+ * env vars está guardada para no romper en browser.
+ *
+ * Ver ADR 0004 (logger custom) y ADR 0011 (split browser/Node — Logger
+ * universal).
  */
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -24,10 +29,15 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 export type LogContext = Record<string, unknown>;
 
 /**
- * Lee `LOG_LEVEL` del entorno. Valores válidos: debug | info | warn | error.
- * Cualquier otro valor (o ausente) cae a 'info' silenciosamente.
+ * Lee `LOG_LEVEL` del entorno cuando estamos en Node. En browser devuelve
+ * 'info' silenciosamente — el cliente puede sobrescribir con el constructor.
+ *
+ * El check `typeof process !== 'undefined'` evita el `ReferenceError` en
+ * browser donde `process` no existe (Vite a veces lo polyfillea pero no
+ * dependemos de eso).
  */
 function readEnvLevel(): LogLevel {
+  if (typeof process === 'undefined') return 'info';
   const raw = process.env.LOG_LEVEL?.toLowerCase();
   if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') {
     return raw;
@@ -76,9 +86,12 @@ export class Logger {
   }
 
   /**
-   * Único método que toca stdout/stderr. Filtra por nivel y formatea la línea.
-   * Mantenerlo aislado facilita el test (sustituyendo el sink) y un refactor
-   * futuro a pino sin cambiar la API pública.
+   * Único método que toca el sink. Filtra por nivel y formatea la línea.
+   *
+   * Usa `console.*` (universal en Node y browser). En Node, `console.debug`
+   * y `console.info` van a stdout; `console.warn` y `console.error` a stderr.
+   * En browser todos van a DevTools, con un styling sutil del propio
+   * console por nivel.
    */
   private write(level: LogLevel, msg: string, payload?: object): void {
     if (LEVEL_ORDER[level] < this.threshold) return;
@@ -87,10 +100,10 @@ export class Logger {
     const levelTag = level.toUpperCase().padEnd(5);
     const ctxStr = formatContext(this.context);
     const payloadStr = payload ? ` ${safeStringify(payload)}` : '';
-    const line = `${timestamp} ${levelTag} ${ctxStr}${msg}${payloadStr}\n`;
+    const line = `${timestamp} ${levelTag} ${ctxStr}${msg}${payloadStr}`;
 
-    const sink = level === 'error' || level === 'warn' ? process.stderr : process.stdout;
-    sink.write(line);
+    const sink = console[level];
+    sink(line);
   }
 }
 
