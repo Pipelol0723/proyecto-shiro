@@ -1,110 +1,23 @@
-.playground {
-  min-height: 100vh;
+.app {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: space-between;
-  padding: 32px 48px;
-  gap: 24px;
+  width: 100vw;
+  height: 100vh;
+  background-image: var(--bg-grad);
+  background-color: var(--bg);
+  overflow: hidden;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-}
-
-.brand {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.title {
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0;
-  color: var(--ink);
-}
-
-.subtitle {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin: 0;
-  text-transform: lowercase;
-}
-
-.stage {
+.main {
   flex: 1;
-  display: grid;
-  place-items: center;
-  min-height: 360px;
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 32px;
-  padding: 20px 24px;
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  backdrop-filter: var(--backdrop-blur);
-  -webkit-backdrop-filter: var(--backdrop-blur);
-  box-shadow: var(--shadow-md);
-}
-
-.controlGroup {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-width: 0;
+  min-height: 0;
 }
 
-.controlLabel {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.pillRow {
+.content {
+  flex: 1;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.pill {
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--surface-solid);
-  border: 1px solid var(--surface-border);
-  font-family: var(--font-body);
-  font-size: 13px;
-  color: var(--ink-mute);
-  transition:
-    background 160ms var(--ease-out),
-    color 160ms var(--ease-out),
-    border-color 160ms var(--ease-out);
-}
-
-.pill:hover {
-  border-color: var(--accent);
-  color: var(--ink);
-}
-
-.pillActive {
-  background: var(--accent);
-  color: var(--surface-solid);
-  border-color: var(--accent);
-}
-
-.pillActive:hover {
-  background: var(--accent);
-  color: var(--surface-solid);
+  min-height: 0;
+  overflow: hidden;
 }

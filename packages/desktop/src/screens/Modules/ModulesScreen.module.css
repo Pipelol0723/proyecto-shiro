@@ -1,0 +1,116 @@
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 40px;
+}
+
+.head {
+  max-width: 720px;
+  margin-bottom: 28px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+
+.subtitle {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-mute);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.subtitle code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  max-width: 1200px;
+}
+
+.slot {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slotHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.label {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.badge-pendiente {
+  background: var(--accent-soft);
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.active {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-2);
+  padding: 6px 10px;
+  background: var(--surface-solid);
+  border-radius: var(--radius-sm);
+  word-break: break-word;
+}
+
+.fallbacks {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.tag {
+  color: var(--ink-mute);
+}
+
+.note {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
