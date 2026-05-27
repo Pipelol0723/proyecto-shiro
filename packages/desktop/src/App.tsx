@@ -8,9 +8,14 @@
  * El reducer + suscripciones al bus viven dentro de
  * `ConversationScreen` vía `useCompanionState`. Las otras 4 pantallas
  * son stubs estáticos sin acoplamiento al state del companion.
+ *
+ * El `bus` se inyecta desde `main.tsx` (producción) con
+ * `WebSocketTransport` al server. Si se omite (tests, demos), el
+ * `BusProvider` cae al default `InProcessTransport`.
  */
 
 import { useState } from 'react';
+import type { EventMap, IEventBus } from '@proyecto-shiro/core';
 import { BusProvider } from './bus-context';
 import { Sidebar, Header, type ScreenId } from './layout';
 import {
@@ -23,12 +28,17 @@ import {
 import type { ThemeName } from './themes';
 import styles from './App.module.css';
 
-export function App(): JSX.Element {
+export interface AppProps {
+  /** Bus de producción inyectado desde `main.tsx`. Omitir en tests. */
+  bus?: IEventBus<EventMap>;
+}
+
+export function App({ bus }: AppProps = {}): JSX.Element {
   const [theme, setTheme] = useState<ThemeName>('kawaii');
   const [screen, setScreen] = useState<ScreenId>('chat');
 
   return (
-    <BusProvider>
+    <BusProvider bus={bus}>
       <div className={styles.app}>
         <Sidebar active={screen} onChange={setScreen} />
         <main className={styles.main}>
