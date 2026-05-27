@@ -33,6 +33,23 @@ export type { EventBusOptions } from './core/event-bus.js';
 
 export { InProcessTransport } from './core/transports/in-process-transport.js';
 
+export { WebSocketTransport } from './core/transports/websocket-transport.js';
+export type {
+  WebSocketTransportOptions,
+  WebSocketLike,
+  WebSocketCtor,
+  Scheduler,
+} from './core/transports/websocket-transport.js';
+
+export {
+  WIRE_PROTOCOL_VERSION,
+  WireEnvelopeSchema,
+  makeEnvelope,
+  serializeEnvelope,
+  parseEnvelope,
+} from './core/transports/wire-schema.js';
+export type { WireEnvelope, ParseResult } from './core/transports/wire-schema.js';
+
 // Loader y Orchestrator (puros — no usan node:fs)
 export { ModuleLoader, ModuleLoaderError } from './core/module-loader.js';
 export type { ModuleDeps, ModuleFactory } from './core/module-loader.js';
