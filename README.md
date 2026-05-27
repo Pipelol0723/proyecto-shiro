@@ -79,6 +79,35 @@ npm run typecheck
 npm test
 ```
 
+## Arrancar la app (modo dev)
+
+Desde ADR 0012, el companion se reparte en **dos procesos**: el servidor
+Node (`@proyecto-shiro/core-host`) que tiene los módulos LLM/Router/etc.
+y el cliente desktop (`@proyecto-shiro/desktop`) que pinta la UI. Hablan
+por WebSocket.
+
+```bash
+# Arranca ambos en paralelo (concurrently)
+npm run dev
+```
+
+El cliente abre `http://localhost:5173` en el navegador y se conecta a
+`ws://localhost:9876/bus`. Si el server tarda en arrancar, el cliente
+reintenta con backoff exponencial — verás logs de reconexión.
+
+Para arrancar solo uno:
+
+```bash
+npm run dev -w @proyecto-shiro/core-host   # solo el server
+npm run dev -w @proyecto-shiro/desktop     # solo el cliente
+```
+
+Configurable por env (ver `.env.example`):
+
+- `SHIRO_HOST_PORT` — puerto del WS (default 9876)
+- `VITE_SHIRO_HOST_URL` — URL que usa el cliente (default `ws://localhost:9876/bus`)
+- `LOG_LEVEL` — `debug` | `info` | `warn` | `error`
+
 ## Scripts disponibles (desde la raíz)
 
 | Comando                 | Descripción                                      |
