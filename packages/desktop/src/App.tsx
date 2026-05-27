@@ -1,33 +1,123 @@
 /**
- * App — componente raiz del cliente desktop.
+ * App — playground del orbe (PR B del cliente desktop).
  *
- * Estado actual (PR de setup): pantalla de bienvenida minima que
- * solo valida que Vite + React + TS + CSS Modules empaquetan bien.
+ * Renderiza el orbe en el centro con controles para forzar emoción y
+ * estados (speaking / listening / thinking) + selector de tema.
  *
- * NOTA: NO importa nada de @proyecto-shiro/core en este PR. El barrel
- * de core re-exporta `ConfigLoader` que usa `node:fs`, lo cual Vite no
- * puede empaquetar para navegador. Antes de PR C (wiring) hay que
- * partir el core en dos entries (browser-safe vs Node-only) — se
- * documentara con un ADR nuevo.
- *
- * En PRs siguientes se reemplaza por:
- * - Sidebar + Header + main content (PR B - orbe + temas)
- * - 5 screens completas + wiring real al core (PR C)
+ * Esta UI es temporal — sirve para validar el orbe + temas. En PR C
+ * se reemplaza por el layout real (sidebar + header + screens) y los
+ * controles desaparecen porque el state vendrá del EventBus.
  */
 
+import { useState } from 'react';
+import { Orb } from './components/Orb';
+import type { Emotion } from './components/Orb';
+import { ThemeSwitcher } from './components/ThemeSwitcher';
+import type { ThemeName } from './themes';
 import styles from './App.module.css';
 
+const EMOTIONS: readonly Emotion[] = [
+  'neutral',
+  'alegre',
+  'pensativa',
+  'sorprendida',
+  'triste',
+  'enojada',
+] as const;
+
+const EMOTION_LABELS: Record<Emotion, string> = {
+  neutral: 'Neutral',
+  alegre: 'Alegre',
+  pensativa: 'Pensativa',
+  sorprendida: 'Sorprendida',
+  triste: 'Triste',
+  enojada: 'Enojada',
+};
+
 export function App(): JSX.Element {
+  const [theme, setTheme] = useState<ThemeName>('kawaii');
+  const [emotion, setEmotion] = useState<Emotion>('neutral');
+  const [speaking, setSpeaking] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [thinking, setThinking] = useState(false);
+
   return (
-    <main className={styles.welcome}>
-      <h1 className={styles.title}>Shiro</h1>
-      <p className={styles.subtitle}>AI Companion modular</p>
-      <p className={styles.versions}>
-        cliente desktop <code>0.1.0</code>
-      </p>
-      <p className={styles.hint}>
-        Esta pantalla es temporal. El orbe + las pantallas reales llegan en los siguientes PRs.
-      </p>
+    <main className={styles.playground}>
+      <header className={styles.header}>
+        <div className={styles.brand}>
+          <h1 className={styles.title}>Shiro</h1>
+          <p className={styles.subtitle}>playground del orbe · PR B</p>
+        </div>
+        <ThemeSwitcher value={theme} onChange={setTheme} />
+      </header>
+
+      <section className={styles.stage}>
+        <Orb
+          emotion={emotion}
+          speaking={speaking}
+          listening={listening}
+          thinking={thinking}
+          size={320}
+        />
+      </section>
+
+      <footer className={styles.controls}>
+        <div className={styles.controlGroup}>
+          <span className={styles.controlLabel}>Emoción</span>
+          <div className={styles.pillRow} role="radiogroup" aria-label="Emoción">
+            {EMOTIONS.map((e) => (
+              <button
+                key={e}
+                type="button"
+                role="radio"
+                aria-checked={emotion === e}
+                className={`${styles.pill} ${emotion === e ? styles.pillActive : ''}`}
+                onClick={() => {
+                  setEmotion(e);
+                }}
+              >
+                {EMOTION_LABELS[e]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={styles.controlGroup}>
+          <span className={styles.controlLabel}>Estado</span>
+          <div className={styles.pillRow}>
+            <button
+              type="button"
+              aria-pressed={speaking}
+              className={`${styles.pill} ${speaking ? styles.pillActive : ''}`}
+              onClick={() => {
+                setSpeaking((v) => !v);
+              }}
+            >
+              speaking
+            </button>
+            <button
+              type="button"
+              aria-pressed={listening}
+              className={`${styles.pill} ${listening ? styles.pillActive : ''}`}
+              onClick={() => {
+                setListening((v) => !v);
+              }}
+            >
+              listening
+            </button>
+            <button
+              type="button"
+              aria-pressed={thinking}
+              className={`${styles.pill} ${thinking ? styles.pillActive : ''}`}
+              onClick={() => {
+                setThinking((v) => !v);
+              }}
+            >
+              thinking
+            </button>
+          </div>
+        </div>
+      </footer>
     </main>
   );
 }

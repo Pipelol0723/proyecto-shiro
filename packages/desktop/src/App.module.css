@@ -1,58 +1,110 @@
-.welcome {
+.playground {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 32px;
-  background:
-    radial-gradient(ellipse at 20% 0%, #ffe4f0 0%, transparent 55%),
-    radial-gradient(ellipse at 100% 100%, #e8e0ff 0%, transparent 60%), #fbf3f7;
-  color: #2a1530;
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-  text-align: center;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 32px 48px;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .title {
-  font-size: 64px;
+  font-family: var(--font-display);
+  font-size: 32px;
   font-weight: 700;
-  margin: 0;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
+  margin: 0;
+  color: var(--ink);
 }
 
 .subtitle {
-  font-size: 18px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
   margin: 0;
-  color: #7c5a78;
+  text-transform: lowercase;
 }
 
-.versions {
-  font-size: 14px;
-  color: #7c5a78;
-  margin-top: 16px;
+.stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 360px;
 }
 
-.versions code {
-  font-family: ui-monospace, 'JetBrains Mono', monospace;
-  background: rgba(255, 255, 255, 0.6);
-  padding: 2px 8px;
-  border-radius: 4px;
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  padding: 20px 24px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  box-shadow: var(--shadow-md);
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controlLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface-solid);
+  border: 1px solid var(--surface-border);
+  font-family: var(--font-body);
   font-size: 13px;
+  color: var(--ink-mute);
+  transition:
+    background 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out);
 }
 
-.hint {
-  margin-top: 24px;
-  font-size: 13px;
-  color: #b8a4b8;
-  font-style: italic;
-  max-width: 480px;
+.pill:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.pillActive {
+  background: var(--accent);
+  color: var(--surface-solid);
+  border-color: var(--accent);
+}
+
+.pillActive:hover {
+  background: var(--accent);
+  color: var(--surface-solid);
 }

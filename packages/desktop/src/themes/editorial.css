@@ -1,0 +1,38 @@
+/**
+ * Tema "editorial" — beige cálido + naranja oscuro, serif elegante para
+ * displays + sans-serif para cuerpo. Estilo revista literaria.
+ */
+
+.theme-editorial {
+  --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --bg: #ece5d3;
+  --bg-grad: radial-gradient(ellipse at 80% 10%, #f7f1e3 0%, transparent 50%);
+  --surface: rgba(255, 252, 244, 0.7);
+  --surface-solid: #fffcf4;
+  --surface-border: rgba(28, 28, 28, 0.1);
+  --surface-hover: rgba(255, 252, 244, 0.95);
+
+  --ink: #18181b;
+  --ink-mute: #5c5a52;
+  --ink-faint: #a39e8f;
+
+  --accent: #1a1a1a;
+  --accent-soft: rgba(28, 28, 28, 0.06);
+  --accent-2: #b8541d;
+
+  --neutral-color: #5c5a52;
+  --alegre-color: #b8541d;
+  --pensativa-color: #3d4a5c;
+  --sorprendida-color: #8b1f3a;
+  --triste-color: #4d5a6c;
+  --enojada-color: #7d2235;
+
+  --shadow-lg: 0 30px 60px -30px rgba(28, 28, 28, 0.18);
+  --shadow-md: 0 4px 12px -4px rgba(28, 28, 28, 0.1);
+  --backdrop-blur: blur(8px);
+
+  --orb-halo: rgba(184, 84, 29, 0.3);
+}

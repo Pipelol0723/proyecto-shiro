@@ -1,0 +1,41 @@
+/**
+ * Tema "kawaii pastel" — rosado/violeta suave, redondeado, amistoso.
+ * Fuente principal: Quicksand.
+ * Replica el tema del mockup (docs/design-mockup/project/styles.css).
+ */
+
+.theme-kawaii {
+  --font-display: 'Quicksand', system-ui, sans-serif;
+  --font-body: 'Quicksand', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --bg: #fbf3f7;
+  --bg-grad:
+    radial-gradient(ellipse at 20% 0%, #ffe4f0 0%, transparent 55%),
+    radial-gradient(ellipse at 100% 100%, #e8e0ff 0%, transparent 60%);
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-solid: #ffffff;
+  --surface-border: rgba(236, 72, 153, 0.12);
+  --surface-hover: rgba(255, 255, 255, 0.92);
+
+  --ink: #2a1530;
+  --ink-mute: #7c5a78;
+  --ink-faint: #b8a4b8;
+
+  --accent: #ec4899;
+  --accent-soft: #fce7f3;
+  --accent-2: #a855f7;
+
+  --neutral-color: #c2b8ff;
+  --alegre-color: #ffb454;
+  --pensativa-color: #a855f7;
+  --sorprendida-color: #ec4899;
+  --triste-color: #6b8caf;
+  --enojada-color: #d94350;
+
+  --shadow-lg: 0 24px 60px -20px rgba(236, 72, 153, 0.25), 0 4px 16px -4px rgba(168, 85, 247, 0.12);
+  --shadow-md: 0 8px 24px -8px rgba(236, 72, 153, 0.18);
+  --backdrop-blur: blur(24px);
+
+  --orb-halo: rgba(236, 72, 153, 0.4);
+}

@@ -1,0 +1,35 @@
+/**
+ * Variables compartidas por todos los temas.
+ *
+ * Cada tema (kawaii.css / cyber.css / editorial.css) define un set
+ * paralelo de --bg, --ink, --accent, --orb-*, etc. Esto vive aparte
+ * porque son dimensiones y curvas — no cambian entre temas.
+ */
+
+:root {
+  /* Layout */
+  --sidebar-w: 76px;
+  --diag-w: 320px;
+  --header-h: 56px;
+
+  /* Radios */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-xl: 32px;
+
+  /* Curvas de easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+body {
+  background: var(--bg, #fbf3f7);
+  background-image: var(--bg-grad, none);
+  color: var(--ink, #2a1530);
+  font-family: var(--font-body, system-ui, sans-serif);
+  min-height: 100vh;
+  transition:
+    background 240ms var(--ease-out),
+    color 240ms var(--ease-out);
+}
