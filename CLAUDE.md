@@ -49,14 +49,36 @@ Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
 ```
 packages/
 ├── core/      → @proyecto-shiro/core    (cerebro headless: lógica del companion)
-└── desktop/   → @proyecto-shiro/desktop (cliente Tauri, Fase 7 — skeleton hoy)
+└── desktop/   → @proyecto-shiro/desktop (cliente Vite + React + TS, en construcción)
 
 config/        → modules.config.yaml + devices.config.yaml (runtime)
-docs/          → architecture.md + adr/
+docs/          → architecture.md + adr/ + design-mockup/
 ```
 
 Paquetes previstos: `mobile`, `arduino-bridge`, `iot-bridge`. Cuando se
 añadan, todos consumen `@proyecto-shiro/core` como dependencia local.
+
+### Orden de trabajo actualizado
+
+El plan original (`plan-modular-ai-companion.md`) usaba numeración
+Fase 0–7. A partir de [ADR 0008](docs/adr/0008-cliente-desktop-vite-react.md)
+pasamos a **nombres** porque el cliente desktop se intercaló entre Core
+y LLM:
+
+1. **Setup** ✅ — monorepo, CI, ADRs, CLAUDE.md.
+2. **Core** ✅ — EventBus, Orchestrator, ModuleLoader, 9 interfaces, 53 tests.
+3. **Cliente desktop** 🟡 _en curso_ — Vite + React + orbe placeholder + 3 temas.
+4. **LLM** — Ollama + Anthropic + HybridRouter.
+5. **Memoria** — Letta + LocalMemory fallback.
+6. **STT** — faster-whisper microservicio Python.
+7. **TTS** — ElevenLabs + Kokoro + SystemTTS.
+8. **Avatar Live2D** — reemplaza el orbe dentro de `<Avatar>`.
+9. **Packaging Tauri** — envuelve el build de Vite en binario nativo.
+
+Post-MVP: Plugins, Mobile, Avatar 3D (VRM), Arduino bridge, IoT bridge.
+
+Ver [`README.md`](README.md) y [`docs/architecture.md`](docs/architecture.md)
+para el estado vivo.
 
 ## Convenciones de Git
 
