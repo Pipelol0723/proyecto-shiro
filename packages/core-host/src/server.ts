@@ -14,17 +14,19 @@
  */
 
 import { Logger } from '@proyecto-shiro/core';
-import { ConfigLoader } from '@proyecto-shiro/core/node';
+import { CharacterLoader, ConfigLoader } from '@proyecto-shiro/core/node';
 import { bootstrap } from './bootstrap.js';
 
 const DEFAULT_PORT = 9876;
 /**
- * Path al config relativo al cwd del proceso. Cuando se arranca con
+ * Paths relativos al cwd del proceso. Cuando se arranca con
  * `npm run dev -w @proyecto-shiro/core-host` o `npm run dev` desde la
  * raíz, el cwd es `packages/core-host/` — de ahí los `../..`. Override
- * con `SHIRO_MODULES_CONFIG` si el server corre desde otro sitio.
+ * con `SHIRO_MODULES_CONFIG` y `SHIRO_CHARACTER` si el server corre
+ * desde otro sitio.
  */
 const DEFAULT_CONFIG_PATH = '../../config/modules.config.yaml';
+const DEFAULT_CHARACTER_PATH = '../core/src/character/characters/default.yaml';
 
 function parsePort(raw: string | undefined): number {
   if (!raw) return DEFAULT_PORT;
@@ -40,8 +42,10 @@ async function main(): Promise<void> {
   const port = parsePort(process.env.SHIRO_HOST_PORT);
   const logger = new Logger();
   const configPath = process.env.SHIRO_MODULES_CONFIG ?? DEFAULT_CONFIG_PATH;
+  const characterPath = process.env.SHIRO_CHARACTER ?? DEFAULT_CHARACTER_PATH;
   const config = new ConfigLoader({ logger }).loadModulesConfig(configPath);
-  const result = await bootstrap({ port, config, logger });
+  const character = new CharacterLoader({ logger }).loadFromFile(characterPath);
+  const result = await bootstrap({ port, config, character, logger });
 
   const shutdown = (signal: string): void => {
     console.log(`\nrecibido ${signal}, apagando…`);

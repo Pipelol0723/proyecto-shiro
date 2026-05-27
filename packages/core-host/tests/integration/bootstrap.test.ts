@@ -10,10 +10,12 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  CharacterSchema,
   EventBus,
   Logger,
   ModulesConfigSchema,
   WebSocketTransport,
+  type Character,
   type EventMap,
   type WebSocketCtor,
 } from '@proyecto-shiro/core';
@@ -49,6 +51,18 @@ modules:
 character:
   file: 'src/character/characters/default.yaml'
 `;
+
+const FIXTURE_CHARACTER: Character = CharacterSchema.parse({
+  version: 1,
+  identity: {
+    name: 'Shiro',
+    pronouns: 'ella',
+  },
+  personality: {
+    traits: ['curiosa', 'directa'],
+    speech_style: 'natural',
+  },
+});
 
 function loadFixtureConfig() {
   return ModulesConfigSchema.parse(parseYaml(FIXTURE_YAML));
@@ -87,6 +101,7 @@ describe('core-host bootstrap end-to-end', () => {
     result = await bootstrap({
       port: 0,
       config: loadFixtureConfig(),
+      character: FIXTURE_CHARACTER,
       logger: makeLogger(),
       simulationSpeed: 0,
     });
@@ -105,6 +120,10 @@ describe('core-host bootstrap end-to-end', () => {
     // El transport está escuchando.
     expect(result.transport.port).toBeGreaterThan(0);
 
+    // El personaje está cargado y el systemPrompt pre-construido.
+    expect(result.character.identity.name).toBe('Shiro');
+    expect(result.systemPrompt).toMatch(/Eres Shiro/);
+
     // Comprueba que bus:ready se pueda re-emitir sin error tras `on`.
     result.bus.on('bus:ready', (p) => {
       readyEvents.push(p);
@@ -117,6 +136,7 @@ describe('core-host bootstrap end-to-end', () => {
     result = await bootstrap({
       port: 0,
       config: loadFixtureConfig(),
+      character: FIXTURE_CHARACTER,
       logger: makeLogger(),
       simulationSpeed: 0,
     });
@@ -169,6 +189,7 @@ describe('core-host bootstrap end-to-end', () => {
     result = await bootstrap({
       port: 0,
       config: loadFixtureConfig(),
+      character: FIXTURE_CHARACTER,
       logger: makeLogger(),
       simulationSpeed: 0,
     });
