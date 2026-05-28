@@ -2,7 +2,7 @@
  * Orb — placeholder visual del avatar (ADR 0009).
  *
  * SVG metaball animado que reacciona a 4 estados del companion:
- * - emotion: gradiente de color (neutral/alegre/pensativa/sorprendida/triste/enojada).
+ * - emotion: gradiente de color (neutral/divertida/pensativa/molesta/vulnerable).
  * - speaking: amplitud pulsante (escala el SVG con la "voz").
  * - listening: anillos giran más rápido + halo más intenso.
  * - thinking: partículas orbitando alrededor del orb.
@@ -27,11 +27,10 @@ import styles from './Orb.module.css';
 
 const EMOTION_TO_VAR: Record<Emotion, string> = {
   neutral: '--neutral-color',
-  alegre: '--alegre-color',
+  divertida: '--divertida-color',
   pensativa: '--pensativa-color',
-  sorprendida: '--sorprendida-color',
-  triste: '--triste-color',
-  enojada: '--enojada-color',
+  molesta: '--molesta-color',
+  vulnerable: '--vulnerable-color',
 };
 
 export function Orb(props: OrbProps): JSX.Element {

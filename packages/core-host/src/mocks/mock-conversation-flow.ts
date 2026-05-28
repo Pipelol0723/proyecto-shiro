@@ -32,7 +32,7 @@ const SAMPLE_REPLIES: readonly SampleEntry[] = [
   {
     match: /(diffusion|difusi[oó]n|modelo|red neuronal)/,
     response:
-      'Mmm, déjame pensarlo bien. Imagínate que tomás una imagen y le agregás ruido poco a poco hasta que es pura estática. El modelo aprende a hacer el camino inverso.',
+      'Déjame procesar esto un momento. Tomas una imagen, le añades ruido hasta que es estática pura, y el modelo aprende a invertir el proceso. Suena más simple de lo que es.',
     emotion: 'pensativa',
     tier: 'cloud',
     latencyMs: 1840,
@@ -40,23 +40,22 @@ const SAMPLE_REPLIES: readonly SampleEntry[] = [
   {
     match: /(record|acord|ayer|mem[oó]ria)/,
     response:
-      'Sí, claro. Estábamos viendo cómo estructurar el módulo de memoria. Decidiste empezar con LocalMemory para no depender de Docker desde el día uno.',
+      'Sí, lo recuerdo. Estábamos diseñando el módulo de memoria. Decidiste empezar con LocalMemory para no depender de Docker desde el día uno. Buena decisión.',
     emotion: 'neutral',
     tier: 'local',
     latencyMs: 940,
   },
   {
     match: /(consegu|logr|increib|!)/,
-    response: '¿Qué?! Contame contame contame.',
-    emotion: 'sorprendida',
+    response: 'Bien por ti. Cuéntame qué hiciste exactamente, sin ahorrarte detalles.',
+    emotion: 'divertida',
     tier: 'local',
     latencyMs: 620,
   },
   {
     match: null, // default
-    response:
-      '¡Hola! Bien, gracias por preguntar. Acabo de terminar de procesar como tres podcasts de música electrónica que dejaste anoche. Tengo opiniones.',
-    emotion: 'alegre',
+    response: 'Hola. Aquí, observando cómo va tu día. ¿Algo en particular que quieras compartir?',
+    emotion: 'neutral',
     tier: 'local',
     latencyMs: 820,
   },

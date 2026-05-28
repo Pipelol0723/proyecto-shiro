@@ -66,20 +66,20 @@ describe('companionReducer', () => {
         {
           type: 'SHIRO_REPLY',
           text: 'hola tú',
-          emotion: 'alegre',
+          emotion: 'divertida',
           tier: 'local',
           latencyMs: 740,
         },
       );
       expect(result.thinking).toBe(false);
       expect(result.speaking).toBe(true);
-      expect(result.emotion).toBe('alegre');
+      expect(result.emotion).toBe('divertida');
       expect(result.subtitle).toBe('hola tú');
       expect(result.history).toHaveLength(1);
       const msg = result.history[0];
       expect(msg?.role).toBe('shiro');
       expect(msg?.text).toBe('hola tú');
-      expect(msg?.emotion).toBe('alegre');
+      expect(msg?.emotion).toBe('divertida');
       expect(msg?.tier).toBe('local');
       expect(msg?.latencyMs).toBe(740);
     });
@@ -88,12 +88,12 @@ describe('companionReducer', () => {
   describe('SPEAK_END', () => {
     it('apaga speaking y limpia subtitle, mantiene emotion', () => {
       const result = companionReducer(
-        { ...baseState, speaking: true, subtitle: 'hola', emotion: 'alegre' },
+        { ...baseState, speaking: true, subtitle: 'hola', emotion: 'divertida' },
         { type: 'SPEAK_END' },
       );
       expect(result.speaking).toBe(false);
       expect(result.subtitle).toBe('');
-      expect(result.emotion).toBe('alegre'); // emoción se mantiene hasta nueva reply
+      expect(result.emotion).toBe('divertida'); // emoción se mantiene hasta nueva reply
     });
   });
 
@@ -115,7 +115,7 @@ describe('companionReducer', () => {
           ...baseState,
           listening: true,
           thinking: true,
-          emotion: 'sorprendida',
+          emotion: 'molesta',
           history: [{ role: 'user', text: 'hi', timestamp: '2026-01-01T00:00:00Z' }],
         },
         { type: 'RESET' },
@@ -151,18 +151,18 @@ describe('companionReducer', () => {
       state = companionReducer(state, {
         type: 'SHIRO_REPLY',
         text: '¡hola!',
-        emotion: 'alegre',
+        emotion: 'divertida',
         tier: 'local',
         latencyMs: 500,
       });
       expect(state.thinking).toBe(false);
       expect(state.speaking).toBe(true);
-      expect(state.emotion).toBe('alegre');
+      expect(state.emotion).toBe('divertida');
 
       state = companionReducer(state, { type: 'SPEAK_END' });
       expect(state.speaking).toBe(false);
       expect(state.subtitle).toBe('');
-      expect(state.emotion).toBe('alegre'); // persiste
+      expect(state.emotion).toBe('divertida'); // persiste
       expect(state.history).toHaveLength(2);
     });
   });
