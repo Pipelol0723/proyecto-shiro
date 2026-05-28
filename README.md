@@ -4,12 +4,12 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: fases **Setup**, **Core** y **Cliente desktop** completas
-> (71 tests, CI verde). Próximo hito: **LLM** — arranca con el split
-> cliente/server (nuevo paquete `core-host`) para que la API key de
-> Anthropic viva en un proceso Node aparte y no en el bundle del browser.
-> Ver [ADR 0012](docs/adr/0012-split-cliente-server-core-host.md) y
-> [ADR 0013](docs/adr/0013-protocolo-websocket-eventbus.md).
+> **Estado**: hitos **Setup**, **Core**, **Cliente desktop** y **LLM**
+> completados (200+ tests, CI verde). Shiro responde con Ollama
+> (`qwen2.5:3b` local) o Claude Sonnet 4.6 según decide el `HybridRouter`,
+> con el system prompt construido desde
+> [`default.yaml`](packages/core/src/character/characters/default.yaml).
+> Próximo hito: **Memoria** (Letta + LocalMemory fallback).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
 
@@ -21,23 +21,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado          | Notas                                                                              |
-| ------------------- | --------------- | ---------------------------------------------------------------------------------- |
-| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                   |
-| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces, 53 tests                       |
-| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring (71 tests)          |
-| **LLM**             | 🟡 **en curso** | Split cliente/server (`core-host` + WebSocket) → Ollama + Anthropic + HybridRouter |
-| **Memoria**         | ⏸️ pendiente    | Letta self-hosted + LocalMemory SQLite (fallback)                                  |
-| **STT**             | ⏸️ pendiente    | faster-whisper microservicio Python (puerto 8765)                                  |
-| **TTS**             | ⏸️ pendiente    | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                              |
-| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                 |
-| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                        |
-| **Post-MVP**        |                 |                                                                                    |
-| Plugins             | ⏳ futuro       | Sistema de extensiones                                                             |
-| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                         |
-| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                 |
-| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                      |
-| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                               |
+| Hito                | Estado           | Notas                                                                                                        |
+| ------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| **Setup**           | ✅ completo      | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                             |
+| **Core**            | ✅ completo      | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                           |
+| **Cliente desktop** | ✅ completo      | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                               |
+| **LLM**             | ✅ completo      | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional |
+| **Memoria**         | 🟡 **siguiente** | Letta self-hosted + LocalMemory SQLite (fallback)                                                            |
+| **STT**             | ⏸️ pendiente     | faster-whisper microservicio Python (puerto 8765)                                                            |
+| **TTS**             | ⏸️ pendiente     | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                                                        |
+| **Avatar Live2D**   | ⏸️ pendiente     | Reemplaza el orbe dentro del componente `<Avatar>`                                                           |
+| **Packaging Tauri** | ⏸️ pendiente     | Envuelve el build de Vite en binario nativo                                                                  |
+| **Post-MVP**        |                  |                                                                                                              |
+| Plugins             | ⏳ futuro        | Sistema de extensiones                                                                                       |
+| Móvil               | ⏳ futuro        | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                   |
+| Avatar 3D (VRM)     | ⏳ futuro        | `@pixiv/three-vrm`                                                                                           |
+| Arduino bridge      | ⏳ futuro        | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                |
+| IoT bridge          | ⏳ futuro        | MQTT, Home Assistant                                                                                         |
 
 ## Stack
 
@@ -104,9 +104,18 @@ npm run dev -w @proyecto-shiro/desktop     # solo el cliente
 
 Configurable por env (ver `.env.example`):
 
+- `ANTHROPIC_API_KEY` — sin esto, el slot cloud no responde y el `HybridRouter` cae a Ollama solo. Conseguir una key en [console.anthropic.com](https://console.anthropic.com).
 - `SHIRO_HOST_PORT` — puerto del WS (default 9876)
 - `VITE_SHIRO_HOST_URL` — URL que usa el cliente (default `ws://localhost:9876/bus`)
+- `OLLAMA_HOST` — endpoint de Ollama (default `http://localhost:11434`)
 - `LOG_LEVEL` — `debug` | `info` | `warn` | `error`
+
+El `.env` se carga automáticamente al arrancar el server (flag `--env-file-if-exists` en el script `dev`). Copia `.env.example` a `.env` y rellena.
+
+### Requisitos para el hito LLM
+
+- **Ollama** corriendo en `localhost:11434` con `qwen2.5:3b` descargado (`ollama pull qwen2.5:3b`). Para GPUs con más VRAM, sube a `:7b` o `:14b` editando `config/modules.config.yaml`.
+- **Anthropic API key** (opcional pero recomendada para que el `HybridRouter` pueda escalar a Claude en preguntas complejas).
 
 ## Scripts disponibles (desde la raíz)
 
