@@ -27,6 +27,7 @@ import {
   EventBus,
   Logger,
   ModuleLoader,
+  OllamaLLM,
   Orchestrator,
   type Character,
   type EventMap,
@@ -101,10 +102,12 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     transports: [transport],
   });
 
-  // 3. ModuleLoader con factories de los mocks (PR 3 — se reemplazan
-  //    progresivamente en PRs 5/6/7 y hitos posteriores).
+  // 3. ModuleLoader con factories. OllamaLLM ya es la implementación
+  //    real (PR 5). El resto siguen siendo mocks no-op hasta que llegue
+  //    su PR: AnthropicLLM (PR 6), HybridRouter (PR 7), STT/TTS/Memory
+  //    (hitos posteriores).
   const loader = new ModuleLoader({ logger });
-  loader.register('OllamaLLM', () => new NoopLLM('llm:noop-local'));
+  loader.register('OllamaLLM', (cfg, deps) => new OllamaLLM(cfg, deps));
   loader.register('AnthropicLLM', () => new NoopLLM('llm:noop-cloud'));
   loader.register('HybridRouter', () => new NoopRouter());
   loader.register('WhisperSTT', () => new NoopSTT());

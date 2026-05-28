@@ -64,3 +64,7 @@ export * from './config/index.js';
 // Schemas + builder del personaje (browser-safe). El CharacterLoader
 // vive en `@proyecto-shiro/core/node`.
 export * from './character/index.js';
+
+// Implementaciones de módulos LLM (browser-safe — usan fetch).
+export { OllamaLLM, OllamaLLMConfigSchema, OllamaLLMError } from './modules/llm/ollama-llm.js';
+export type { OllamaLLMConfig } from './modules/llm/ollama-llm.js';
