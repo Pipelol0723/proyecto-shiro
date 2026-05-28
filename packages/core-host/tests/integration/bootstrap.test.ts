@@ -109,9 +109,10 @@ describe('core-host bootstrap end-to-end', () => {
     // bus:ready ya se emitió durante init — nos suscribimos después,
     // así que verificamos los módulos cargados en su lugar.
     const modules = result.orchestrator.getModules();
-    // llmLocal es ya OllamaLLM real (PR 5). El resto siguen siendo mocks.
+    // llmLocal es OllamaLLM real (PR 5), llmCloud es AnthropicLLM real
+    // (PR 6). El resto siguen siendo mocks.
     expect(modules.llmLocal.id).toMatch(/^llm:ollama:/);
-    expect(modules.llmCloud.id).toMatch(/noop/);
+    expect(modules.llmCloud.id).toMatch(/^llm:anthropic:/);
     expect(modules.router.id).toBe('router:noop');
     expect(modules.stt.id).toBe('stt:noop');
     expect(modules.tts.id).toBe('tts:noop');

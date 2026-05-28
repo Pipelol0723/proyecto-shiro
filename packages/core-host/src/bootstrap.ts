@@ -23,6 +23,7 @@
  */
 
 import {
+  AnthropicLLM,
   buildSystemPrompt,
   EventBus,
   Logger,
@@ -36,14 +37,7 @@ import {
 } from '@proyecto-shiro/core';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireMockConversationFlow } from './mocks/mock-conversation-flow.js';
-import {
-  NoopAvatar,
-  NoopLLM,
-  NoopMemory,
-  NoopRouter,
-  NoopSTT,
-  NoopTTS,
-} from './mocks/noop-modules.js';
+import { NoopAvatar, NoopMemory, NoopRouter, NoopSTT, NoopTTS } from './mocks/noop-modules.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -102,13 +96,13 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     transports: [transport],
   });
 
-  // 3. ModuleLoader con factories. OllamaLLM ya es la implementación
-  //    real (PR 5). El resto siguen siendo mocks no-op hasta que llegue
-  //    su PR: AnthropicLLM (PR 6), HybridRouter (PR 7), STT/TTS/Memory
+  // 3. ModuleLoader con factories. OllamaLLM y AnthropicLLM son ya las
+  //    implementaciones reales (PRs 5 y 6). El resto siguen siendo mocks
+  //    no-op hasta que llegue su PR: HybridRouter (PR 7), STT/TTS/Memory
   //    (hitos posteriores).
   const loader = new ModuleLoader({ logger });
   loader.register('OllamaLLM', (cfg, deps) => new OllamaLLM(cfg, deps));
-  loader.register('AnthropicLLM', () => new NoopLLM('llm:noop-cloud'));
+  loader.register('AnthropicLLM', (cfg, deps) => new AnthropicLLM(cfg, deps));
   loader.register('HybridRouter', () => new NoopRouter());
   loader.register('WhisperSTT', () => new NoopSTT());
   loader.register('ElevenLabsTTS', () => new NoopTTS());
