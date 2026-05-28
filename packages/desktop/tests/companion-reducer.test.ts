@@ -37,17 +37,55 @@ describe('companionReducer', () => {
   });
 
   describe('STT_FINAL', () => {
-    it('apaga listening, limpia sttLive, añade mensaje al historial', () => {
+    it('apaga listening y limpia sttLive (sin tocar el historial)', () => {
       const result = companionReducer(
         { ...baseState, listening: true, sttLive: 'hola' },
         { type: 'STT_FINAL', text: 'hola mundo', userId: 'u1' },
       );
       expect(result.listening).toBe(false);
       expect(result.sttLive).toBe('');
+      // El historial lo alimenta USER_SAID (que llega por user:message),
+      // no STT_FINAL, para unificar el camino tipeado/hablado.
+      expect(result.history).toHaveLength(0);
+    });
+  });
+
+  describe('USER_SAID', () => {
+    it('añade el mensaje del usuario al historial con role user', () => {
+      const result = companionReducer(baseState, {
+        type: 'USER_SAID',
+        text: 'hola Shiro',
+        userId: 'u1',
+      });
       expect(result.history).toHaveLength(1);
       expect(result.history[0]?.role).toBe('user');
-      expect(result.history[0]?.text).toBe('hola mundo');
+      expect(result.history[0]?.text).toBe('hola Shiro');
       expect(result.history[0]?.timestamp).toBeDefined();
+    });
+
+    it('preserva el resto del state', () => {
+      const result = companionReducer(
+        {
+          ...baseState,
+          listening: false,
+          thinking: true,
+          emotion: 'pensativa',
+          routedTo: 'cloud',
+        },
+        { type: 'USER_SAID', text: 'sigue', userId: 'u1' },
+      );
+      expect(result.thinking).toBe(true);
+      expect(result.emotion).toBe('pensativa');
+      expect(result.routedTo).toBe('cloud');
+    });
+
+    it('mensajes consecutivos se acumulan en orden', () => {
+      let state: CompanionState = baseState;
+      state = companionReducer(state, { type: 'USER_SAID', text: 'uno', userId: 'u1' });
+      state = companionReducer(state, { type: 'USER_SAID', text: 'dos', userId: 'u1' });
+      expect(state.history).toHaveLength(2);
+      expect(state.history[0]?.text).toBe('uno');
+      expect(state.history[1]?.text).toBe('dos');
     });
   });
 
@@ -143,7 +181,19 @@ describe('companionReducer', () => {
         userId: 'me',
       });
       expect(state.listening).toBe(false);
+      // STT_FINAL solo cierra la captura; el historial aún está vacío.
+      expect(state.history).toHaveLength(0);
+
+      // El siguiente evento por el bus sería `user:message` (lo emite el
+      // cliente tras tipear o tras stt:transcribed). El reducer lo recibe
+      // como USER_SAID.
+      state = companionReducer(state, {
+        type: 'USER_SAID',
+        text: 'hola shiro',
+        userId: 'me',
+      });
       expect(state.history).toHaveLength(1);
+      expect(state.history[0]?.role).toBe('user');
 
       state = companionReducer(state, { type: 'THINK_START', tier: 'local' });
       expect(state.thinking).toBe(true);

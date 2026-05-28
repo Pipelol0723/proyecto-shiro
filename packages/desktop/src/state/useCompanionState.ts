@@ -8,14 +8,20 @@
  *
  *   stt:listening    → LISTEN_START
  *   stt:partial      → STT_PARTIAL
- *   stt:transcribed  → STT_FINAL
+ *   stt:transcribed  → STT_FINAL  (apaga listening, limpia sttLive)
+ *   user:message     → USER_SAID  (añade el mensaje del usuario al historial)
  *   router:routed    → THINK_START
  *   llm:responded    → SHIRO_REPLY
  *   tts:audio-ended  → SPEAK_END
  *
- * El cliente NO se suscribe a `user:message` ni a `llm:chunk` aquí
- * — `user:message` lo emite el cliente, y `llm:chunk` lo consume el
- * TTS, no el state visual.
+ * Por qué `user:message` añade al historial y no `stt:transcribed`:
+ *
+ * El cliente emite `user:message` tanto cuando el usuario tipea como
+ * cuando STT entrega una transcripción final (futuro). Unificar el
+ * historial sobre ese evento mantiene el código DRY y permite que el
+ * mensaje "Tú: hola" aparezca incluso sin STT (estado actual).
+ *
+ * `llm:chunk` no se consume aquí — lo procesará el TTS cuando llegue.
  */
 
 import { useReducer } from 'react';
@@ -40,6 +46,10 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
 
   useBusEvent('stt:transcribed', (p) => {
     dispatch({ type: 'STT_FINAL', text: p.text, userId: p.userId });
+  });
+
+  useBusEvent('user:message', (p) => {
+    dispatch({ type: 'USER_SAID', text: p.text, userId: p.userId });
   });
 
   useBusEvent('router:routed', (p) => {
