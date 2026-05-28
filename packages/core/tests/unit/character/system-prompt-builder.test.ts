@@ -101,10 +101,25 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/COMPORTAMIENTO/);
   });
 
-  it('NO menciona el formato de salida JSON (eso lo enforza el LLM aparte)', () => {
+  it('incluye la sección FORMATO DE SALIDA recordando la emoción', () => {
+    const prompt = buildSystemPrompt(MINIMAL);
+    expect(prompt).toMatch(/FORMATO DE SALIDA/);
+    expect(prompt).toMatch(/emotion/);
+    expect(prompt).toMatch(/obligatorio/i);
+  });
+
+  it('FORMATO DE SALIDA lista las 5 emociones del enum', () => {
+    const prompt = buildSystemPrompt(MINIMAL);
+    expect(prompt).toMatch(/neutral/);
+    expect(prompt).toMatch(/divertida/);
+    expect(prompt).toMatch(/pensativa/);
+    expect(prompt).toMatch(/molesta/);
+    expect(prompt).toMatch(/vulnerable/);
+  });
+
+  it('NO menciona "JSON" — el wording natural deja el formato técnico al provider', () => {
     const prompt = buildSystemPrompt(MINIMAL);
     expect(prompt).not.toMatch(/JSON/i);
-    expect(prompt).not.toMatch(/format.*json/i);
   });
 
   it('es determinístico — mismo input produce mismo output', () => {
