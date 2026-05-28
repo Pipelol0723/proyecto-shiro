@@ -54,6 +54,12 @@ export const CharacterSchema = z.object({
   personality: PersonalitySchema,
   backstory: z.string().optional(),
   behaviors: BehaviorsSchema,
+  /**
+   * Reglas de comportamiento conversacional. Se inyectan tal cual como
+   * sección "REGLAS" del system prompt — el LLM debe respetarlas en
+   * cada turno. Útil para anti-patterns ("no halagar", "evitar emojis").
+   */
+  interaction_rules: z.array(z.string().min(1)).optional(),
   emotions: EmotionMappingSchema.optional(),
 });
 

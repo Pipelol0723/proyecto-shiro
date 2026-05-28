@@ -62,7 +62,7 @@ describe('CharacterSchema', () => {
       },
       emotions: {
         neutral: { tts_stability: 0.5, avatar_expression: 'idle' },
-        alegre: { tts_stability: 0.4 },
+        divertida: { tts_stability: 0.4 },
       },
     });
     expect(result.success).toBe(true);
@@ -74,5 +74,32 @@ describe('CharacterSchema', () => {
       emotions: { neutral: { tts_stability: 1.5 } },
     });
     expect(result.success).toBe(false);
+  });
+
+  it('acepta interaction_rules como array de strings', () => {
+    const result = CharacterSchema.safeParse({
+      ...MINIMAL_CHARACTER,
+      interaction_rules: ['evita emojis', 'no halaga al usuario'],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.interaction_rules).toEqual(['evita emojis', 'no halaga al usuario']);
+    }
+  });
+
+  it('rechaza interaction_rules con elementos vacíos', () => {
+    const result = CharacterSchema.safeParse({
+      ...MINIMAL_CHARACTER,
+      interaction_rules: ['regla válida', ''],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('omite interaction_rules si no se pasa (opcional)', () => {
+    const result = CharacterSchema.safeParse(MINIMAL_CHARACTER);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.interaction_rules).toBeUndefined();
+    }
   });
 });
