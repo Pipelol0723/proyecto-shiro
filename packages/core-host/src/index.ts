@@ -24,14 +24,7 @@ export type { WebSocketServerTransportOptions } from './transports/websocket-ser
 export { bootstrap } from './bootstrap.js';
 export type { BootstrapOptions, BootstrapResult } from './bootstrap.js';
 
-export { wireMockConversationFlow } from './mocks/mock-conversation-flow.js';
-export type { MockConversationFlowOptions } from './mocks/mock-conversation-flow.js';
+export { wireConversationFlow } from './pipeline/conversation-flow.js';
+export type { WireConversationFlowOptions } from './pipeline/conversation-flow.js';
 
-export {
-  NoopAvatar,
-  NoopLLM,
-  NoopMemory,
-  NoopRouter,
-  NoopSTT,
-  NoopTTS,
-} from './mocks/noop-modules.js';
+export { NoopAvatar, NoopLLM, NoopMemory, NoopSTT, NoopTTS } from './mocks/noop-modules.js';

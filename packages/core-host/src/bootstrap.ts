@@ -26,6 +26,7 @@ import {
   AnthropicLLM,
   buildSystemPrompt,
   EventBus,
+  HybridRouter,
   Logger,
   ModuleLoader,
   OllamaLLM,
@@ -36,8 +37,8 @@ import {
   type ModulesConfig,
 } from '@proyecto-shiro/core';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
-import { wireMockConversationFlow } from './mocks/mock-conversation-flow.js';
-import { NoopAvatar, NoopMemory, NoopRouter, NoopSTT, NoopTTS } from './mocks/noop-modules.js';
+import { wireConversationFlow } from './pipeline/conversation-flow.js';
+import { NoopAvatar, NoopMemory, NoopSTT, NoopTTS } from './mocks/noop-modules.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -96,14 +97,13 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     transports: [transport],
   });
 
-  // 3. ModuleLoader con factories. OllamaLLM y AnthropicLLM son ya las
-  //    implementaciones reales (PRs 5 y 6). El resto siguen siendo mocks
-  //    no-op hasta que llegue su PR: HybridRouter (PR 7), STT/TTS/Memory
-  //    (hitos posteriores).
+  // 3. ModuleLoader con factories. LLM local/cloud y Router son ya las
+  //    implementaciones reales (PRs 5, 6, 7). STT/TTS/Memory/Avatar
+  //    siguen siendo mocks no-op hasta sus respectivos hitos.
   const loader = new ModuleLoader({ logger });
   loader.register('OllamaLLM', (cfg, deps) => new OllamaLLM(cfg, deps));
   loader.register('AnthropicLLM', (cfg, deps) => new AnthropicLLM(cfg, deps));
-  loader.register('HybridRouter', () => new NoopRouter());
+  loader.register('HybridRouter', (cfg, deps) => new HybridRouter(cfg, deps));
   loader.register('WhisperSTT', () => new NoopSTT());
   loader.register('ElevenLabsTTS', () => new NoopTTS());
   loader.register('LettaMemory', () => new NoopMemory());
@@ -113,18 +113,19 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   const orchestrator = new Orchestrator({ bus, loader, logger, config: options.config });
   await orchestrator.init();
 
-  // 5. Engancha el simulador del flujo conversacional. Cuando el cliente
-  //    emita `user:message`, el simulador responde con la cadena de
-  //    eventos. Se reemplaza por el pipeline real en PR 7.
-  const disposeSimulator = wireMockConversationFlow({
-    bus,
-    speed: options.simulationSpeed,
-  });
-
-  // 6. Construye el system prompt una vez — se reusa turn a turn. Cuando
-  //    el wiring del pipeline (PR 7) construya `LLMRequest`, inyecta este
-  //    string como `systemPrompt`.
+  // 5. System prompt pre-construido — se reusa turn a turn.
   const systemPrompt = buildSystemPrompt(options.character);
+
+  // 6. Cablea el pipeline conversacional real. `user:message` arranca
+  //    el flujo router → LLM → llm:responded → tts:audio-ended (este
+  //    último simulado hasta el hito TTS). Ver ADR 0016.
+  const disposeFlow = wireConversationFlow({
+    bus,
+    modules: orchestrator.getModules(),
+    systemPrompt,
+    logger,
+    simulationSpeed: options.simulationSpeed,
+  });
 
   child.info(
     `core-host listo en puerto ${transport.port}${options.path ?? '/bus'} (personaje: ${options.character.identity.name})`,
@@ -138,7 +139,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     character: options.character,
     systemPrompt,
     shutdown: async () => {
-      disposeSimulator();
+      disposeFlow();
       await orchestrator.shutdown();
       await transport.close();
       child.info('core-host apagado');

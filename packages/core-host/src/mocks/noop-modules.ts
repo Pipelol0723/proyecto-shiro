@@ -1,30 +1,25 @@
 /**
- * Mocks no-op para los 7 slots del Orchestrator durante PR 3.
+ * Mocks no-op para los slots del Orchestrator que todavía no tienen
+ * implementación real.
  *
  * El Orchestrator (`@proyecto-shiro/core`) carga los 7 módulos definidos
- * en `modules.config.yaml` al arranque. En esta fase del hito LLM todavía
- * no tenemos implementaciones reales (Ollama llega en PR 5, Anthropic en
- * PR 6, Router en PR 7, STT/TTS/Memory/Avatar son hitos posteriores).
+ * en `modules.config.yaml` al arranque. A partir de PR 7 los slots LLM
+ * (local + cloud) y Router ya son implementaciones reales — quedan
+ * solo STT/TTS/Memory/Avatar como noops hasta sus respectivos hitos.
  *
- * Para que el Orchestrator pueda inicializar sin error, registramos estos
- * stubs que satisfacen los contratos pero no hacen nada útil. La
- * "simulación visible" del flujo conversacional vive en
- * `mock-conversation-flow.ts` — independiente de los módulos, solo cablea
- * eventos sobre el bus.
- *
- * Estos mocks se irán reemplazando uno por uno en los PRs siguientes.
+ * `NoopLLM` sigue exportado por si algún test quiere registrarlo en
+ * lugar del OllamaLLM/AnthropicLLM real (e.g. tests que no quieren
+ * tocar red).
  */
 
 import type {
   IAvatarModule,
   ILLMModule,
   IMemoryModule,
-  IRouterModule,
   ISTTModule,
   ITTSModule,
   LLMRequest,
   LLMResponse,
-  LLMTier,
   MemoryEntry,
   STTRequest,
   STTResult,
@@ -43,13 +38,6 @@ export class NoopLLM implements ILLMModule {
       emotion: 'neutral',
       tokensUsed: 0,
     });
-  }
-}
-
-export class NoopRouter implements IRouterModule {
-  readonly id = 'router:noop';
-  route(_request: LLMRequest): Promise<LLMTier> {
-    return Promise.resolve('local');
   }
 }
 
