@@ -12,6 +12,7 @@
  *   2. Personalidad (rasgos + estilo + likes/dislikes).
  *   3. Backstory (si la hay).
  *   4. Comportamiento (saludo, incertidumbre, registros emocionales).
+ *   5. Reglas conversacionales (si las hay).
  *
  * NO incluye el formato de salida (JSON con emoción) — eso lo enforza
  * el LLM por separado (Ollama `format: 'json'`, Anthropic `tool_use`),
@@ -73,6 +74,15 @@ export function buildSystemPrompt(character: Character): string {
       }
     }
     if (lines.length > 1) sections.push(lines.join('\n'));
+  }
+
+  // ─── Reglas conversacionales (opcional) ───
+  if (character.interaction_rules && character.interaction_rules.length > 0) {
+    const lines: string[] = ['REGLAS'];
+    for (const rule of character.interaction_rules) {
+      lines.push(`- ${rule}`);
+    }
+    sections.push(lines.join('\n'));
   }
 
   return sections.join('\n\n');

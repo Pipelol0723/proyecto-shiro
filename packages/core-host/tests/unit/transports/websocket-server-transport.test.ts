@@ -81,11 +81,11 @@ describe('WebSocketServerTransport', () => {
     const received = new Promise<string>((resolve) => {
       client.once('message', (data: RawData) => resolve(rawToString(data)));
     });
-    await t.send('llm:responded', { text: 'hola', emotion: 'alegre' });
+    await t.send('llm:responded', { text: 'hola', emotion: 'divertida' });
     const raw = await received;
     const env = JSON.parse(raw) as Record<string, unknown>;
     expect(env.name).toBe('llm:responded');
-    expect(env.payload).toEqual({ text: 'hola', emotion: 'alegre' });
+    expect(env.payload).toEqual({ text: 'hola', emotion: 'divertida' });
   });
 
   it('send() broadcast a múltiples clientes', async () => {

@@ -24,11 +24,10 @@
   --accent-2: #b8541d;
 
   --neutral-color: #5c5a52;
-  --alegre-color: #b8541d;
+  --divertida-color: #b8541d;
   --pensativa-color: #3d4a5c;
-  --sorprendida-color: #8b1f3a;
-  --triste-color: #4d5a6c;
-  --enojada-color: #7d2235;
+  --molesta-color: #7d2235;
+  --vulnerable-color: #4d5a6c;
 
   --shadow-lg: 0 30px 60px -30px rgba(28, 28, 28, 0.18);
   --shadow-md: 0 4px 12px -4px rgba(28, 28, 28, 0.1);

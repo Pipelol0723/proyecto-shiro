@@ -111,7 +111,7 @@ describe('WebSocket round-trip (cliente ↔ server)', () => {
     serverBus.on('user:message', async () => {
       await serverBus.emit('llm:responded', {
         text: 'hola tú',
-        emotion: 'alegre',
+        emotion: 'divertida',
         userId: 'u1',
         tier: 'local',
         latencyMs: 50,
@@ -137,7 +137,7 @@ describe('WebSocket round-trip (cliente ↔ server)', () => {
     await clientBus.emit('user:message', { text: 'hola', userId: 'u1' });
     await waitFor(() => replies.length === 1);
 
-    expect(replies[0]).toEqual({ text: 'hola tú', emotion: 'alegre' });
+    expect(replies[0]).toEqual({ text: 'hola tú', emotion: 'divertida' });
   });
 });
 

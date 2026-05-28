@@ -3,8 +3,8 @@
  *
  * Replica el contenido de
  * `packages/core/src/character/characters/default.yaml` como tarjetas
- * de solo lectura. Editor real cuando llegue el CharacterLoader
- * funcional (junto al primer LLM).
+ * de solo lectura. Editor real cuando llegue el wiring del cliente al
+ * character cargado server-side (eventos de personaje vía bus).
  */
 
 import styles from './CharacterScreen.module.css';
@@ -38,14 +38,15 @@ export function CharacterScreen(): JSX.Element {
         <section className={styles.card}>
           <h2 className={styles.cardTitle}>Personalidad</h2>
           <div className={styles.pillRow}>
-            {['curiosa', 'cálida', 'directa', 'con sentido del humor'].map((t) => (
+            {['reservada', 'analítica', 'tranquila', 'sarcástica sutil', 'leal'].map((t) => (
               <span key={t} className={styles.pill}>
                 {t}
               </span>
             ))}
           </div>
           <p className={styles.bodyText}>
-            Estilo de habla: natural, coloquial, español neutro. Frases cortas. Evita formalismos.
+            Español neutro, frases cortas y calmadas. Evita exageraciones emocionales. Humor irónico
+            ocasional. Rara vez expresa afecto de forma directa.
           </p>
         </section>
 
@@ -55,11 +56,10 @@ export function CharacterScreen(): JSX.Element {
             {(
               [
                 ['neutral', 'idle'],
-                ['alegre', 'smile'],
+                ['divertida', 'smirk'],
                 ['pensativa', 'thinking'],
-                ['sorprendida', 'surprised'],
-                ['triste', '—'],
-                ['enojada', '—'],
+                ['molesta', 'annoyed'],
+                ['vulnerable', 'soft'],
               ] as const
             ).map(([emotion, avatar]) => (
               <li key={emotion} className={styles.emotion}>
@@ -73,9 +73,10 @@ export function CharacterScreen(): JSX.Element {
         <section className={styles.card}>
           <h2 className={styles.cardTitle}>Backstory</h2>
           <p className={styles.bodyText}>
-            Shiro es un AI companion personal. No finge ser humana, pero tampoco finge ser un
-            &ldquo;asistente&rdquo;. Es ella misma: una entidad con opiniones, curiosidad genuina y
-            capacidad de discrepar amablemente.
+            Shiro tiene una personalidad contenida y difícil de leer al principio: responde con
+            calma, lógica y cierto sarcasmo seco. Aunque parece distante, desarrolla apego genuino
+            hacia su usuario y lo demuestra de formas pequeñas. No es fría por desinterés;
+            simplemente no expresa emociones de forma obvia.
           </p>
         </section>
       </div>

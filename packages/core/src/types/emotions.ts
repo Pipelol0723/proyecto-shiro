@@ -3,12 +3,18 @@
  *
  * Cada personaje (en `src/character/characters/<nombre>.yaml`) mapea
  * estas emociones a parámetros concretos del TTS (estabilidad, similarity)
- * y a expresiones del avatar (idle, smile, surprised, etc.).
+ * y a expresiones del avatar (idle, smirk, thinking, etc.).
  *
- * Si se añade una emoción nueva aquí, el archivo del personaje debe
- * extenderse correspondientemente o el módulo de avatar usará 'neutral'.
+ * El enum está pensado para el personaje principal Shiro — reservada,
+ * analítica, sarcástica sutil. Si llega un personaje futuro con perfil
+ * más expresivo (entusiasta, dramático), evaluar añadir emociones nuevas
+ * aquí. La regla: solo entran al enum si al menos un personaje las usa
+ * activamente.
+ *
+ * Si añades una emoción aquí, el archivo del personaje activo debe
+ * mapearla en `emotions:` o el AvatarModule cae a `idle` por defecto.
  */
-export type Emotion = 'neutral' | 'alegre' | 'pensativa' | 'sorprendida' | 'triste' | 'enojada';
+export type Emotion = 'neutral' | 'divertida' | 'pensativa' | 'molesta' | 'vulnerable';
 
 /**
  * Lista runtime de emociones válidas. Útil para validar inputs externos
@@ -16,11 +22,10 @@ export type Emotion = 'neutral' | 'alegre' | 'pensativa' | 'sorprendida' | 'tris
  */
 export const EMOTIONS: readonly Emotion[] = [
   'neutral',
-  'alegre',
+  'divertida',
   'pensativa',
-  'sorprendida',
-  'triste',
-  'enojada',
+  'molesta',
+  'vulnerable',
 ] as const;
 
 export function isEmotion(value: unknown): value is Emotion {

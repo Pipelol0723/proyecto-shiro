@@ -112,4 +112,22 @@ describe('buildSystemPrompt', () => {
     const b = buildSystemPrompt(MINIMAL);
     expect(a).toBe(b);
   });
+
+  it('incluye sección REGLAS cuando hay interaction_rules', () => {
+    const prompt = buildSystemPrompt({
+      ...MINIMAL,
+      interaction_rules: ['evita emojis', 'no halaga al usuario'],
+    });
+    expect(prompt).toMatch(/REGLAS/);
+    expect(prompt).toMatch(/- evita emojis/);
+    expect(prompt).toMatch(/- no halaga al usuario/);
+  });
+
+  it('omite REGLAS si interaction_rules está vacío o ausente', () => {
+    const promptSinReglas = buildSystemPrompt(MINIMAL);
+    expect(promptSinReglas).not.toMatch(/REGLAS/);
+
+    const promptArrayVacio = buildSystemPrompt({ ...MINIMAL, interaction_rules: [] });
+    expect(promptArrayVacio).not.toMatch(/REGLAS/);
+  });
 });

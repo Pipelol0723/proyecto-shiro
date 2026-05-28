@@ -41,12 +41,12 @@ describe('wire-schema', () => {
 
   describe('parseEnvelope', () => {
     it('parsea un envelope válido', () => {
-      const raw = serializeEnvelope('llm:responded', { text: 'hi', emotion: 'alegre' });
+      const raw = serializeEnvelope('llm:responded', { text: 'hi', emotion: 'divertida' });
       const result = parseEnvelope(raw);
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.envelope.name).toBe('llm:responded');
-        expect(result.envelope.payload).toEqual({ text: 'hi', emotion: 'alegre' });
+        expect(result.envelope.payload).toEqual({ text: 'hi', emotion: 'divertida' });
       }
     });
 
