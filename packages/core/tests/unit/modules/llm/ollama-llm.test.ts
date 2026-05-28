@@ -72,7 +72,7 @@ describe('OllamaLLM', () => {
   it('generate llama al endpoint /api/chat con el body esperado', async () => {
     fetchSpy.mockResolvedValue(
       mockResponse({
-        message: { role: 'assistant', content: '{"text":"hola","emotion":"alegre"}' },
+        message: { role: 'assistant', content: '{"text":"hola","emotion":"divertida"}' },
         done: true,
         eval_count: 42,
       }),
@@ -161,7 +161,7 @@ describe('OllamaLLM', () => {
   it('generate parsea correctamente una respuesta válida', async () => {
     fetchSpy.mockResolvedValue(
       mockResponse({
-        message: { role: 'assistant', content: '{"text":"hola tú","emotion":"alegre"}' },
+        message: { role: 'assistant', content: '{"text":"hola tú","emotion":"divertida"}' },
         done: true,
         eval_count: 42,
       }),
@@ -171,7 +171,7 @@ describe('OllamaLLM', () => {
     const result = await llm.generate({ text: 'hola' });
 
     expect(result.text).toBe('hola tú');
-    expect(result.emotion).toBe('alegre');
+    expect(result.emotion).toBe('divertida');
     expect(result.tokensUsed).toBe(42);
   });
 
