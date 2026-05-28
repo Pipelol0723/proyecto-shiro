@@ -15,8 +15,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
+    "dev": "tsx --env-file-if-exists=../../.env watch src/server.ts",
+    "start": "node --env-file-if-exists=../../.env dist/server.js",
     "print-prompt": "tsx scripts/print-system-prompt.ts"
   },
   "dependencies": {
