@@ -62,6 +62,7 @@ export type CompanionAction =
   | { type: 'LISTEN_START' }
   | { type: 'STT_PARTIAL'; text: string }
   | { type: 'STT_FINAL'; text: string; userId: string }
+  | { type: 'USER_SAID'; text: string; userId: string }
   | { type: 'THINK_START'; tier: LLMTier }
   | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
   | { type: 'SPEAK_END' }
@@ -77,10 +78,16 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
       return { ...state, sttLive: action.text };
 
     case 'STT_FINAL':
+      // Solo transición de estado. El mensaje al historial lo añade
+      // `USER_SAID` cuando llegue `user:message` por el bus (lo dispara
+      // el cliente al tipear, o el adaptador STT tras una transcripción
+      // final). Así el historial recibe input sea tipeado o hablado por
+      // un único camino.
+      return { ...state, listening: false, sttLive: '' };
+
+    case 'USER_SAID':
       return {
         ...state,
-        listening: false,
-        sttLive: '',
         history: [
           ...state.history,
           { role: 'user', text: action.text, timestamp: new Date().toISOString() },
