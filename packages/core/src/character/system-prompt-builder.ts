@@ -13,12 +13,20 @@
  *   3. Backstory (si la hay).
  *   4. Comportamiento (saludo, incertidumbre, registros emocionales).
  *   5. Reglas conversacionales (si las hay).
+ *   6. **Formato de salida** — recordatorio explícito de que la emoción
+ *      es obligatoria.
  *
- * NO incluye el formato de salida (JSON con emoción) — eso lo enforza
- * el LLM por separado (Ollama `format: 'json'`, Anthropic `tool_use`),
- * decidido en ADR 0014.
+ * El formato de salida se enforza primariamente por el provider
+ * (Ollama `format: 'json'`, Anthropic `tool_use`, ADR 0014). En la
+ * práctica esos mecanismos no son 100% estrictos — Anthropic permite
+ * que el modelo omita campos `required`, y modelos chicos (Qwen 3B)
+ * ignoran el schema ocasionalmente. La sección "FORMATO DE SALIDA"
+ * del prompt refuerza la regla con lenguaje natural, mejorando
+ * dramáticamente el ratio de respuestas con emoción válida sin
+ * tocar código de los módulos LLM.
  */
 
+import { EMOTIONS } from '../types/emotions.js';
 import type { Character } from './schema.js';
 
 /**
@@ -85,5 +93,25 @@ export function buildSystemPrompt(character: Character): string {
     sections.push(lines.join('\n'));
   }
 
+  // ─── Formato de salida (obligatorio, refuerza ADR 0014) ───
+  sections.push(buildOutputFormatSection());
+
   return sections.join('\n\n');
+}
+
+/**
+ * Sección final del prompt. Refuerza con lenguaje natural lo que ya
+ * dice el schema estructurado del provider (`format` en Ollama,
+ * `tool_use` en Anthropic). En la práctica el refuerzo es necesario
+ * porque ningún provider enforza `required` de forma 100% estricta
+ * con inputs cortos.
+ */
+function buildOutputFormatSection(): string {
+  const emotionList = [...EMOTIONS].join(', ');
+  return [
+    'FORMATO DE SALIDA',
+    'Cada respuesta debe incluir SIEMPRE el campo "emotion" con uno de:',
+    emotionList + '.',
+    'Es obligatorio — nunca lo omitas. Si dudas, usa "neutral".',
+  ].join('\n');
 }

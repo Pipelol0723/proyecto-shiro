@@ -104,6 +104,19 @@ Mejor degradar a "respuesta sin emoción" que romper el turno entero.
 
 - El system prompt **no necesita explicar el formato JSON** — el provider lo enforza. Mantiene el prompt centrado en la personalidad. Esto se documenta en `system-prompt-builder.ts`.
 
+## Addendum 2026-05-28: el provider no enforza tanto como pensábamos
+
+Tras las primeras horas de uso real con OllamaLLM y AnthropicLLM (PRs 5 y 6) detectamos que **ambos providers omiten la emoción con frecuencia notable**, especialmente con inputs cortos ("hola") o cuando el modelo está poco "calentado":
+
+- **Anthropic** acepta el `tool_use` forzado, pero `required: ['text', 'emotion']` es un hint que el modelo puede ignorar. En la práctica, ~30% de respuestas a inputs triviales llegaban sin `emotion`. Resultado: warn "emoción desconocida 'undefined', usando neutral".
+- **Ollama con `qwen2.5:3b`** sigue el schema mejor (es más estricto), pero el modelo de 3B es lo bastante pequeño que ocasionalmente devuelve la JSON sin el campo o con un valor fuera del enum.
+
+El fallback a `'neutral'` evita romper el turno — bien — pero el avatar se queda neutral siempre. Pierde el 80% de su valor.
+
+**Mitigación adoptada**: el `buildSystemPrompt` añade una sección final `FORMATO DE SALIDA` que recuerda en lenguaje natural que la emoción es obligatoria y lista las 5 válidas. Con esto el ratio de respuestas con emoción válida sube significativamente sin tocar código de los módulos LLM.
+
+La decisión original (structured outputs por provider) sigue siendo correcta — es la primera línea de defensa. El recordatorio en el prompt es la segunda línea, que la práctica mostró necesaria.
+
 ## Notas de implementación
 
 - `packages/core/src/modules/llm/ollama-llm.ts` (PR 5):
