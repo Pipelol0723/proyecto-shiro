@@ -14,8 +14,9 @@ modules:
     local:
       active: OllamaLLM
       config:
-        # Cambiar a "qwen2.5:14b" cuando haya 16+ GB de VRAM disponible
-        model: 'qwen2.5:7b'
+        # qwen2.5:3b cabe en GPUs de 4 GB. Subir a 7b con 8 GB+ VRAM,
+        # 14b con 16 GB+ (RTX 5080, etc.). Ver README sección hardware.
+        model: 'qwen2.5:3b'
         host: 'http://localhost:11434'
         temperature: 0.7
     cloud:
@@ -27,12 +28,14 @@ modules:
 
   # ─────────────────────────────────────────────────────────────
   # Router — decide qué LLM usa cada mensaje
+  # Ver ADR 0015: clasificador LLM binario con fallback heurístico.
   # ─────────────────────────────────────────────────────────────
   router:
     active: HybridRouter
     config:
-      classifier_model: 'qwen2.5:7b'
-      # Umbral de complejidad: 0.0 (todo a local) - 1.0 (todo a cloud)
+      classifier_model: 'qwen2.5:3b'
+      # cloud_threshold se ignora en V1 (clasificación binaria local|cloud).
+      # Reservado para V2 cuando llegue scoring real. Ver ADR 0015.
       cloud_threshold: 0.6
 
   # ─────────────────────────────────────────────────────────────

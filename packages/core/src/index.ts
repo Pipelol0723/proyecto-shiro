@@ -75,3 +75,11 @@ export {
   AnthropicLLMError,
 } from './modules/llm/anthropic-llm.js';
 export type { AnthropicLLMConfig, AnthropicLLMOptions } from './modules/llm/anthropic-llm.js';
+
+export {
+  HybridRouter,
+  HybridRouterConfigSchema,
+  HybridRouterError,
+  routeByHeuristic,
+} from './modules/router/hybrid-router.js';
+export type { HybridRouterConfig } from './modules/router/hybrid-router.js';
