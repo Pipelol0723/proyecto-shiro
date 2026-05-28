@@ -60,3 +60,7 @@ export type { LoadedModules, OrchestratorOptions } from './core/orchestrator.js'
 // Schemas + tipos de config (browser-safe). El ConfigLoader vive en
 // `@proyecto-shiro/core/node`.
 export * from './config/index.js';
+
+// Schemas + builder del personaje (browser-safe). El CharacterLoader
+// vive en `@proyecto-shiro/core/node`.
+export * from './character/index.js';

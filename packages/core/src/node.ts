@@ -12,3 +12,5 @@
  */
 
 export { ConfigLoader, ConfigValidationError } from './config/config-loader.js';
+
+export { CharacterLoader, CharacterValidationError } from './character/character-loader.js';

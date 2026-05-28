@@ -67,5 +67,6 @@ emotions:
     tts_stability: 0.3
     avatar_expression: 'surprised'
 
-# System prompt base que se construye a partir de los campos anteriores
-# El CharacterLoader (Fase 2) genera este texto automáticamente.
+# El system prompt se construye automáticamente con `buildSystemPrompt()`
+# a partir de identity + personality + backstory + behaviors. El campo
+# `emotions` lo consume el TTS y el AvatarModule, no el LLM.

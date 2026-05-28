@@ -16,7 +16,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "print-prompt": "tsx scripts/print-system-prompt.ts"
   },
   "dependencies": {
     "@proyecto-shiro/core": "*",
