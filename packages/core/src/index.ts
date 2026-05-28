@@ -68,3 +68,10 @@ export * from './character/index.js';
 // Implementaciones de módulos LLM (browser-safe — usan fetch).
 export { OllamaLLM, OllamaLLMConfigSchema, OllamaLLMError } from './modules/llm/ollama-llm.js';
 export type { OllamaLLMConfig } from './modules/llm/ollama-llm.js';
+
+export {
+  AnthropicLLM,
+  AnthropicLLMConfigSchema,
+  AnthropicLLMError,
+} from './modules/llm/anthropic-llm.js';
+export type { AnthropicLLMConfig, AnthropicLLMOptions } from './modules/llm/anthropic-llm.js';
