@@ -72,9 +72,7 @@ describe('LocalMemory', () => {
 
     it('persiste el role tal cual (user y assistant)', () => {
       memory.save(makeEntry({ id: 'u', role: 'user', timestamp: '2026-05-29T12:00:00.000Z' }));
-      memory.save(
-        makeEntry({ id: 'a', role: 'assistant', timestamp: '2026-05-29T12:00:01.000Z' }),
-      );
+      memory.save(makeEntry({ id: 'a', role: 'assistant', timestamp: '2026-05-29T12:00:01.000Z' }));
       const pending = memory.getPending();
       expect(pending.map((e) => e.role)).toEqual(['user', 'assistant']);
     });
