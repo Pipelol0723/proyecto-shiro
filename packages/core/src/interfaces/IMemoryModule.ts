@@ -1,4 +1,11 @@
 export interface MemoryEntry {
+  /**
+   * Identificador único de la entrada. UUID v7 generado por el caller
+   * (típicamente el pipeline) antes de pasarla a `save`. Se usa como
+   * clave externa al sincronizar con backends remotos (Letta) para
+   * garantizar idempotencia. Ver ADR 0017.
+   */
+  id: string;
   role: 'user' | 'assistant';
   text: string;
   /** ISO 8601 timestamp. */
