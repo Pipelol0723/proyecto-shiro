@@ -68,6 +68,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0014](0014-llm-structured-output-text-emotion.md)    | Salida estructurada del LLM — `{ text, emotion }`       | Accepted |
 | [0015](0015-hybrid-router-classifier-llm-based.md)    | HybridRouter — clasificador LLM con fallback heurístico | Accepted |
 | [0016](0016-pipeline-conversational-wiring.md)        | Wiring del pipeline conversacional en `core-host`       | Accepted |
+| [0017](0017-memoria-persistente-local-y-letta.md)     | Memoria persistente — LocalMemory + LettaMemory         | Accepted |
 
 ## Referencias externas
 
