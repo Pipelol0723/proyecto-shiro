@@ -71,11 +71,11 @@ y LLM:
 2. **Core** ✅ — EventBus, Orchestrator, ModuleLoader, 9 interfaces.
 3. **Cliente desktop** ✅ — Vite + React + orbe + 3 temas + 5 pantallas + EventBus wiring (ahora via WebSocket).
 4. **LLM** ✅ — split cliente/server (`core-host` proceso Node con WebSocketTransport), `OllamaLLM` (Qwen 2.5), `AnthropicLLM` (Claude Sonnet 4.6) con structured outputs, `HybridRouter` con clasificador LLM + fallback heurístico, pipeline conversacional cableado. Ver ADRs 0012-0016.
-5. **Memoria** 🟡 _siguiente_ — Letta + LocalMemory fallback.
-6. **STT** — faster-whisper microservicio Python.
-7. **TTS** — ElevenLabs + Kokoro + SystemTTS.
-8. **Avatar Live2D** — reemplaza el orbe dentro de `<Avatar>`.
-9. **Packaging Tauri** — envuelve el build de Vite en binario nativo.
+5. **Memoria** 🟡 _en curso_ — Letta como almacén canónico (core memory editable + semántica + consolidación) con `LocalMemory` SQLite como WAL de continuidad (cero turnos perdidos durante hiccups de Letta). Plan en 7 PRs. Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md).
+6. **STT** ⏸️ pendiente — faster-whisper microservicio Python.
+7. **TTS** ⏸️ pendiente — ElevenLabs + Kokoro + SystemTTS.
+8. **Avatar Live2D** ⏸️ pendiente — reemplaza el orbe dentro de `<Avatar>`.
+9. **Packaging Tauri** ⏸️ pendiente — envuelve el build de Vite en binario nativo.
 
 Post-MVP: Plugins, Mobile, Avatar 3D (VRM), Arduino bridge, IoT bridge.
 
