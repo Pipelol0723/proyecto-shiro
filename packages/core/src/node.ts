@@ -14,3 +14,7 @@
 export { ConfigLoader, ConfigValidationError } from './config/config-loader.js';
 
 export { CharacterLoader, CharacterValidationError } from './character/character-loader.js';
+
+// Módulos con dependencias nativas — solo Node.
+export { LocalMemory } from './modules/memory/local-memory.js';
+export type { LocalMemoryOptions } from './modules/memory/local-memory.js';
