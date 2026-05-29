@@ -83,3 +83,12 @@ export {
   routeByHeuristic,
 } from './modules/router/hybrid-router.js';
 export type { HybridRouterConfig } from './modules/router/hybrid-router.js';
+
+// Memoria — LettaMemory es browser-safe (usa fetch). LocalMemory (SQLite,
+// nativo) vive en `@proyecto-shiro/core/node`.
+export {
+  LettaMemory,
+  LettaMemoryConfigSchema,
+  LettaMemoryError,
+} from './modules/memory/letta-memory.js';
+export type { LettaMemoryConfig } from './modules/memory/letta-memory.js';
