@@ -1,7 +1,7 @@
-# ADR 0017: Memoria persistente — LocalMemory (SQLite) + LettaMemory con fallback dinámico
+# ADR 0017: Memoria persistente — Letta canónico con LocalMemory como WAL de continuidad
 
 - **Status**: Accepted
-- **Fecha**: 2026-05-28
+- **Fecha**: 2026-05-29
 - **Decidido por**: Pipelol0723
 
 ## Contexto
@@ -21,85 +21,134 @@ La pieza para resolverlo ya está esbozada:
       local_db_path: './data/memory.db'
   ```
 
-Toca decidir **cómo se materializa**: qué backends construimos, qué se guarda, cómo se recupera y cómo se sincroniza con el cliente.
+Toca decidir **cómo se materializa**: qué papel juegan ambos backends, qué se guarda, cómo se recupera y cómo se sincroniza con el cliente.
 
 ### Restricciones reales
 
-- **Docker no siempre está corriendo**. Letta vive en un contenedor; obligarlo en cada arranque rompe el "abre la app y funciona". Tiene que haber un camino sin Docker.
-- **Hardware limitado**. GTX 1650 4 GB ya está ajustada con `qwen2.5:3b`. Cargar un modelo de embeddings local (nomic-embed-text, mxbai-embed-large) es VRAM extra que no nos sobra. Letta lo hace en su propio contenedor (CPU o GPU separado).
-- **El cliente desktop hoy es session-local**. Si cerramos la app, el historial visible desaparece aunque el server lo persista.
+- **Objetivo a largo plazo**: "recordar todo lo que pueda". Memoria es protagonista del producto, no accesorio. Pérdida de turnos = pérdida de valor.
+- **Proyecto multi-cliente por diseño**. Hoy hay un desktop; en el roadmap entran móvil, Arduino bridge e IoT bridge. Todos conectan al mismo `core-host` por WebSocket ([ADR 0012](0012-split-cliente-server-core-host.md), [ADR 0013](0013-protocolo-websocket-eventbus.md)). Necesitamos **una memoria centralizada y compartida**, no una por superficie.
+- **Docker disponible de forma estable**. El usuario puede mantener el contenedor de Letta corriendo permanentemente; la pregunta "y si Docker no está" deja de ser bloqueante, pero "y si Letta reinicia o tiene un hiccup" sigue siendo un riesgo real (updates, errores puntuales, reinicios).
+- **Hardware en transición**. La VRAM no será el cuello de botella inmediato; embeddings remotos (en el contenedor de Letta) o locales son ambos viables.
 - **Protocolo WebSocket congelado** ([ADR 0013](0013-protocolo-websocket-eventbus.md)): broadcast-everything, sin acks, sin subscriptions. Cualquier sync inicial tiene que pasar por el bus, no por extensiones del envelope.
 
 ## Decisión
 
-**Dos backends (`LocalMemory` SQLite + `LettaMemory` HTTP) detrás de un `MemoryManager` que selecciona el activo en caliente; verbatim por turno; recuperación híbrida cronológica + semántica cuando Letta está; el server empuja `memory:snapshot` al cliente al conectar.**
+**Letta es el almacén canónico de memoria (cronológica, semántica, core memory, consolidación). `LocalMemory` (SQLite) es un write-ahead log invisible al path normal: cada turno se persiste primero en SQLite y se empuja inmediatamente a Letta; un drainer en background reenvía las entradas pendientes si Letta tartamudea. Cero turnos perdidos. El server empuja `memory:snapshot` al cliente al conectar.**
 
-### Backends
+### Letta como almacén canónico
 
-Dos implementaciones concretas de `IMemoryModule`, ambas registradas en el `ModuleLoader` ([ADR 0007](0007-module-loader-registry.md)):
+Concreto:
 
-- **`LocalMemory`** — SQLite vía `better-sqlite3`. Single-process, síncrono, sin servicios externos. Implementa `save / getRecent / clear`. **No implementa `searchSemantic`** (la interfaz lo permite, es opcional).
-- **`LettaMemory`** — cliente HTTP contra Letta (Docker). Implementa los cuatro métodos incluyendo `searchSemantic` (Letta hace embeddings internamente con `mxbai-embed-large`).
+- **Lectura cronológica** (`getRecent`) → Letta.
+- **Lectura semántica** (`searchSemantic`) → Letta. Embeddings con `mxbai-embed-large` (default de Letta).
+- **Core memory** (datos del usuario siempre presentes en el system prompt) → Letta. El LLM puede escribirla con tool calls.
+- **Consolidación / archival** (resúmenes automáticos cuando el log crece) → Letta.
+- **Snapshot al cliente al conectar** → Letta.
 
-### `MemoryManager` con fallback dinámico
+`LettaMemory` implementa `IMemoryModule` completo (los cuatro métodos incluyendo `searchSemantic`) y expone además un `ping()` para healthcheck.
 
-Wrapper que también implementa `IMemoryModule` y delega al backend activo:
+### `LocalMemory` como WAL de continuidad
+
+`LocalMemory` (SQLite vía `better-sqlite3`) **no se lee desde el path normal**. Su único rol es ser una cola persistente:
+
+1. Cada `save()` escribe primero a SQLite (síncrono, <1ms).
+2. Inmediatamente se intenta empujar a Letta.
+3. Si Letta confirma, la fila local se marca `synced_at = now()`.
+4. Si Letta falla (timeout, 5xx, contenedor reiniciándose), la fila queda con `synced_at = NULL` y un drainer la procesará después.
+
+Cuando todo va bien, la tabla local es estado transitorio — entradas con `synced_at` se podan periódicamente (o nunca, según convenga; el coste de mantener ~años de turnos en SQLite es despreciable y sirve de respaldo offline contra cualquier evento catastrófico de Letta).
+
+`LocalMemory` implementa **solo `save / clear`** (no expone `getRecent` ni `searchSemantic`); el contrato `IMemoryModule` se cumple en el wrapper, no en esta clase aislada.
+
+### `MemoryManager` con write-ahead log
+
+Wrapper que implementa `IMemoryModule` y orquesta el WAL:
+
+```
+class MemoryManager implements IMemoryModule:
+  save(entry):
+    1. localMemory.save(entry)              # SQLite, síncrono, devuelve ya
+    2. enqueueForLetta(entry)               # fire-and-forget al drainer
+    3. resolve
+
+  getRecent(userId, limit):
+    return letta.getRecent(userId, limit)   # Letta es la verdad
+
+  searchSemantic(query, userId, limit):
+    return letta.searchSemantic(query, userId, limit)
+
+  clear(userId):
+    await Promise.all([
+      letta.clear(userId),
+      localMemory.clear(userId),
+    ])
+```
+
+El drainer:
+
+- Worker en background (loop con `setInterval`).
+- Cada ~5 segundos: si hay entradas con `synced_at IS NULL`, intenta empujarlas a Letta en orden cronológico.
+- Si Letta no responde (`ping()` falla), espera al siguiente ciclo. No bloquea, no escala el intervalo (lineal y predecible).
+- Si Letta confirma, marca la fila local como sincronizada.
+- Logging mínimo: solo cambio de estado ("Letta down — N entradas pendientes" / "Letta up — drenando N entradas").
+
+### `MemoryEntry` gana un `id`
+
+Para deduplicar al sincronizar (caso típico: el manager ya envió a Letta pero perdió la respuesta por timeout; reintentar duplicaría):
 
 ```typescript
-class MemoryManager implements IMemoryModule {
-  private active: 'letta' | 'local';
-  constructor(
-    private letta: LettaMemory,
-    private local: LocalMemory,
-  ) {
-    /* … */
-  }
-
-  // Delegación pura — el método que se llame va al backend activo.
-  save(entry) {
-    return this[this.active === 'letta' ? 'letta' : 'local'].save(entry);
-  }
-  getRecent(userId, limit) {
-    /* delega */
-  }
-  searchSemantic?(query, userId, limit) {
-    if (this.active === 'letta') return this.letta.searchSemantic(query, userId, limit);
-    return undefined; // LocalMemory no la soporta
-  }
-  clear(userId) {
-    /* delega */
-  }
+interface MemoryEntry {
+  id: string; // UUID v7 generado al construir el entry, antes del save
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: string;
+  userId: string;
+  metadata?: Record<string, unknown>;
 }
 ```
 
-Estado de arranque y health-check periódico:
+UUID v7 (ordenable por tiempo) — ordenación local barata, idempotencia en Letta porque el `id` se manda como clave externa.
 
-1. Bootstrap intenta `letta.ping()` con timeout corto (~2s).
-2. Si responde, `active = 'letta'`. Si no, `active = 'local'` y log `warn`.
-3. Cada **30 segundos** vuelve a probar `letta.ping()`. Si Letta entra/sale, se actualiza `active`.
-4. **Los turnos no se migran entre backends** al hacer swap. Cada almacén mantiene lo suyo; el siguiente turno persiste en el backend que esté activo en ese momento. Limitación conocida, documentada.
+### Schema SQLite
+
+```sql
+CREATE TABLE messages (
+  id           TEXT PRIMARY KEY,              -- UUID v7
+  user_id      TEXT NOT NULL,
+  role         TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+  text         TEXT NOT NULL,
+  timestamp    TEXT NOT NULL,                 -- ISO 8601
+  metadata     TEXT,                          -- JSON
+  synced_at    TEXT                           -- ISO 8601 cuando Letta confirma; NULL = pendiente
+);
+
+CREATE INDEX idx_messages_pending ON messages(synced_at) WHERE synced_at IS NULL;
+CREATE INDEX idx_messages_user_time ON messages(user_id, timestamp);
+```
+
+El índice parcial sobre `synced_at IS NULL` mantiene el drainer barato — escanea solo lo no sincronizado.
 
 ### Granularidad: verbatim
 
-Un `MemoryEntry` por turno, sin transformaciones:
+Un `MemoryEntry` por turno, sin transformaciones por nuestra parte:
 
-- `user:message` → `save({ role: 'user', text, timestamp, userId, metadata })`.
-- `llm:responded` → `save({ role: 'assistant', text, timestamp, userId, metadata: { emotion, tier, latencyMs } })`.
+- `user:message` → `save({ id: uuid, role: 'user', text, timestamp, userId, metadata })`.
+- `llm:responded` → `save({ id: uuid, role: 'assistant', text, timestamp, userId, metadata: { emotion, tier, latencyMs } })`.
 
-Sin resúmenes, sin consolidación. Sencillo de auditar, reversible, sin latencia extra.
+La consolidación / summarization la hace **Letta** internamente cuando el archival crece. Nosotros guardamos verbatim; Letta decide cuándo comprimir.
 
-### Recuperación: híbrida cronológica + semántica
+### Recuperación: cronológica + semántica desde Letta
 
 Cada turno, antes de invocar al LLM, el pipeline pide:
 
 ```
-recent      = await memory.getRecent(userId, N)             // siempre
-relevant    = await memory.searchSemantic?(text, userId, M) // si existe
+recent      = await memory.getRecent(userId, N)            // Letta
+relevant    = await memory.searchSemantic(text, userId, M) // Letta
 context     = formatContextForLLM(recent, relevant)
 llm.generate({ text, systemPrompt, context, userId })
 ```
 
-Cuando Letta está, `searchSemantic` devuelve M entradas semánticamente relevantes (incluso antiguas). Cuando solo está LocalMemory, `searchSemantic` es `undefined` y el contexto se queda con los últimos N cronológicos. **Degradación silenciosa, no rotura**.
+Si Letta no responde dentro de un timeout corto (~1.5s), el pipeline procede **sin contexto** (mensaje guardado igual gracias al WAL, simplemente Shiro responde "ciego" ese turno). Logueado como warn. No rompe el turno.
 
 ### Tamaños: N=5, M=3 (configurables)
 
@@ -111,9 +160,11 @@ memory:
     recent_limit: 5
     semantic_limit: 3
     snapshot_limit: 20 # cuántos turnos enviamos al cliente al conectar
+    drainer_interval_ms: 5000 # cada cuánto el drainer intenta empujar pendientes
+    letta_timeout_ms: 1500 # timeout de reads en el hot path del LLM
 ```
 
-Cambiar el valor no requiere recompilar — se ajusta tras observar uso real.
+Cambiar el valor no requiere recompilar.
 
 ### Sync con cliente: `memory:snapshot` post-conexión
 
@@ -127,8 +178,8 @@ Flujo:
 
 1. Cliente abre la conexión WebSocket.
 2. Server detecta nueva conexión (en `WebSocketServerTransport`).
-3. Server hace `memory.getRecent(userId, snapshot_limit)` y emite `memory:snapshot` al bus. El `WebSocketServerTransport` lo entrega al cliente recién conectado.
-4. Cliente recibe el evento; `useCompanionState` despacha `HYDRATE_FROM_MEMORY` al `companionReducer`, que **mapea `MemoryEntry[]` a `CompanionMessage[]`** y reemplaza `history` **solo si está vacío** (evita duplicar si ya hubo turnos en la sesión actual).
+3. Server hace `memory.getRecent(userId, snapshot_limit)` (que va a Letta) y emite `memory:snapshot` al bus. El `WebSocketServerTransport` lo entrega al cliente recién conectado.
+4. Cliente recibe el evento; `useCompanionState` despacha `HYDRATE_FROM_MEMORY` al `companionReducer`, que mapea `MemoryEntry[]` a `CompanionMessage[]` y reemplaza `history` **solo si está vacío** (evita duplicar si ya hubo turnos en la sesión actual).
 
 No tocamos el envelope WebSocket ([ADR 0013](0013-protocolo-websocket-eventbus.md)) — `memory:snapshot` es un evento más del bus.
 
@@ -140,69 +191,88 @@ El companion es de un solo dueño. El pipeline usa `userId: 'default'` constante
 
 ### Sobre el alcance del hito
 
-- **Solo `LocalMemory` ahora, Letta más tarde**: descartada. Letta es la pieza con semántica y consolidación; sin ella, el `searchSemantic?` del contrato queda en el aire indefinidamente y el `LLMRequest.context` pierde la mitad de su valor. El usuario eligió tener la pieza buena lista.
-- **Solo `LettaMemory`, sin `LocalMemory`**: descartada. Si Docker no está corriendo, Shiro se queda sin memoria. SQLite single-file es la red de seguridad.
+- **Solo `LocalMemory` ahora, Letta más tarde**: descartada. Letta es la pieza con core memory editable, consolidación automática y semántica de calidad — exactamente lo que el objetivo "recordar todo lo más posible a largo plazo" pide. Aplazarla deja el hito a medias.
+- **Solo `LettaMemory`, sin WAL local**: descartada. Cuando Letta reinicia (updates, restarts del contenedor, errores puntuales), los turnos de esos segundos se perderían. Para un proyecto cuyo objetivo es "no olvidar nada", la pérdida no es aceptable. El WAL es barato como póliza.
+
+### Sobre la arquitectura entre backends
+
+- **Write-through dual síncrono** (escribir a ambos antes de devolver): descartada. Cada turno pagaría la latencia de Letta (red + embeddings) en el hot path. El WAL asíncrono da la misma garantía de no-pérdida sin colgar la conversación.
+- **`LocalMemory` también con búsqueda semántica vía Ollama embeddings**: descartada. Duplica lo que Letta hace mejor. La semántica vive en Letta; LocalMemory solo persiste.
+- **Migración one-shot al volver Letta** (sin loop de background, solo al detectar swap): descartada. Requiere un evento de "swap" claro y deja ventanas de inconsistencia. El loop periódico es más simple y predecible.
+- **Sync bidireccional** (Letta → Local también, para snapshot rápido al cliente): descartada para V1. El snapshot al conectar puede pagar la latencia de Letta sin problema (~100-300ms). Si en el futuro duele, se introduce un cache local de lectura sin reescribir el ADR.
 
 ### Sobre la recuperación
 
-- **Solo cronológica (últimos N)**: descartada. Mensajes relevantes antiguos se pierden cuando la conversación crece. Letta nos da semántica gratis; aprovechamos.
+- **Solo cronológica (últimos N)**: descartada. Mensajes relevantes antiguos se pierden cuando la conversación crece. Letta da semántica gratis.
 - **Solo semántica**: descartada. Sin un mínimo de turnos cronológicos contiguos, el LLM pierde el hilo inmediato ("¿de qué hablábamos hace dos turnos?").
-- **`LocalMemory` también con embeddings vía Ollama (`nomic-embed-text`)**: descartada. Otro modelo a descargar, más VRAM en uso, código de gestión de vectores en SQLite. El contrato `searchSemantic?` ya es opcional; sale más limpio dejar a LocalMemory en modo "solo cronológica" y dejar la semántica como upgrade que Letta aporta.
 
 ### Sobre la granularidad
 
-- **Verbatim + resumen periódico cada N turnos (con LLM)**: descartada para esta versión. Añade otra ruta de fallo (la llamada al LLM resumidor), latencia extra y complejidad. Cuando Letta esté consolidado y el verbatim moleste, se reconsidera — Letta de hecho ya hace consolidación interna.
-- **Solo resúmenes**: descartada. Perdemos fidelidad para depurar.
+- **Verbatim + resumen periódico nuestro (con LLM)**: descartada. Letta ya consolida internamente; duplicaríamos lógica. Si en el futuro queremos control sobre cómo se resume, se reconsidera.
+- **Solo resúmenes**: descartada. Perdemos fidelidad para depurar y reentrenar a Letta si cambiamos backend.
 
 ### Sobre el comportamiento si Letta no responde
 
-- **Server falla con error claro**: descartada. Romper el arranque por una dependencia opcional es hostil cuando solo quieres probar localmente sin Docker.
-- **Warning y carga `LocalMemory` permanentemente hasta reinicio**: descartada. Si arrancas Letta a mitad de sesión, sería absurdo no usarlo. Por eso el retry periódico.
+- **Server falla con error claro**: descartada. Romper el arranque por un hiccup de Letta es hostil cuando hay un WAL que sigue salvando turnos.
+- **Bloquear el turno hasta que Letta responda**: descartada. Latencia perceptible y mala UX. Mejor responder sin contexto y guardar el turno; cuando Letta vuelva, el contexto vuelve en el siguiente turno.
 
 ### Sobre el sync con el cliente
 
-- **Mantener cliente session-local (sin sync inicial)**: descartada. Memoria persistente que no se ve en la UI es media memoria. Cerrar y reabrir la app debe seguir mostrando lo que pasó antes.
-- **Cliente pide explícitamente con `memory:request`**: descartada como diseño base — añade un round-trip y el cliente no tiene razón para no querer su historial al conectar. Reservado por si el futuro multi-user requiere distinguir "primer arranque" de "reload" antes de pedir nada.
-- **Extender el envelope WebSocket con `kind=snapshot`**: descartada. Toca [ADR 0013](0013-protocolo-websocket-eventbus.md), añade un caso especial al protocolo y no aporta nada que un evento del bus no haga.
+- **Mantener cliente session-local (sin sync inicial)**: descartada. Memoria persistente que no se ve en la UI es media memoria.
+- **Cliente pide explícitamente con `memory:request`**: descartada como diseño base. Push automático evita un round-trip y siempre quieres tu historial al conectar.
+- **Extender el envelope WebSocket con `kind=snapshot`**: descartada. Toca [ADR 0013](0013-protocolo-websocket-eventbus.md) sin ganancia frente a un evento del bus.
 
 ## Consecuencias
 
 ### Positivas
 
-- **Shiro recuerda turnos previos**. Después de mergear este hito, el LLM recibe contexto real en cada llamada — primera conversación de verdad.
+- **Cero turnos perdidos**. Letta puede reiniciar, perder red, dar un hiccup — el WAL captura y reenvía.
+- **Hot path rápido**. `save()` devuelve en sub-ms (SQLite); el push a Letta no bloquea la conversación.
+- **Shiro recuerda turnos previos con calidad real**. Core memory editable + semántica de Letta + cronológica reciente.
 - **Cliente arranca con historial visible**. Cerrar y reabrir la app no pierde el chat.
-- **Degradación graceful**. Sin Docker: SQLite local. Con Docker: Letta + semántica. Sin código condicional en el caller — `MemoryManager` lo maneja.
-- **Interfaz ya cuajada**. `IMemoryModule` se diseñó pensando en esto; no necesita cambios.
-- **Patrón de fallback chain estrenado**. El `MemoryManager` es la primera implementación real de la `fallback_chain` que el YAML lleva tiempo prometiendo; sirve de plantilla para TTS cuando llegue.
+- **Multi-cliente by default**. Cuando aparezca el móvil, Arduino o robot, conectan al mismo `core-host` por WS, hablan con el mismo Letta. Ningún diseño nuevo.
+- **Seguro contra lock-in de Letta**. Si Letta cambia drásticamente o quieres migrar a otro backend, el log crudo está en SQLite — migración posible.
 
 ### Negativas / Riesgos
 
-- **Letta como dependencia operativa**. Aunque no es obligatoria, cuando esté activa hay un contenedor más que gestionar, healthchecks, posible OOM en la máquina. Mitigación: el fallback a SQLite es el plan B real, no decorativo.
-- **`better-sqlite3` requiere binarios nativos**. Builds en Windows/Mac/Linux funcionan pero el npm install es más lento. Mitigación: módulo asentado y mantenido; alternativa `node:sqlite` (Node 22+) está en consideración para una migración futura sin ADR.
-- **Memoria infinita en LocalMemory**. Sin política de pruning, la DB crece para siempre. Mitigación: poda por edad/cantidad la hacemos cuando duela, no antes (probablemente nunca para un usuario individual).
-- **Cambios de backend a media sesión pueden confundir** ("¿por qué este turno no recuerda el de hace 5 minutos?" si Letta cayó y el de antes lo guardó allí). Limitación conocida; documentada en el ADR y en el código.
-- **`memory:snapshot` se emite también en re-conexiones** (no solo en primer arranque). El reducer compensa: solo hidrata si `history` está vacío. Cualquier nueva lógica que reaccione a `memory:snapshot` debe ser idempotente.
+- **Complejidad del drainer**. Un loop de background, un índice parcial, manejo de errores de red. Aislado en una clase, pero pieza que mantener.
+- **Letta como dependencia operativa real**. Aunque hay WAL, los reads dependen de Letta — si Letta está caído mucho rato, el LLM responde sin contexto y la experiencia degrada. Mitigación: monitoreo básico, retry, alertas en log cuando el backlog crezca.
+- **Doble escritura en disco**. Cada turno toca SQLite y Letta. Storage barato pero no cero.
+- **Potencial drift de schema entre SQLite y Letta**. Si Letta cambia su modelo de datos, el push del drainer puede romper. Mitigación: la API de Letta es estable; cambios mayores se reflejarían en bump de versión del cliente HTTP.
+- **`memory:snapshot` se emite también en re-conexiones** (no solo en primer arranque). El reducer compensa: solo hidrata si `history` está vacío. Cualquier nueva lógica que reaccione a este evento debe ser idempotente.
 
 ### Neutrales
 
-- **`searchSemantic?` queda como contrato opcional**. La interfaz no cambia.
+- **`searchSemantic?` deja de ser opcional en la práctica**. La interfaz lo mantiene opcional por contrato, pero el `MemoryManager` siempre lo expone (delegando a Letta).
 - **`cloud_threshold` del router sigue deprecated** ([ADR 0015](0015-hybrid-router-classifier-llm-based.md)); este ADR no lo toca.
 - **`userId` queda en `'default'` constante**. Multi-user es post-MVP.
+- **`MemoryEntry` gana `id: string`**. Cambio menor del contrato; las implementaciones existentes (`NoopMemory`) lo generan vacío o con un placeholder; los tests se ajustan.
+
+## Consideraciones futuras (fuera del alcance de este ADR)
+
+Estos puntos se decidirán **cuando aparezcan los clientes correspondientes**, no antes. La arquitectura actual los habilita sin diseño extra; lo que cambiará es la operativa.
+
+- **Memoria offline en clientes "móviles"** (robot operando sin red al servidor, Arduino con conexión intermitente). Cada cliente podría mantener su propio WAL local y sincronizar al volver — patrón equivalente al que aquí montamos en el server, replicado en el edge. Decisión real cuando el robot exista y sepamos qué autonomía necesita.
+- **`clientId` / `deviceId` en `MemoryEntry`** (saber si Pipe dijo X desde el desktop, el móvil o el robot). Añadir un campo opcional a `MemoryEntry` cuando aparezca el segundo cliente es trivial — migración SQL de una columna con default `'unknown'` para entradas viejas.
+- **Multi-agente en Letta** (un agente Shiro por superficie vs un solo Shiro compartido). Letta lo soporta nativo. Decisión depende de qué se sienta mejor cuando haya dos clientes funcionando.
+
+No los planeamos hoy: hacerlo sin tener las superficies reales = adivinar abstracciones.
 
 ## Notas de implementación
 
 ### Paquete `core`
 
-- `packages/core/src/modules/memory/local-memory.ts` — clase `LocalMemory`, schema SQL inline, `better-sqlite3` como dependencia.
-- `packages/core/src/modules/memory/letta-memory.ts` — clase `LettaMemory`, `fetch` global, `ping()` para healthcheck.
-- `packages/core/src/modules/memory/memory-manager.ts` — `MemoryManager`, intervalo de retry, swap del active.
+- `packages/core/src/interfaces/IMemoryModule.ts` — añadir `id: string` a `MemoryEntry`.
+- `packages/core/src/modules/memory/local-memory.ts` — clase `LocalMemory` (solo `save / clear`), schema SQL inline, `better-sqlite3` como dependencia.
+- `packages/core/src/modules/memory/letta-memory.ts` — clase `LettaMemory` (los cuatro métodos + `ping()`), `fetch` global.
+- `packages/core/src/modules/memory/memory-manager.ts` — `MemoryManager` con drainer, expone `IMemoryModule` completo.
 - `packages/core/src/types/events.ts` — añadir `'memory:snapshot': { entries: MemoryEntry[]; userId: string }` al `EventMap`.
-- Tests: `LocalMemory` con DB `:memory:`, `LettaMemory` con `fetch` mockeado, `MemoryManager` simulando Letta cayendo/volviendo.
+- Tests: `LocalMemory` con DB `:memory:`, `LettaMemory` con `fetch` mockeado, `MemoryManager` simulando Letta cayendo/volviendo y validando que el drainer drena en orden y marca `synced_at`.
 
 ### Paquete `core-host`
 
-- `packages/core-host/src/bootstrap.ts` — registrar factories de `LocalMemory`, `LettaMemory` y `MemoryManager`; instanciar el manager con ambos backends.
-- `packages/core-host/src/pipeline/conversation-flow.ts` — antes de `llm.generate`, llamar a `getRecent` y `searchSemantic?` y pasar `context`. Tras `llm:responded`, persistir user msg + assistant msg.
+- `packages/core-host/src/bootstrap.ts` — registrar factories de `LocalMemory`, `LettaMemory` y `MemoryManager`; instanciar el manager con ambos backends; arrancar el drainer.
+- `packages/core-host/src/pipeline/conversation-flow.ts` — antes de `llm.generate`, llamar a `getRecent` y `searchSemantic` con timeout; pasar `context`. Tras `llm:responded`, persistir user msg + assistant msg.
 - `packages/core-host/src/server.ts` (o donde vive `WebSocketServerTransport`) — al detectar nueva conexión, emitir `memory:snapshot` con los últimos `snapshot_limit` turnos.
 
 ### Paquete `desktop`
@@ -212,7 +282,12 @@ El companion es de un solo dueño. El pipeline usa `userId: 'default'` constante
 
 ### Config
 
-- `config/modules.config.yaml` — añadir `recent_limit: 5`, `semantic_limit: 3`, `snapshot_limit: 20` bajo `memory.config`. El schema zod los valida con defaults.
+- `config/modules.config.yaml` — actualizar bloque `memory.config` con `recent_limit`, `semantic_limit`, `snapshot_limit`, `drainer_interval_ms`, `letta_timeout_ms`. El schema zod los valida con defaults.
+
+### Documentación operativa
+
+- README: sección de cómo arrancar Letta (docker compose snippet, healthcheck).
+- `docs/architecture.md`: diagrama mermaid del flujo `pipeline → MemoryManager → Letta` con la rama WAL → SQLite → drainer.
 
 ## Referencias
 
@@ -223,5 +298,5 @@ El companion es de un solo dueño. El pipeline usa `userId: 'default'` constante
 - [ADR 0014](0014-llm-structured-output-text-emotion.md) — el `LLMRequest.context` que este ADR rellena.
 - [ADR 0016](0016-pipeline-conversational-wiring.md) — pipeline que se extiende con el wiring de memoria.
 - Interfaz: [`packages/core/src/interfaces/IMemoryModule.ts`](../../packages/core/src/interfaces/IMemoryModule.ts).
-- Letta: <https://docs.letta.com/> — servicio de memoria que usaremos como upgrade.
+- Letta: <https://docs.letta.com/> — servicio de memoria canónico.
 - `better-sqlite3`: <https://github.com/WiseLibs/better-sqlite3>.
