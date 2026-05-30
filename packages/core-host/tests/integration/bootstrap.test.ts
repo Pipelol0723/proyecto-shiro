@@ -43,8 +43,18 @@ modules:
     active: ElevenLabsTTS
     config: { voice_id: 'mock' }
   memory:
-    active: LettaMemory
-    config: {}
+    active: MemoryManager
+    config:
+      user_id: 'default'
+      letta:
+        base_url: 'http://localhost:8283'
+        agent_id: 'test-agent'
+        timeout_ms: 100
+      local:
+        db_path: ':memory:'
+      drainer:
+        interval_ms: 60000
+        batch_size: 10
   avatar:
     active: Live2DAvatar
     config: {}
@@ -116,7 +126,7 @@ describe('core-host bootstrap end-to-end', () => {
     expect(modules.router.id).toBe('router:hybrid');
     expect(modules.stt.id).toBe('stt:noop');
     expect(modules.tts.id).toBe('tts:noop');
-    expect(modules.memory.id).toBe('memory:noop');
+    expect(modules.memory.id).toBe('memory:manager:default');
     expect(modules.avatar.id).toBe('avatar:noop');
 
     // El transport está escuchando.
