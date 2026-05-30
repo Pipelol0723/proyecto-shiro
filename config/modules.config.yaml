@@ -88,6 +88,16 @@ modules:
       drainer:
         interval_ms: 5000
         batch_size: 100
+      pipeline:
+        # Cuántos turnos cronológicos recientes inyecta el pipeline en
+        # cada llamada al LLM como contexto.
+        recent_limit: 5
+        # Cuántos turnos semánticamente relevantes pide a Letta por turno.
+        # Si Letta no está disponible, se ignora silenciosamente.
+        semantic_limit: 3
+        # Timeout máximo (en ms) para las lecturas de memoria en el hot
+        # path. Si Letta tarda más, el LLM responde sin contexto ese turno.
+        timeout_ms: 1500
 
   # ─────────────────────────────────────────────────────────────
   # Avatar — render visual
