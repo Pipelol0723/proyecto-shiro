@@ -103,11 +103,11 @@ describe('LettaMemory', () => {
   });
 
   describe('ping', () => {
-    it('devuelve true si /v1/health/check responde 2xx', async () => {
+    it('devuelve true si GET /v1/agents/{id} responde 2xx', async () => {
       fetchMock.mockResolvedValueOnce(emptyResponse(200));
       await expect(memory.ping()).resolves.toBe(true);
       const call = fetchMock.mock.calls[0];
-      expect(call?.[0]).toBe(`${BASE}/v1/health/check`);
+      expect(call?.[0]).toBe(`${BASE}/v1/agents/${AGENT}`);
       expect(call?.[1]?.method).toBe('GET');
     });
 

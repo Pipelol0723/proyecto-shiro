@@ -160,19 +160,27 @@ export class LettaMemory implements IMemoryModule {
   }
 
   /**
-   * Healthcheck del servidor Letta. Devuelve `true` si responde 2xx en
-   * el timeout configurado; `false` en cualquier otro caso (timeout,
-   * red, status no-ok, o `agent_id` no configurado). Nunca lanza — el
-   * manager lo usa en loop.
+   * Healthcheck del servidor Letta. Verifica DOS cosas a la vez:
+   *
+   * 1. Letta está vivo y responde.
+   * 2. El `agent_id` configurado existe (Letta devuelve 200 si lo encuentra,
+   *    404 si no).
+   *
+   * Devuelve `true` solo si responde 2xx. `false` en cualquier otro
+   * caso (timeout, red, 404 por agent_id inválido, 5xx, o `agent_id`
+   * no configurado). Nunca lanza — el manager lo usa en loop.
+   *
+   * No usamos `/v1/health/...` porque las rutas de healthcheck han
+   * cambiado entre versiones de Letta y a veces no existen. Verificar
+   * el agente sirve doble propósito y es estable.
    */
   async ping(): Promise<boolean> {
     if (this.config.agent_id === '') {
       // Sin agente configurado, Letta queda deshabilitado a propósito.
-      // No hace falta golpear /health para saber que no podemos usar la API.
       return false;
     }
     try {
-      const res = await this.request('GET', '/v1/health/check');
+      const res = await this.request('GET', `/v1/agents/${this.config.agent_id}`);
       return res.ok;
     } catch (err) {
       this.logger.debug(`ping fallo: ${String(err)}`);
