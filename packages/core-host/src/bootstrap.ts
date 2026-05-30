@@ -121,6 +121,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     el slot memory por algo sin start/stop, este cast hay que revisarlo.
   const memoryManager = orchestrator.getModules().memory as MemoryManager;
   await memoryManager.start();
+  const memoryReads = memoryManager.getPipelineConfig();
 
   // 5. System prompt pre-construido — se reusa turn a turn.
   const systemPrompt = buildSystemPrompt(options.character);
@@ -134,6 +135,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     systemPrompt,
     logger,
     simulationSpeed: options.simulationSpeed,
+    memoryReads,
   });
 
   child.info(

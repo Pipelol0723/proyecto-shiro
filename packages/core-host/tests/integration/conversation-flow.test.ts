@@ -1,10 +1,11 @@
 /**
  * Tests del pipeline conversacional real con mocks de los módulos.
  *
- * Valida el flujo: user:message → router → LLM → llm:responded →
- * tts:audio-ended. No hace red — los mocks responden inmediatamente.
+ * Valida el flujo: user:message → memory.save (user) → router → memory
+ * reads → LLM (con context) → llm:responded → memory.save (assistant)
+ * → tts:audio-ended. No hace red — los mocks responden inmediatamente.
  *
- * Ver ADR 0016.
+ * Ver ADR 0016 (wiring) y ADR 0017 (memoria).
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -21,6 +22,7 @@ import type {
   LLMResponse,
   LLMTier,
   LoadedModules,
+  MemoryEntry,
 } from '@proyecto-shiro/core';
 import { wireConversationFlow } from '../../src/pipeline/conversation-flow.js';
 
@@ -73,6 +75,61 @@ function makeLLM(id: string, opts: LLMMockOptions = {}): ILLMModule & { calls: n
   };
 }
 
+interface MemoryMockOptions {
+  /** Entradas que getRecent devuelve. Default []. */
+  recent?: MemoryEntry[];
+  /** Entradas que searchSemantic devuelve. Default []. */
+  semantic?: MemoryEntry[];
+  /** Si true, save() rechaza. */
+  saveFails?: boolean;
+  /** Si > 0, getRecent espera esos ms antes de resolver. */
+  recentDelayMs?: number;
+}
+
+function makeMemory(opts: MemoryMockOptions = {}): IMemoryModule & {
+  saved: MemoryEntry[];
+  getRecentCalls: { userId: string; limit: number }[];
+  searchCalls: { query: string; userId: string; limit: number }[];
+} {
+  const saved: MemoryEntry[] = [];
+  const getRecentCalls: { userId: string; limit: number }[] = [];
+  const searchCalls: { query: string; userId: string; limit: number }[] = [];
+  return {
+    id: 'memory:mock',
+    save: async (entry) => {
+      if (opts.saveFails === true) throw new Error('save falló');
+      saved.push(entry);
+      await Promise.resolve();
+    },
+    getRecent: async (userId, limit) => {
+      getRecentCalls.push({ userId, limit });
+      if (opts.recentDelayMs !== undefined && opts.recentDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, opts.recentDelayMs));
+      } else {
+        await Promise.resolve();
+      }
+      return opts.recent ?? [];
+    },
+    searchSemantic: async (query, userId, limit) => {
+      searchCalls.push({ query, userId, limit });
+      await Promise.resolve();
+      return opts.semantic ?? [];
+    },
+    clear: async () => {
+      await Promise.resolve();
+    },
+    get saved() {
+      return saved;
+    },
+    get getRecentCalls() {
+      return getRecentCalls;
+    },
+    get searchCalls() {
+      return searchCalls;
+    },
+  };
+}
+
 function makeModules(overrides: Partial<LoadedModules> = {}): LoadedModules {
   return {
     llmLocal: makeLLM('llm:local-mock'),
@@ -80,7 +137,7 @@ function makeModules(overrides: Partial<LoadedModules> = {}): LoadedModules {
     router: makeRouter(),
     stt: { id: 'stt:noop' } as ISTTModule,
     tts: { id: 'tts:noop' } as ITTSModule,
-    memory: { id: 'memory:noop' } as unknown as IMemoryModule,
+    memory: makeMemory(),
     avatar: { id: 'avatar:noop' } as IAvatarModule,
     ...overrides,
   };
@@ -322,5 +379,272 @@ describe('wireConversationFlow', () => {
     expect(responded[0]?.emotion).toBe('neutral');
 
     dispose();
+  });
+
+  // ─── Tests de la integración con memoria ───────────────────────────
+
+  describe('integración con memoria', () => {
+    it('persiste el user msg al recibir user:message', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const memory = makeMemory();
+      const modules = makeModules({ memory });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'hola Shiro', userId: 'me' });
+
+      const userEntries = memory.saved.filter((e) => e.role === 'user');
+      expect(userEntries).toHaveLength(1);
+      expect(userEntries[0]?.text).toBe('hola Shiro');
+      expect(userEntries[0]?.userId).toBe('me');
+      expect(userEntries[0]?.id).toBeTruthy();
+      expect(userEntries[0]?.timestamp).toMatch(/^2/);
+
+      dispose();
+    });
+
+    it('persiste el assistant msg con metadata (emotion, tier, latencyMs)', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const memory = makeMemory();
+      const modules = makeModules({
+        memory,
+        router: makeRouter({ tier: 'cloud' }),
+        llmCloud: makeLLM('llm:cloud-mock', {
+          response: { text: '¡hola!', emotion: 'divertida', tokensUsed: 8 },
+        }),
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+      const assistantEntries = memory.saved.filter((e) => e.role === 'assistant');
+      expect(assistantEntries).toHaveLength(1);
+      const entry = assistantEntries[0];
+      expect(entry?.text).toBe('¡hola!');
+      expect(entry?.metadata).toMatchObject({
+        emotion: 'divertida',
+        tier: 'cloud',
+      });
+      expect(typeof entry?.metadata?.latencyMs).toBe('number');
+
+      dispose();
+    });
+
+    it('pide getRecent + searchSemantic con los límites configurados', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const memory = makeMemory();
+      const modules = makeModules({ memory });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+        memoryReads: { recentLimit: 7, semanticLimit: 2, timeoutMs: 1_000 },
+      });
+
+      await bus.emit('user:message', { text: 'algo', userId: 'me' });
+
+      expect(memory.getRecentCalls).toEqual([{ userId: 'me', limit: 7 }]);
+      expect(memory.searchCalls).toEqual([{ query: 'algo', userId: 'me', limit: 2 }]);
+
+      dispose();
+    });
+
+    it('pasa el context formateado al LLM cuando hay entradas', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+        tokensUsed: 1,
+      });
+      const memory = makeMemory({
+        recent: [
+          {
+            id: 'r1',
+            role: 'user',
+            text: 'hola',
+            timestamp: '2026-05-29T12:00:00.000Z',
+            userId: 'me',
+          },
+          {
+            id: 'r2',
+            role: 'assistant',
+            text: 'hola tú',
+            timestamp: '2026-05-29T12:00:05.000Z',
+            userId: 'me',
+          },
+        ],
+        semantic: [
+          {
+            id: 's1',
+            role: 'user',
+            text: 'antes hablamos de X',
+            timestamp: '2026-05-28T00:00:00.000Z',
+            userId: 'me',
+          },
+        ],
+      });
+      const modules = makeModules({
+        memory,
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'sigue', userId: 'me' });
+
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.context).toBeDefined();
+      expect(req?.context).toContain('Conversación reciente:');
+      expect(req?.context).toContain('Usuario: hola');
+      expect(req?.context).toContain('Shiro: hola tú');
+      expect(req?.context).toContain('Otros momentos relevantes');
+      expect(req?.context).toContain('antes hablamos de X');
+
+      dispose();
+    });
+
+    it('no pasa context cuando memoria devuelve [] en ambas lecturas', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+      });
+      const modules = makeModules({
+        memory: makeMemory(), // recent y semantic vacíos
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.context).toBeUndefined();
+
+      dispose();
+    });
+
+    it('si memory.getRecent supera el timeout, procede sin context', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+      });
+      const modules = makeModules({
+        memory: makeMemory({ recentDelayMs: 200 }),
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+        memoryReads: { recentLimit: 5, semanticLimit: 3, timeoutMs: 20 },
+      });
+
+      await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.context).toBeUndefined();
+
+      dispose();
+    });
+
+    it('si memory.save falla, el turno sigue (no rompe el flujo)', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const modules = makeModules({ memory: makeMemory({ saveFails: true }) });
+
+      const responded: EventMap['llm:responded'][] = [];
+      bus.on('llm:responded', (p) => {
+        responded.push(p);
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'hola', userId: 'me' });
+      await flushPromises();
+
+      expect(responded).toHaveLength(1);
+      expect(responded[0]?.emotion).toBe('neutral');
+
+      dispose();
+    });
+
+    it('si searchSemantic no está implementado, usa solo getRecent', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const memory: IMemoryModule = {
+        id: 'memory:no-semantic',
+        save: () => Promise.resolve(),
+        getRecent: () =>
+          Promise.resolve([
+            {
+              id: 'r1',
+              role: 'user',
+              text: 'hola',
+              timestamp: '2026-05-29T12:00:00.000Z',
+              userId: 'me',
+            },
+          ]),
+        // sin searchSemantic
+        clear: () => Promise.resolve(),
+      };
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+      });
+      const modules = makeModules({ memory, llmLocal: { id: 'llm:spy', generate: generateSpy } });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.context).toContain('Usuario: hola');
+      expect(req?.context).not.toContain('Otros momentos');
+
+      dispose();
+    });
   });
 });

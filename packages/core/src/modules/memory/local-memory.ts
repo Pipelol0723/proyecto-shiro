@@ -15,6 +15,8 @@
  * paquete `memory` con métodos específicos del rol WAL.
  */
 
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import Database, { type Database as DatabaseInstance, type Statement } from 'better-sqlite3';
 import type { MemoryEntry } from '../../interfaces/IMemoryModule.js';
 import type { Logger } from '../../core/logger.js';
@@ -54,6 +56,14 @@ export class LocalMemory {
   private readonly stmtPendingCount: Statement;
 
   constructor(options: LocalMemoryOptions) {
+    // `better-sqlite3` no crea el directorio padre: si no existe la
+    // apertura lanza con "Cannot open database because the directory
+    // does not exist". Lo creamos idempotente; `recursive: true` es
+    // no-op si ya está.
+    if (options.dbPath !== ':memory:') {
+      mkdirSync(dirname(options.dbPath), { recursive: true });
+    }
+
     this.db = new Database(options.dbPath);
     this.logger = options.logger?.child({ module: 'LocalMemory' });
 

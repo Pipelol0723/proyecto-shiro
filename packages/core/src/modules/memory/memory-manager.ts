@@ -60,6 +60,19 @@ export const MemoryManagerConfigSchema = z.object({
       batch_size: z.number().int().positive().default(100),
     })
     .default({ interval_ms: 5_000, batch_size: 100 }),
+
+  /**
+   * Parámetros que el pipeline conversacional usa al leer contexto
+   * (ver ADR 0017). Los consume `wireConversationFlow` vía el getter
+   * `getPipelineConfig()` del manager.
+   */
+  pipeline: z
+    .object({
+      recent_limit: z.number().int().nonnegative().default(5),
+      semantic_limit: z.number().int().nonnegative().default(3),
+      timeout_ms: z.number().int().positive().default(1_500),
+    })
+    .default({ recent_limit: 5, semantic_limit: 3, timeout_ms: 1_500 }),
 });
 
 export type MemoryManagerConfig = z.infer<typeof MemoryManagerConfigSchema>;
@@ -132,10 +145,19 @@ export class MemoryManager implements IMemoryModule {
     await this.checkLetta();
     if (!this.lettaUp) {
       const pending = this.local.pendingCount();
-      this.logger.warn(
-        `Letta no responde al arrancar — ${pending} entradas pendientes en WAL. ` +
-          `El drainer reintentará cada ${this.config.drainer.interval_ms}ms.`,
-      );
+      if (this.config.letta.agent_id === '') {
+        this.logger.warn(
+          'letta.agent_id no está configurado — Letta deshabilitada. ' +
+            'Configura el ID de un agente en config/modules.config.yaml y ' +
+            'reinicia para activar la memoria semántica. Mientras tanto, ' +
+            'los turnos se guardan en el WAL local.',
+        );
+      } else {
+        this.logger.warn(
+          `Letta no responde al arrancar — ${String(pending)} entradas pendientes en WAL. ` +
+            `El drainer reintentará cada ${String(this.config.drainer.interval_ms)}ms.`,
+        );
+      }
     }
     this.drainerTimer = setInterval(() => {
       this.runDrainerCycle().catch((err: unknown) => {
@@ -220,6 +242,24 @@ export class MemoryManager implements IMemoryModule {
         this.lettaUp = false;
       }
     }
+  }
+
+  /**
+   * Devuelve los parámetros que el pipeline conversacional necesita
+   * para construir el contexto del LLM en cada turno (límite de turnos
+   * recientes, límite semántico y timeout). El bootstrap los lee de
+   * aquí y los pasa a `wireConversationFlow`.
+   */
+  getPipelineConfig(): {
+    recentLimit: number;
+    semanticLimit: number;
+    timeoutMs: number;
+  } {
+    return {
+      recentLimit: this.config.pipeline.recent_limit,
+      semanticLimit: this.config.pipeline.semantic_limit,
+      timeoutMs: this.config.pipeline.timeout_ms,
+    };
   }
 
   // ─── Testing helpers ────────────────────────────────────────────────
