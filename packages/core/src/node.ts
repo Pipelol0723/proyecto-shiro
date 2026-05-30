@@ -18,3 +18,13 @@ export { CharacterLoader, CharacterValidationError } from './character/character
 // Módulos con dependencias nativas — solo Node.
 export { LocalMemory } from './modules/memory/local-memory.js';
 export type { LocalMemoryOptions } from './modules/memory/local-memory.js';
+
+export {
+  MemoryManager,
+  MemoryManagerConfigSchema,
+  MemoryManagerError,
+} from './modules/memory/memory-manager.js';
+export type {
+  MemoryManagerConfig,
+  MemoryManagerBackends,
+} from './modules/memory/memory-manager.js';

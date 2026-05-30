@@ -65,14 +65,29 @@ modules:
 
   # ─────────────────────────────────────────────────────────────
   # Memory — memoria persistente
+  # Modelo: Letta canónico + LocalMemory como WAL de continuidad.
+  # Ver ADR 0017.
   # ─────────────────────────────────────────────────────────────
   memory:
-    active: LettaMemory
-    fallback_chain:
-      - LocalMemory
+    active: MemoryManager
     config:
-      letta_url: 'http://localhost:8283'
-      local_db_path: './data/memory.db'
+      user_id: 'default'
+      letta:
+        base_url: 'http://localhost:8283'
+        # agent_id obligatorio — crea un agente en Letta y pega su ID aquí.
+        # Sin agente válido, el server arranca igual pero los reads
+        # devuelven [] y los turnos se acumulan en el WAL local hasta que
+        # se configure el agente y Letta responda.
+        agent_id: ''
+        # password opcional — solo si el self-hosted activa password
+        # protection. Mejor leer de env y referenciar; por ahora vacío.
+        # password: ''
+        timeout_ms: 1500
+      local:
+        db_path: './data/memory.db'
+      drainer:
+        interval_ms: 5000
+        batch_size: 100
 
   # ─────────────────────────────────────────────────────────────
   # Avatar — render visual

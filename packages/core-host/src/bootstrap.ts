@@ -36,9 +36,10 @@ import {
   type IEventBus,
   type ModulesConfig,
 } from '@proyecto-shiro/core';
+import { MemoryManager } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
-import { NoopAvatar, NoopMemory, NoopSTT, NoopTTS } from './mocks/noop-modules.js';
+import { NoopAvatar, NoopSTT, NoopTTS } from './mocks/noop-modules.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -106,12 +107,20 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   loader.register('HybridRouter', (cfg, deps) => new HybridRouter(cfg, deps));
   loader.register('WhisperSTT', () => new NoopSTT());
   loader.register('ElevenLabsTTS', () => new NoopTTS());
-  loader.register('LettaMemory', () => new NoopMemory());
+  loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
   loader.register('Live2DAvatar', () => new NoopAvatar());
 
   // 4. Orchestrator: instancia los 7 módulos y emite `bus:ready`.
   const orchestrator = new Orchestrator({ bus, loader, logger, config: options.config });
   await orchestrator.init();
+
+  // 4b. MemoryManager necesita lifecycle propio (drainer en background +
+  //     SQLite). El factory devuelve IMemoryModule pero sabemos por el
+  //     YAML que es un MemoryManager. Cast justificado: el bootstrap es
+  //     quien controla el wiring; si en el futuro se permite swappear
+  //     el slot memory por algo sin start/stop, este cast hay que revisarlo.
+  const memoryManager = orchestrator.getModules().memory as MemoryManager;
+  await memoryManager.start();
 
   // 5. System prompt pre-construido — se reusa turn a turn.
   const systemPrompt = buildSystemPrompt(options.character);
@@ -140,6 +149,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     systemPrompt,
     shutdown: async () => {
       disposeFlow();
+      await memoryManager.stop();
       await orchestrator.shutdown();
       await transport.close();
       child.info('core-host apagado');
