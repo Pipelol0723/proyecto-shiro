@@ -4,6 +4,9 @@
  * Cada test crea su propia DB `:memory:` para aislamiento total.
  */
 
+import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { LocalMemory } from '../../../../src/modules/memory/local-memory.js';
 import type { MemoryEntry } from '../../../../src/interfaces/IMemoryModule.js';
@@ -36,6 +39,22 @@ describe('LocalMemory', () => {
     it('arranca con DB vacía (0 pendientes)', () => {
       expect(memory.pendingCount()).toBe(0);
       expect(memory.getPending()).toEqual([]);
+    });
+
+    it('crea el directorio padre si no existe (recursivo)', () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'shiro-localmem-'));
+      const dbPath = join(tmp, 'sub1', 'sub2', 'memory.db');
+      try {
+        const fresh = new LocalMemory({ dbPath });
+        try {
+          expect(existsSync(dbPath)).toBe(true);
+          expect(statSync(dbPath).isFile()).toBe(true);
+        } finally {
+          fresh.close();
+        }
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
     });
   });
 

@@ -38,3 +38,11 @@ coverage/
 *.bin
 *.gguf
 models/
+
+# WAL local de memoria (LocalMemory SQLite). Persistente por dev y máquina;
+# nunca se commitea. Ver ADR 0017.
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
