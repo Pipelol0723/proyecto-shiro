@@ -145,10 +145,19 @@ export class MemoryManager implements IMemoryModule {
     await this.checkLetta();
     if (!this.lettaUp) {
       const pending = this.local.pendingCount();
-      this.logger.warn(
-        `Letta no responde al arrancar — ${pending} entradas pendientes en WAL. ` +
-          `El drainer reintentará cada ${this.config.drainer.interval_ms}ms.`,
-      );
+      if (this.config.letta.agent_id === '') {
+        this.logger.warn(
+          'letta.agent_id no está configurado — Letta deshabilitada. ' +
+            'Configura el ID de un agente en config/modules.config.yaml y ' +
+            'reinicia para activar la memoria semántica. Mientras tanto, ' +
+            'los turnos se guardan en el WAL local.',
+        );
+      } else {
+        this.logger.warn(
+          `Letta no responde al arrancar — ${String(pending)} entradas pendientes en WAL. ` +
+            `El drainer reintentará cada ${String(this.config.drainer.interval_ms)}ms.`,
+        );
+      }
     }
     this.drainerTimer = setInterval(() => {
       this.runDrainerCycle().catch((err: unknown) => {

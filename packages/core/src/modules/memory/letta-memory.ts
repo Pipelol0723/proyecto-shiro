@@ -58,9 +58,15 @@ export const LettaMemoryConfigSchema = z.object({
   /**
    * ID del agente Letta que actúa como almacén. Debe existir antes de
    * arrancar `LettaMemory`; la creación del agente es responsabilidad
-   * del bootstrap (PR 4 del hito Memoria).
+   * del usuario (Letta UI/CLI).
+   *
+   * Si llega vacío, `ping()` devuelve `false` directamente sin tocar
+   * red — el `MemoryManager` lo trata como "Letta deshabilitada" y
+   * opera en modo solo WAL local hasta que se configure. Esto evita
+   * que el server falle al arrancar cuando el usuario aún no ha creado
+   * el agente.
    */
-  agent_id: z.string().min(1, 'LettaMemory: `agent_id` es obligatorio'),
+  agent_id: z.string().default(''),
   /**
    * Password del servidor (auth Bearer). Solo aplica si la instalación
    * self-hosted activó protección por password. Opcional.
@@ -156,9 +162,15 @@ export class LettaMemory implements IMemoryModule {
   /**
    * Healthcheck del servidor Letta. Devuelve `true` si responde 2xx en
    * el timeout configurado; `false` en cualquier otro caso (timeout,
-   * red, status no-ok). Nunca lanza — el manager lo usa en loop.
+   * red, status no-ok, o `agent_id` no configurado). Nunca lanza — el
+   * manager lo usa en loop.
    */
   async ping(): Promise<boolean> {
+    if (this.config.agent_id === '') {
+      // Sin agente configurado, Letta queda deshabilitado a propósito.
+      // No hace falta golpear /health para saber que no podemos usar la API.
+      return false;
+    }
     try {
       const res = await this.request('GET', '/v1/health/check');
       return res.ok;

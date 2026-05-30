@@ -80,8 +80,9 @@ describe('MemoryManagerConfigSchema', () => {
     expect(result.drainer.batch_size).toBe(100);
   });
 
-  it('rechaza si falta letta.agent_id', () => {
-    expect(() => MemoryManagerConfigSchema.parse({ letta: {} })).toThrow();
+  it('acepta letta.agent_id vacío (modo Letta deshabilitada)', () => {
+    const result = MemoryManagerConfigSchema.parse({ letta: {} });
+    expect(result.letta.agent_id).toBe('');
   });
 });
 
@@ -104,7 +105,13 @@ describe('MemoryManager', () => {
 
   describe('constructor', () => {
     it('lanza MemoryManagerError si config inválida', () => {
-      expect(() => new MemoryManager({ letta: {} }, makeDeps())).toThrow(MemoryManagerError);
+      expect(
+        () =>
+          new MemoryManager({ letta: { base_url: 'no-es-url' } }, makeDeps(), {
+            local,
+            letta,
+          }),
+      ).toThrow(MemoryManagerError);
     });
 
     it('expone id determinista por user_id', () => {

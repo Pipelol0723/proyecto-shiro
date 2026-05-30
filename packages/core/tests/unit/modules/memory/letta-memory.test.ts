@@ -64,8 +64,9 @@ describe('LettaMemoryConfigSchema', () => {
     expect(result.password).toBeUndefined();
   });
 
-  it('rechaza si falta agent_id', () => {
-    expect(() => LettaMemoryConfigSchema.parse({})).toThrow();
+  it('permite agent_id vacío (modo deshabilitado, ver MemoryManager)', () => {
+    const result = LettaMemoryConfigSchema.parse({});
+    expect(result.agent_id).toBe('');
   });
 
   it('rechaza base_url malformada', () => {
@@ -91,7 +92,9 @@ describe('LettaMemory', () => {
 
   describe('constructor', () => {
     it('lanza LettaMemoryError si la config no parsea', () => {
-      expect(() => new LettaMemory({ agent_id: '' }, makeDeps())).toThrow(LettaMemoryError);
+      expect(() => new LettaMemory({ base_url: 'no-es-url' }, makeDeps())).toThrow(
+        LettaMemoryError,
+      );
     });
 
     it('expone un id determinista derivado del agent_id', () => {
@@ -116,6 +119,12 @@ describe('LettaMemory', () => {
     it('devuelve false si fetch lanza (red caída)', async () => {
       fetchMock.mockRejectedValueOnce(new TypeError('network'));
       await expect(memory.ping()).resolves.toBe(false);
+    });
+
+    it('devuelve false sin tocar fetch si agent_id está vacío', async () => {
+      const disabled = new LettaMemory({ base_url: BASE, agent_id: '' }, makeDeps());
+      await expect(disabled.ping()).resolves.toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
