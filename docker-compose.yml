@@ -1,0 +1,53 @@
+# docker-compose para los servicios de soporte de Proyecto Shiro.
+#
+# Por ahora solo Letta (memoria persistente, ver ADR 0017 y 0018). Se
+# arranca aparte del `npm run dev` porque es un servicio de larga vida que
+# quieres siempre arriba:
+#
+#   docker compose up -d letta
+#
+# Requisitos previos:
+#   1. Ollama corriendo en el host (localhost:11434) con el modelo de
+#      embeddings descargado:  ollama pull mxbai-embed-large
+#   2. Una password en .env:   LETTA_SERVER_PASSWORD=algo-secreto
+#
+# Verifica que arrancó:  curl http://localhost:8283/v1/health/
+
+services:
+  letta:
+    image: letta/letta:latest # TODO: pinar a una versión concreta cuando confirmemos una estable
+    restart: unless-stopped
+    ports:
+      - '8283:8283'
+    environment:
+      # Protección por password (auth Bearer). El cliente usa la misma var.
+      - SECURE=true
+      - LETTA_SERVER_PASSWORD=${LETTA_SERVER_PASSWORD}
+      # Embeddings + LLM del agente vía Ollama del host. El sufijo /v1 es
+      # obligatorio (API compatible con OpenAI). En Windows/macOS el
+      # contenedor llega al host por host.docker.internal, no localhost.
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+    extra_hosts:
+      # Hace que host.docker.internal resuelva también en Linux (en Docker
+      # Desktop Windows/macOS ya existe; añadirlo no molesta).
+      - 'host.docker.internal:host-gateway'
+    volumes:
+      # Persiste la base de datos (Postgres interno de Letta) entre reinicios.
+      - letta_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # La imagen de Letta es Python — usamos urllib en vez de curl (que
+      # puede no estar instalado). /v1/health/ es liveness, no requiere auth.
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://localhost:8283/v1/health/')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  letta_pgdata:
