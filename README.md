@@ -4,12 +4,12 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **Memoria** 🟡 en curso. Letta vía SDK oficial con
-> embeddings locales en Ollama, `LocalMemory` SQLite como WAL de
-> continuidad y drainer en background ya funcionales (PRs #28-#34).
-> Auto-provisión del agente Letta al arrancar — setup casi cero.
-> Hitos previos completos: **Setup**, **Core**, **Cliente desktop**,
-> **LLM**. Próximo: **STT** (faster-whisper).
+> **Estado**: hito **Memoria** ✅ completo. Letta vía SDK oficial con
+> embeddings locales en Ollama, `LocalMemory` SQLite como WAL +
+> drainer en background, auto-provisión del agente Letta al arrancar,
+> y `memory:snapshot` que rehidrata el chat del desktop al reconectar
+> (PRs #28-#35). Hitos previos: **Setup**, **Core**, **Cliente
+> desktop**, **LLM**. Próximo hito en planificación: **STT**.
 > Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y
 > [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
@@ -23,23 +23,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado          | Notas                                                                                                        |
-| ------------------- | --------------- | ------------------------------------------------------------------------------------------------------------ |
-| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                             |
-| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                           |
-| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                               |
-| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional |
-| **Memoria**         | 🟡 **en curso** | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer en background. Ver ADRs 0017 y 0018.        |
-| **STT**             | ⏸️ pendiente    | faster-whisper microservicio Python (puerto 8765)                                                            |
-| **TTS**             | ⏸️ pendiente    | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                                                        |
-| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                                           |
-| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                  |
-| **Post-MVP**        |                 |                                                                                                              |
-| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                       |
-| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                   |
-| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                           |
-| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                |
-| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                         |
+| Hito                | Estado          | Notas                                                                                                                   |
+| ------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                        |
+| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                      |
+| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                          |
+| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional            |
+| **Memoria**         | ✅ completo     | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018. |
+| **STT**             | 🟡 planificando | faster-whisper o similar. Arquitectura por decidir (microservicio Python vs Node bindings, modelo, VAD, streaming).     |
+| **TTS**             | ⏸️ pendiente    | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                                                                   |
+| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                                                      |
+| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                             |
+| **Post-MVP**        |                 |                                                                                                                         |
+| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                                  |
+| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                              |
+| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                                      |
+| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                           |
+| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                                    |
 
 ## Stack
 
