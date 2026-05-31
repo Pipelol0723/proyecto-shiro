@@ -54,6 +54,8 @@ export class LocalMemory {
   private readonly stmtMarkSynced: Statement;
   private readonly stmtClear: Statement;
   private readonly stmtPendingCount: Statement;
+  private readonly stmtGetMeta: Statement;
+  private readonly stmtSetMeta: Statement;
 
   constructor(options: LocalMemoryOptions) {
     // `better-sqlite3` no crea el directorio padre: si no existe la
@@ -96,6 +98,11 @@ export class LocalMemory {
     this.stmtClear = this.db.prepare(`DELETE FROM messages WHERE user_id = ?`);
     this.stmtPendingCount = this.db.prepare(
       `SELECT COUNT(*) AS n FROM messages WHERE synced_at IS NULL`,
+    );
+    this.stmtGetMeta = this.db.prepare(`SELECT value FROM meta WHERE key = ?`);
+    this.stmtSetMeta = this.db.prepare(
+      `INSERT INTO meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     );
   }
 
@@ -146,6 +153,21 @@ export class LocalMemory {
     return row.n;
   }
 
+  /**
+   * Lee un valor de la tabla clave-valor `meta`. Devuelve `undefined`
+   * si la clave no existe. Uso actual: persistir el `agent_id` de Letta
+   * auto-provisionado para que sobreviva reinicios (ver ADR 0018).
+   */
+  getMeta(key: string): string | undefined {
+    const row = this.stmtGetMeta.get(key) as { value: string } | undefined;
+    return row?.value;
+  }
+
+  /** Inserta o actualiza un valor en la tabla `meta`. Síncrono. */
+  setMeta(key: string, value: string): void {
+    this.stmtSetMeta.run(key, value);
+  }
+
   /** Cierra la conexión. Llamar en shutdown del server. */
   close(): void {
     this.db.close();
@@ -168,6 +190,11 @@ export class LocalMemory {
 
       CREATE INDEX IF NOT EXISTS idx_messages_user_time
         ON messages(user_id, timestamp);
+
+      CREATE TABLE IF NOT EXISTS meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
   }
 }

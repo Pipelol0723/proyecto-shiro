@@ -34,6 +34,9 @@ import type { ModuleDeps } from '../../core/module-loader.js';
 import { LettaMemory, LettaMemoryConfigSchema } from './letta-memory.js';
 import { LocalMemory } from './local-memory.js';
 
+/** Clave del WAL (tabla `meta`) donde se persiste el agente auto-provisionado. */
+const META_AGENT_ID = 'letta_agent_id';
+
 // ─── Schema de config ─────────────────────────────────────────────────
 
 export const MemoryManagerConfigSchema = z.object({
@@ -104,8 +107,13 @@ export class MemoryManager implements IMemoryModule {
   private readonly letta: LettaMemory;
   private readonly local: LocalMemory;
 
-  /** Cache del último ping a Letta. Lo actualiza el drainer y los reads. */
+  /**
+   * Cache del estado usable de Letta = servidor sano **y** agente listo.
+   * Lo actualiza el drainer y los reads.
+   */
   private lettaUp = false;
+  /** El agente Letta está resuelto/provisionado y listo para reads/saves. */
+  private agentReady = false;
   private drainerTimer: ReturnType<typeof setInterval> | undefined;
   private drainerInFlight = false;
   private stopped = false;
@@ -145,19 +153,12 @@ export class MemoryManager implements IMemoryModule {
     await this.checkLetta();
     if (!this.lettaUp) {
       const pending = this.local.pendingCount();
-      if (this.config.letta.agent_id === '') {
-        this.logger.warn(
-          'letta.agent_id no está configurado — Letta deshabilitada. ' +
-            'Configura el ID de un agente en config/modules.config.yaml y ' +
-            'reinicia para activar la memoria semántica. Mientras tanto, ' +
-            'los turnos se guardan en el WAL local.',
-        );
-      } else {
-        this.logger.warn(
-          `Letta no responde al arrancar — ${String(pending)} entradas pendientes en WAL. ` +
-            `El drainer reintentará cada ${String(this.config.drainer.interval_ms)}ms.`,
-        );
-      }
+      this.logger.warn(
+        `Letta no usable al arrancar (servidor caído o agente sin provisionar) — ` +
+          `${String(pending)} entradas pendientes en el WAL local. El drainer reintentará ` +
+          `cada ${String(this.config.drainer.interval_ms)}ms y provisionará el agente en ` +
+          `cuanto Letta responda. Los turnos no se pierden mientras tanto.`,
+      );
     }
     this.drainerTimer = setInterval(() => {
       this.runDrainerCycle().catch((err: unknown) => {
@@ -195,8 +196,10 @@ export class MemoryManager implements IMemoryModule {
       await this.letta.save(entry);
       this.local.markSynced(entry.id);
     } catch (err) {
+      // No marcamos Letta como caída: un push lento (cold-start de embeddings)
+      // no significa servidor abajo. La entrada queda pendiente y el drainer la
+      // reintenta; el estado up/down lo decide el ping periódico (checkLetta).
       this.logger.warn(`push inmediato a Letta falló (entry ${entry.id}): ${String(err)}`);
-      this.lettaUp = false;
     }
   }
 
@@ -208,8 +211,9 @@ export class MemoryManager implements IMemoryModule {
     try {
       return await this.letta.getRecent(userId, limit);
     } catch (err) {
+      // El estado up/down lo decide el ping, no un read fallido (evita que un
+      // hipo puntual deje a Shiro "ciego" varios turnos).
       this.logger.warn(`getRecent: Letta falló — devolviendo []. ${String(err)}`);
-      this.lettaUp = false;
       return [];
     }
   }
@@ -223,7 +227,6 @@ export class MemoryManager implements IMemoryModule {
       return await this.letta.searchSemantic(query, userId, limit);
     } catch (err) {
       this.logger.warn(`searchSemantic: Letta falló — devolviendo []. ${String(err)}`);
-      this.lettaUp = false;
       return [];
     }
   }
@@ -239,7 +242,6 @@ export class MemoryManager implements IMemoryModule {
         await this.letta.clear(userId);
       } catch (err) {
         this.logger.warn(`clear: Letta falló — local borrado, Letta no. ${String(err)}`);
-        this.lettaUp = false;
       }
     }
   }
@@ -303,9 +305,10 @@ export class MemoryManager implements IMemoryModule {
           this.local.markSynced(entry.id);
           drained += 1;
         } catch (err) {
+          // Corta el batch (la entrada sigue pendiente); el próximo ciclo lo
+          // reintenta. No marcamos down: lo decide el ping de checkLetta.
           this.logger.warn(`drainer falló en entry ${entry.id}: ${String(err)}`);
-          this.lettaUp = false;
-          break; // resto se reintenta en el próximo ciclo
+          break;
         }
       }
       if (drained > 0) {
@@ -318,12 +321,71 @@ export class MemoryManager implements IMemoryModule {
 
   private async checkLetta(): Promise<void> {
     const wasUp = this.lettaUp;
-    const up = await this.letta.ping();
-    this.lettaUp = up;
-    if (!wasUp && up) {
+    let up = await this.letta.ping();
+    // Si el servidor responde pero aún no resolvimos el agente, intentamos
+    // provisionarlo ahora. Sin agente, Letta no es usable para reads/saves.
+    if (up && !this.agentReady) {
+      try {
+        await this.ensureAgent();
+        this.agentReady = true;
+        // Calienta el modelo de embeddings en background (no bloquea) para que
+        // el primer searchSemantic real no pague el cold-start. Ver ADR 0018.
+        void this.warmUp();
+      } catch (err) {
+        this.logger.warn(`no se pudo provisionar/confirmar el agente Letta: ${String(err)}`);
+        up = false; // se reintenta en el próximo ciclo del drainer
+      }
+    }
+    this.lettaUp = up && this.agentReady;
+    if (!wasUp && this.lettaUp) {
       this.logger.info('Letta volvió arriba');
-    } else if (wasUp && !up) {
+    } else if (wasUp && !this.lettaUp) {
       this.logger.warn('Letta cayó');
     }
+  }
+
+  /**
+   * Carga el modelo de embeddings de Ollama con una búsqueda descartable en
+   * cuanto el agente está listo. Sin esto, el primer `searchSemantic` real
+   * paga el cold-start (varios segundos) y suele expirar, dejando a Shiro sin
+   * contexto semántico ese turno. Fire-and-forget: no bloquea el arranque ni
+   * es crítico si falla.
+   */
+  private async warmUp(): Promise<void> {
+    try {
+      await this.letta.searchSemantic('hola', this.config.user_id, 1);
+      this.logger.debug('warm-up de embeddings completado');
+    } catch (err) {
+      this.logger.debug(`warm-up de embeddings falló (no crítico): ${String(err)}`);
+    }
+  }
+
+  /**
+   * Resuelve el agente Letta a usar (ver ADR 0018):
+   *  - Si la config trae `agent_id`, se usa tal cual (override explícito).
+   *  - Si no, reutiliza el id persistido en el WAL si el agente sigue
+   *    existiendo; si no existe (o no había), crea uno nuevo y lo persiste.
+   *
+   * Idempotente a nivel de ciclo: una vez `agentReady`, `checkLetta` no
+   * vuelve a llamarlo.
+   */
+  private async ensureAgent(): Promise<void> {
+    if (this.config.letta.agent_id !== '') {
+      this.letta.setAgentId(this.config.letta.agent_id);
+      return;
+    }
+    const stored = this.local.getMeta(META_AGENT_ID);
+    if (stored !== undefined && stored !== '') {
+      if (await this.letta.agentExists(stored)) {
+        this.letta.setAgentId(stored);
+        this.logger.info(`agente Letta reutilizado desde el WAL: ${stored}`);
+        return;
+      }
+      this.logger.warn(`agente Letta persistido ${stored} ya no existe; re-provisionando`);
+    }
+    const id = await this.letta.provisionAgent();
+    this.local.setMeta(META_AGENT_ID, id);
+    this.letta.setAgentId(id);
+    this.logger.info(`agente Letta provisionado y persistido en el WAL: ${id}`);
   }
 }

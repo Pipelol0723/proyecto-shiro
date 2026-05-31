@@ -199,4 +199,21 @@ describe('LocalMemory', () => {
       expect(memory.getPending().map((e) => e.id)).toEqual(['t4']);
     });
   });
+
+  describe('meta (clave-valor)', () => {
+    it('devuelve undefined para una clave inexistente', () => {
+      expect(memory.getMeta('letta_agent_id')).toBeUndefined();
+    });
+
+    it('persiste y lee un valor', () => {
+      memory.setMeta('letta_agent_id', 'agent-123');
+      expect(memory.getMeta('letta_agent_id')).toBe('agent-123');
+    });
+
+    it('upsert: setMeta sobre una clave existente la sobreescribe', () => {
+      memory.setMeta('letta_agent_id', 'agent-viejo');
+      memory.setMeta('letta_agent_id', 'agent-nuevo');
+      expect(memory.getMeta('letta_agent_id')).toBe('agent-nuevo');
+    });
+  });
 });
