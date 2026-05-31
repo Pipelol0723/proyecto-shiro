@@ -15,9 +15,18 @@ export { ConfigLoader, ConfigValidationError } from './config/config-loader.js';
 
 export { CharacterLoader, CharacterValidationError } from './character/character-loader.js';
 
-// Módulos con dependencias nativas — solo Node.
+// Módulos con dependencias nativas / SDKs server-side — solo Node.
 export { LocalMemory } from './modules/memory/local-memory.js';
 export type { LocalMemoryOptions } from './modules/memory/local-memory.js';
+
+// LettaMemory usa el SDK de Letta (`@letta-ai/letta-client`) — server-side,
+// fuera del bundle browser. Ver ADR 0018.
+export {
+  LettaMemory,
+  LettaMemoryConfigSchema,
+  LettaMemoryError,
+} from './modules/memory/letta-memory.js';
+export type { LettaMemoryConfig, LettaClientLike } from './modules/memory/letta-memory.js';
 
 export {
   MemoryManager,

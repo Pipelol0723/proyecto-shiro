@@ -84,6 +84,8 @@ interface MemoryMockOptions {
   saveFails?: boolean;
   /** Si > 0, getRecent espera esos ms antes de resolver. */
   recentDelayMs?: number;
+  /** Si > 0, searchSemantic espera esos ms antes de resolver. */
+  semanticDelayMs?: number;
 }
 
 function makeMemory(opts: MemoryMockOptions = {}): IMemoryModule & {
@@ -112,7 +114,11 @@ function makeMemory(opts: MemoryMockOptions = {}): IMemoryModule & {
     },
     searchSemantic: async (query, userId, limit) => {
       searchCalls.push({ query, userId, limit });
-      await Promise.resolve();
+      if (opts.semanticDelayMs !== undefined && opts.semanticDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, opts.semanticDelayMs));
+      } else {
+        await Promise.resolve();
+      }
       return opts.semantic ?? [];
     },
     clear: async () => {
@@ -210,6 +216,41 @@ describe('wireConversationFlow', () => {
 
     expect(llmLocal.calls).toBe(0);
     expect(llmCloud.calls).toBe(1);
+
+    dispose();
+  });
+
+  it('si el tier es cloud y el LLM cloud falla, cae a local (no rompe el turno)', async () => {
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const llmLocal = makeLLM('llm:local-mock', {
+      response: { text: 'respondo yo, local', emotion: 'neutral', tokensUsed: 3 },
+    });
+    const llmCloud = makeLLM('llm:cloud-mock', { fail: true }); // p.ej. sin ANTHROPIC_API_KEY
+    const modules = makeModules({ router: makeRouter({ tier: 'cloud' }), llmLocal, llmCloud });
+
+    const responded: EventMap['llm:responded'][] = [];
+    bus.on('llm:responded', (p) => {
+      responded.push(p);
+    });
+
+    const dispose = wireConversationFlow({
+      bus,
+      modules,
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+
+    await bus.emit('user:message', { text: 'tu quien eres?', userId: 'u1' });
+    await flushPromises();
+
+    // El cloud se intentó y falló; el local respondió de verdad.
+    expect(llmCloud.calls).toBe(1);
+    expect(llmLocal.calls).toBe(1);
+    expect(responded).toHaveLength(1);
+    expect(responded[0]?.text).toBe('respondo yo, local');
+    expect(responded[0]?.tier).toBe('local'); // el tier reportado refleja quién respondió
+    expect(responded[0]?.text).not.toMatch(/algo sali/i); // NO es el fallback genérico
 
     dispose();
   });
@@ -576,6 +617,55 @@ describe('wireConversationFlow', () => {
 
       const req = generateSpy.mock.calls[0]?.[0];
       expect(req?.context).toBeUndefined();
+
+      dispose();
+    });
+
+    it('un searchSemantic lento no impide usar el getRecent rápido', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+      });
+      const memory = makeMemory({
+        recent: [
+          {
+            id: 'r1',
+            role: 'user',
+            text: 'soy pipe',
+            timestamp: '2026-05-29T12:00:00.000Z',
+            userId: 'me',
+          },
+        ],
+        semantic: [
+          {
+            id: 's1',
+            role: 'user',
+            text: 'algo viejo',
+            timestamp: '2026-05-01T00:00:00.000Z',
+            userId: 'me',
+          },
+        ],
+        semanticDelayMs: 200, // más lento que el timeout de lectura
+      });
+      const modules = makeModules({ memory, llmLocal: { id: 'llm:spy', generate: generateSpy } });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+        memoryReads: { recentLimit: 5, semanticLimit: 3, timeoutMs: 30 },
+      });
+
+      await bus.emit('user:message', { text: 'quien soy?', userId: 'me' });
+
+      // El recent rápido entra en el context; el semantic lento se descarta por
+      // timeout SIN tumbar el context entero. Ver ADR 0018.
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.context).toContain('soy pipe');
+      expect(req?.context).not.toContain('algo viejo');
 
       dispose();
     });

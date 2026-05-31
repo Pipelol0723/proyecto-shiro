@@ -1,15 +1,17 @@
 /**
- * Tests de LettaMemory — cliente HTTP del servidor Letta.
+ * Tests de LettaMemory — cliente del servidor Letta sobre el SDK oficial
+ * (ver ADR 0018).
  *
- * `fetch` global se mockea con `vi.fn<typeof fetch>()` por test. No
- * tocamos red real.
+ * Inyectamos un `LettaClientLike` falso (vi.fn por método) en el
+ * constructor; no tocamos red ni el SDK real.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LettaMemory,
   LettaMemoryConfigSchema,
   LettaMemoryError,
+  type LettaClientLike,
 } from '../../../../src/modules/memory/letta-memory.js';
 import { Logger } from '../../../../src/core/logger.js';
 import type { ModuleDeps } from '../../../../src/core/module-loader.js';
@@ -42,29 +44,41 @@ function makeEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
   };
 }
 
-/** Construye una Response sintética. */
-function jsonResponse(body: unknown, init: { status?: number } = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-function emptyResponse(status: number, statusText = ''): Response {
-  // status 204/304 no permiten body — Node es estricto y lanza si se pasa string vacío.
-  const body = status === 204 || status === 304 ? null : '';
-  return new Response(body, { status, statusText });
+/** Cliente SDK falso con un vi.fn por método. */
+function makeClient() {
+  const health = vi.fn();
+  const create = vi.fn();
+  const retrieve = vi.fn();
+  const pCreate = vi.fn();
+  const pList = vi.fn();
+  const pSearch = vi.fn();
+  const pDelete = vi.fn();
+  const client = {
+    health,
+    agents: {
+      create,
+      retrieve,
+      passages: { create: pCreate, list: pList, search: pSearch, delete: pDelete },
+    },
+  } as unknown as LettaClientLike;
+  return { client, health, create, retrieve, pCreate, pList, pSearch, pDelete };
 }
 
 describe('LettaMemoryConfigSchema', () => {
-  it('aplica defaults para base_url y timeout', () => {
+  it('aplica defaults (base_url, timeout, embedding config de Ollama)', () => {
     const result = LettaMemoryConfigSchema.parse({ agent_id: AGENT });
     expect(result.base_url).toBe(BASE);
     expect(result.timeout_ms).toBe(5_000);
     expect(result.password).toBeUndefined();
+    expect(result.model).toBe('ollama/qwen2.5:3b');
+    expect(result.embedding_endpoint).toBe('http://host.docker.internal:11434/v1');
+    expect(result.embedding_model).toBe('mxbai-embed-large');
+    expect(result.embedding_dim).toBe(1024);
+    expect(result.context_window_limit).toBe(16_000);
+    expect(result.agent_name).toBe('shiro-memory');
   });
 
-  it('permite agent_id vacío (modo deshabilitado, ver MemoryManager)', () => {
+  it('permite agent_id vacío (modo auto-provisión, ver MemoryManager)', () => {
     const result = LettaMemoryConfigSchema.parse({});
     expect(result.agent_id).toBe('');
   });
@@ -77,221 +91,204 @@ describe('LettaMemoryConfigSchema', () => {
 });
 
 describe('LettaMemory', () => {
+  let mock: ReturnType<typeof makeClient>;
   let memory: LettaMemory;
-  let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
   beforeEach(() => {
-    fetchMock = vi.fn<typeof fetch>();
-    vi.stubGlobal('fetch', fetchMock);
-    memory = new LettaMemory(BASE_CONFIG, makeDeps());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
+    mock = makeClient();
+    memory = new LettaMemory(BASE_CONFIG, makeDeps(), mock.client);
   });
 
   describe('constructor', () => {
     it('lanza LettaMemoryError si la config no parsea', () => {
-      expect(() => new LettaMemory({ base_url: 'no-es-url' }, makeDeps())).toThrow(
+      expect(() => new LettaMemory({ base_url: 'no-es-url' }, makeDeps(), mock.client)).toThrow(
         LettaMemoryError,
       );
     });
 
-    it('expone un id determinista derivado del agent_id', () => {
-      expect(memory.id).toBe(`memory:letta:${AGENT}`);
+    it('expone un id estable', () => {
+      expect(memory.id).toBe('memory:letta');
+    });
+
+    it('toma el agent_id de la config como agente activo', () => {
+      expect(memory.getAgentId()).toBe(AGENT);
     });
   });
 
   describe('ping', () => {
-    it('devuelve true si /v1/health/check responde 2xx', async () => {
-      fetchMock.mockResolvedValueOnce(emptyResponse(200));
+    it('devuelve true si health() resuelve', async () => {
+      mock.health.mockResolvedValueOnce({ status: 'ok', version: '1.12.0' });
       await expect(memory.ping()).resolves.toBe(true);
-      const call = fetchMock.mock.calls[0];
-      expect(call?.[0]).toBe(`${BASE}/v1/health/check`);
-      expect(call?.[1]?.method).toBe('GET');
+      expect(mock.health).toHaveBeenCalledOnce();
     });
 
-    it('devuelve false si el server responde 5xx', async () => {
-      fetchMock.mockResolvedValueOnce(emptyResponse(503));
+    it('devuelve false si health() rechaza (server caído)', async () => {
+      mock.health.mockRejectedValueOnce(new Error('ECONNREFUSED'));
       await expect(memory.ping()).resolves.toBe(false);
-    });
-
-    it('devuelve false si fetch lanza (red caída)', async () => {
-      fetchMock.mockRejectedValueOnce(new TypeError('network'));
-      await expect(memory.ping()).resolves.toBe(false);
-    });
-
-    it('devuelve false sin tocar fetch si agent_id está vacío', async () => {
-      const disabled = new LettaMemory({ base_url: BASE, agent_id: '' }, makeDeps());
-      await expect(disabled.ping()).resolves.toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
-  describe('auth Bearer', () => {
-    it('incluye Authorization si la config tiene password', async () => {
-      const withPass = new LettaMemory({ ...BASE_CONFIG, password: 'sekret' }, makeDeps());
-      fetchMock.mockResolvedValueOnce(emptyResponse(200));
-      await withPass.ping();
-      const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
-      expect(headers?.Authorization).toBe('Bearer sekret');
+  describe('provisionAgent', () => {
+    it('crea el agente con embedding_config explícito y devuelve su id', async () => {
+      mock.create.mockResolvedValueOnce({ id: 'agent-nuevo' });
+      const id = await memory.provisionAgent();
+      expect(id).toBe('agent-nuevo');
+      const body = mock.create.mock.calls[0]?.[0] as {
+        model: string;
+        name: string;
+        context_window_limit: number;
+        embedding_config: {
+          embedding_endpoint: string;
+          embedding_model: string;
+          embedding_dim: number;
+        };
+      };
+      expect(body.model).toBe('ollama/qwen2.5:3b');
+      expect(body.name).toBe('shiro-memory');
+      expect(body.context_window_limit).toBe(16_000);
+      expect(body.embedding_config.embedding_endpoint).toBe('http://host.docker.internal:11434/v1');
+      expect(body.embedding_config.embedding_model).toBe('mxbai-embed-large');
+      expect(body.embedding_config.embedding_dim).toBe(1024);
+    });
+  });
+
+  describe('agentExists', () => {
+    it('true si retrieve resuelve', async () => {
+      mock.retrieve.mockResolvedValueOnce({ id: AGENT });
+      await expect(memory.agentExists(AGENT)).resolves.toBe(true);
     });
 
-    it('omite Authorization si no hay password', async () => {
-      fetchMock.mockResolvedValueOnce(emptyResponse(200));
-      await memory.ping();
-      const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
-      expect(headers?.Authorization).toBeUndefined();
+    it('false si retrieve da 404', async () => {
+      mock.retrieve.mockRejectedValueOnce({ status: 404 });
+      await expect(memory.agentExists(AGENT)).resolves.toBe(false);
+    });
+
+    it('propaga (no asume inexistente) si el error no es 404', async () => {
+      mock.retrieve.mockRejectedValueOnce({ status: 500 });
+      await expect(memory.agentExists(AGENT)).rejects.toMatchObject({
+        name: 'LettaMemoryError',
+        status: 500,
+      });
     });
   });
 
   describe('save', () => {
-    it('hace POST con text, created_at y tags estructurados', async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'letta-id-1' }));
+    it('inserta el passage con text, created_at y tags estructurados', async () => {
+      mock.pCreate.mockResolvedValueOnce([{ id: 'letta-id-1', text: 'hola tú' }]);
       await memory.save(makeEntry({ id: 'uuid-x', role: 'assistant', text: 'hola tú' }));
 
-      const call = fetchMock.mock.calls[0];
-      expect(call?.[0]).toBe(`${BASE}/v1/agents/${AGENT}/archival-memory`);
-      expect(call?.[1]?.method).toBe('POST');
-      const body = JSON.parse(call?.[1]?.body as string) as {
-        text: string;
-        created_at: string;
-        tags: string[];
-      };
-      expect(body.text).toBe('hola tú');
-      expect(body.created_at).toBe('2026-05-29T12:00:00.000Z');
-      expect(body.tags).toEqual(['shiro:id:uuid-x', 'shiro:role:assistant']);
+      expect(mock.pCreate).toHaveBeenCalledWith(AGENT, {
+        text: 'hola tú',
+        created_at: '2026-05-29T12:00:00.000Z',
+        tags: ['shiro:id:uuid-x', 'shiro:role:assistant'],
+      });
     });
 
-    it('lanza LettaMemoryError con status si Letta responde no-ok', async () => {
-      fetchMock.mockResolvedValueOnce(emptyResponse(500, 'server fail'));
-      await expect(memory.save(makeEntry())).rejects.toMatchObject({
+    it('propaga el error del SDK si el insert falla', async () => {
+      mock.pCreate.mockRejectedValueOnce(new Error('boom'));
+      await expect(memory.save(makeEntry())).rejects.toThrow('boom');
+    });
+
+    it('lanza si no hay agente provisionado todavía', async () => {
+      const noAgent = new LettaMemory({ base_url: BASE, agent_id: '' }, makeDeps(), mock.client);
+      await expect(noAgent.save(makeEntry())).rejects.toMatchObject({
         name: 'LettaMemoryError',
-        status: 500,
       });
+      expect(mock.pCreate).not.toHaveBeenCalled();
     });
   });
 
   describe('getRecent', () => {
     it('lista con ascending=false y devuelve en orden cronológico ASC', async () => {
       // Letta devuelve más reciente primero; nosotros reverse → ASC.
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse([
-          {
-            id: 'p2',
-            text: 'segundo',
-            created_at: '2026-05-29T12:01:00.000Z',
-            tags: ['shiro:id:uuid-2', 'shiro:role:assistant'],
-          },
-          {
-            id: 'p1',
-            text: 'primero',
-            created_at: '2026-05-29T12:00:00.000Z',
-            tags: ['shiro:id:uuid-1', 'shiro:role:user'],
-          },
-        ]),
-      );
+      mock.pList.mockResolvedValueOnce([
+        {
+          id: 'p2',
+          text: 'segundo',
+          created_at: '2026-05-29T12:01:00.000Z',
+          tags: ['shiro:id:uuid-2', 'shiro:role:assistant'],
+        },
+        {
+          id: 'p1',
+          text: 'primero',
+          created_at: '2026-05-29T12:00:00.000Z',
+          tags: ['shiro:id:uuid-1', 'shiro:role:user'],
+        },
+      ]);
 
       const entries = await memory.getRecent(USER, 10);
 
-      const [url] = fetchMock.mock.calls[0] ?? [];
-      expect(url).toContain(`/v1/agents/${AGENT}/archival-memory?`);
-      expect(url).toContain('limit=10');
-      expect(url).toContain('ascending=false');
-
+      expect(mock.pList).toHaveBeenCalledWith(AGENT, { limit: 10, ascending: false });
       expect(entries.map((e) => e.id)).toEqual(['uuid-1', 'uuid-2']);
       expect(entries[0]?.role).toBe('user');
       expect(entries[1]?.role).toBe('assistant');
       expect(entries[0]?.text).toBe('primero');
     });
 
-    it('si el passage no tiene tags shiro, usa el id de Letta y role user por default', async () => {
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse([
-          { id: 'letta-foo', text: 'huérfano', created_at: '2026-05-29T12:00:00.000Z' },
-        ]),
-      );
+    it('si el passage no tiene tags shiro, usa el id de Letta y role user', async () => {
+      mock.pList.mockResolvedValueOnce([
+        { id: 'letta-foo', text: 'huérfano', created_at: '2026-05-29T12:00:00.000Z' },
+      ]);
       const [entry] = await memory.getRecent(USER, 1);
       expect(entry?.id).toBe('letta-foo');
       expect(entry?.role).toBe('user');
     });
-
-    it('lanza LettaMemoryError si el server responde 404', async () => {
-      fetchMock.mockResolvedValueOnce(emptyResponse(404, 'agent missing'));
-      await expect(memory.getRecent(USER, 5)).rejects.toMatchObject({
-        name: 'LettaMemoryError',
-        status: 404,
-      });
-    });
   });
 
   describe('searchSemantic', () => {
-    it('hace GET a /archival-memory/search con query y top_k', async () => {
-      fetchMock.mockResolvedValueOnce(
-        jsonResponse({
-          count: 1,
-          results: [
-            {
-              id: 'p-sem',
-              content: 'algo semánticamente cercano',
-              timestamp: '2026-05-29T11:00:00.000Z',
-              tags: ['shiro:id:uuid-sem', 'shiro:role:assistant'],
-            },
-          ],
-        }),
-      );
+    it('busca con query y top_k y normaliza content/timestamp', async () => {
+      mock.pSearch.mockResolvedValueOnce({
+        count: 1,
+        results: [
+          {
+            id: 'p-sem',
+            content: 'algo semánticamente cercano',
+            timestamp: '2026-05-29T11:00:00.000Z',
+            tags: ['shiro:id:uuid-sem', 'shiro:role:assistant'],
+          },
+        ],
+      });
 
       const entries = await memory.searchSemantic('proyecto', USER, 3);
 
-      const [url] = fetchMock.mock.calls[0] ?? [];
-      expect(url).toContain(`/v1/agents/${AGENT}/archival-memory/search?`);
-      expect(url).toContain('query=proyecto');
-      expect(url).toContain('top_k=3');
-
+      expect(mock.pSearch).toHaveBeenCalledWith(AGENT, { query: 'proyecto', top_k: 3 });
       expect(entries).toHaveLength(1);
       expect(entries[0]?.id).toBe('uuid-sem');
       expect(entries[0]?.text).toBe('algo semánticamente cercano');
       expect(entries[0]?.role).toBe('assistant');
     });
-
-    it('encode-URI la query para que caracteres especiales no rompan', async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse({ count: 0, results: [] }));
-      await memory.searchSemantic('hola & mundo', USER, 1);
-      const [url] = fetchMock.mock.calls[0] ?? [];
-      expect(url).toContain('query=hola+%26+mundo');
-    });
   });
 
   describe('clear', () => {
     it('itera list → delete hasta vaciar', async () => {
-      // 1ª list: 2 passages.
-      fetchMock.mockResolvedValueOnce(jsonResponse([{ id: 'a' }, { id: 'b' }]));
-      // DELETE a, DELETE b.
-      fetchMock.mockResolvedValueOnce(emptyResponse(204));
-      fetchMock.mockResolvedValueOnce(emptyResponse(204));
-      // 2ª list: vacío → corta el loop.
-      fetchMock.mockResolvedValueOnce(jsonResponse([]));
+      mock.pList
+        .mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }]) // 1ª list
+        .mockResolvedValueOnce([]); // 2ª list → corta
+      mock.pDelete.mockResolvedValue(undefined);
 
       await memory.clear(USER);
 
-      expect(fetchMock).toHaveBeenCalledTimes(4);
-      const methods = fetchMock.mock.calls.map((c) => c[1]?.method);
-      expect(methods).toEqual(['GET', 'DELETE', 'DELETE', 'GET']);
+      expect(mock.pDelete).toHaveBeenCalledTimes(2);
+      expect(mock.pDelete).toHaveBeenNthCalledWith(1, 'a', { agent_id: AGENT });
+      expect(mock.pDelete).toHaveBeenNthCalledWith(2, 'b', { agent_id: AGENT });
     });
 
-    it('si list devuelve vacío de entrada, no hace ningún delete', async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse([]));
+    it('si list devuelve vacío de entrada, no borra nada', async () => {
+      mock.pList.mockResolvedValueOnce([]);
       await memory.clear(USER);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(mock.pDelete).not.toHaveBeenCalled();
     });
 
-    it('propaga LettaMemoryError si un delete falla', async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse([{ id: 'a' }]));
-      fetchMock.mockResolvedValueOnce(emptyResponse(500, 'fallo'));
-      await expect(memory.clear(USER)).rejects.toMatchObject({
-        name: 'LettaMemoryError',
-        status: 500,
-      });
+    it('propaga si un delete falla', async () => {
+      mock.pList.mockResolvedValueOnce([{ id: 'a' }]);
+      mock.pDelete.mockRejectedValueOnce(new Error('fallo delete'));
+      await expect(memory.clear(USER)).rejects.toThrow('fallo delete');
+    });
+
+    it('corta (no loop infinito) si los passages no traen id', async () => {
+      mock.pList.mockResolvedValue([{ text: 'sin id' }]);
+      await expect(memory.clear(USER)).rejects.toMatchObject({ name: 'LettaMemoryError' });
+      expect(mock.pDelete).not.toHaveBeenCalled();
     });
   });
 });

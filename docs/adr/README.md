@@ -69,6 +69,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0015](0015-hybrid-router-classifier-llm-based.md)    | HybridRouter — clasificador LLM con fallback heurístico | Accepted |
 | [0016](0016-pipeline-conversational-wiring.md)        | Wiring del pipeline conversacional en `core-host`       | Accepted |
 | [0017](0017-memoria-persistente-local-y-letta.md)     | Memoria persistente — LocalMemory + LettaMemory         | Accepted |
+| [0018](0018-letta-sdk-oficial-embeddings-ollama.md)   | Integración Letta — SDK oficial + embeddings Ollama     | Accepted |
 
 ## Referencias externas
 

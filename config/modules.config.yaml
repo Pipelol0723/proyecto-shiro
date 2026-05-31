@@ -74,24 +74,39 @@ modules:
       user_id: 'default'
       letta:
         base_url: 'http://localhost:8283'
-        # agent_id obligatorio — crea un agente en Letta y pega su ID aquí.
-        # Sin agente válido, el server arranca igual pero los reads
-        # devuelven [] y los turnos se acumulan en el WAL local hasta que
-        # se configure el agente y Letta responda.
+        # agent_id vacío → el server auto-provisiona el agente al arrancar
+        # (con embeddings Ollama) y persiste su id en el WAL local. Pega un
+        # id aquí solo si quieres forzar un agente concreto. Ver ADR 0018.
         agent_id: ''
-        # password opcional — solo si el self-hosted activa password
-        # protection. Mejor leer de env y referenciar; por ahora vacío.
-        # password: ''
-        timeout_ms: 1500
+        # password: se lee de LETTA_SERVER_PASSWORD en .env (NUNCA hardcodear).
+        # LLM del agente Letta. Obligatorio para crear el agente aunque la
+        # generación la haga nuestro pipeline (no Letta). Reusa tu modelo.
+        model: 'ollama/qwen2.5:3b'
+        # Embeddings: config EXPLÍCITA a la API OpenAI-compat de Ollama
+        # (OBLIGATORIOS para archival memory). Pullea el modelo primero:
+        #   ollama pull mxbai-embed-large
+        # El endpoint es desde la perspectiva del SERVER Letta: en Docker
+        # llega al host por host.docker.internal y el sufijo /v1 es OBLIGATORIO.
+        # Pasamos config explícita (no un handle de provider) porque el
+        # provider nativo enruta mal el embedding. Ver ADR 0018.
+        embedding_endpoint: 'http://host.docker.internal:11434/v1'
+        embedding_model: 'mxbai-embed-large'
+        embedding_dim: 1024
+        context_window_limit: 16000
+        # Timeout de las requests al server. 10s da margen al primer embedding
+        # (el cold-start de Ollama puede tardar varios segundos); el WAL cubre
+        # lo que aún así expire. La provisión del agente usa un timeout aparte.
+        timeout_ms: 10000
       local:
         db_path: './data/memory.db'
       drainer:
         interval_ms: 5000
         batch_size: 100
       pipeline:
-        # Cuántos turnos cronológicos recientes inyecta el pipeline en
-        # cada llamada al LLM como contexto.
-        recent_limit: 5
+        # Cuántos turnos cronológicos recientes inyecta el pipeline en cada
+        # llamada al LLM como contexto. getRecent no necesita embeddings, así
+        # que es barato y fiable — subimos a 10 para mejor recall inmediato.
+        recent_limit: 10
         # Cuántos turnos semánticamente relevantes pide a Letta por turno.
         # Si Letta no está disponible, se ignora silenciosamente.
         semantic_limit: 3

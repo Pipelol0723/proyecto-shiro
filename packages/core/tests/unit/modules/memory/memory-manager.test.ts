@@ -13,7 +13,7 @@ import {
   MemoryManagerError,
 } from '../../../../src/modules/memory/memory-manager.js';
 import { LocalMemory } from '../../../../src/modules/memory/local-memory.js';
-import { LettaMemory } from '../../../../src/modules/memory/letta-memory.js';
+import { LettaMemory, type LettaClientLike } from '../../../../src/modules/memory/letta-memory.js';
 import { Logger } from '../../../../src/core/logger.js';
 import type { ModuleDeps } from '../../../../src/core/module-loader.js';
 import type { MemoryEntry } from '../../../../src/interfaces/IMemoryModule.js';
@@ -42,21 +42,31 @@ function makeEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
   };
 }
 
-/**
- * Crea un LettaMemory con fetch mockeado para no tocar red. Devuelve el
- * cliente y el `fetchMock` para que cada test controle las respuestas.
- */
-function makeLettaWithMockedFetch(): {
-  letta: LettaMemory;
-  fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
-} {
-  const fetchMock = vi.fn<typeof fetch>();
-  vi.stubGlobal('fetch', fetchMock);
-  const letta = new LettaMemory(
-    { base_url: 'http://localhost:8283', agent_id: 'test-agent' },
-    makeDeps(),
-  );
-  return { letta, fetchMock };
+/** Cliente SDK falso (no toca red). Métodos benignos por defecto. */
+function stubClient(): LettaClientLike {
+  return {
+    health: vi.fn().mockResolvedValue({ status: 'ok', version: 'test' }),
+    agents: {
+      create: vi.fn().mockResolvedValue({ id: 'agent-provisioned' }),
+      retrieve: vi.fn().mockResolvedValue({ id: 'x' }),
+      passages: {
+        create: vi.fn().mockResolvedValue([]),
+        list: vi.fn().mockResolvedValue([]),
+        search: vi.fn().mockResolvedValue({ count: 0, results: [] }),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+    },
+  };
+}
+
+/** LettaMemory real con cliente SDK stub. Los tests espían sus métodos. */
+function makeLetta(
+  lettaConfig: { base_url: string; agent_id: string } = {
+    base_url: 'http://localhost:8283',
+    agent_id: 'test-agent',
+  },
+): LettaMemory {
+  return new LettaMemory(lettaConfig, makeDeps(), stubClient());
 }
 
 const BASE_CONFIG = {
@@ -80,7 +90,7 @@ describe('MemoryManagerConfigSchema', () => {
     expect(result.drainer.batch_size).toBe(100);
   });
 
-  it('acepta letta.agent_id vacío (modo Letta deshabilitada)', () => {
+  it('acepta letta.agent_id vacío (modo auto-provisión)', () => {
     const result = MemoryManagerConfigSchema.parse({ letta: {} });
     expect(result.letta.agent_id).toBe('');
   });
@@ -93,14 +103,13 @@ describe('MemoryManager', () => {
 
   beforeEach(() => {
     local = new LocalMemory({ dbPath: ':memory:' });
-    const made = makeLettaWithMockedFetch();
-    letta = made.letta;
+    letta = makeLetta();
     manager = new MemoryManager(BASE_CONFIG, makeDeps(), { local, letta });
   });
 
   afterEach(async () => {
     await manager.stop();
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   describe('constructor', () => {
@@ -151,7 +160,9 @@ describe('MemoryManager', () => {
       await manager.save(makeEntry({ id: 'stuck' }));
 
       expect(local.pendingCount()).toBe(1);
-      expect(manager.isLettaUp()).toBe(false);
+      // El push falló pero Letta sigue "up": el estado lo decide el ping, no
+      // un push lento (cold-start de embeddings). Ver ADR 0018.
+      expect(manager.isLettaUp()).toBe(true);
     });
   });
 
@@ -186,7 +197,7 @@ describe('MemoryManager', () => {
       expect(semantic[0]?.id).toBe('semantic');
     });
 
-    it('si Letta falla durante un read, marca down y devuelve [] sin lanzar', async () => {
+    it('si Letta falla durante un read, devuelve [] sin lanzar (no marca down)', async () => {
       vi.spyOn(letta, 'ping').mockResolvedValue(true);
       vi.spyOn(letta, 'getRecent').mockRejectedValue(new Error('500'));
       await manager.runDrainerOnce();
@@ -194,7 +205,8 @@ describe('MemoryManager', () => {
 
       const result = await manager.getRecent(USER, 5);
       expect(result).toEqual([]);
-      expect(manager.isLettaUp()).toBe(false);
+      // Un read fallido no tumba el estado: lo decide el ping (checkLetta).
+      expect(manager.isLettaUp()).toBe(true);
     });
   });
 
@@ -278,7 +290,79 @@ describe('MemoryManager', () => {
       // t1 drenó, t2 falló (cortamos), t3 no se intentó.
       expect(saveSpy).toHaveBeenCalledTimes(2);
       expect(local.pendingCount()).toBe(2); // t2 y t3 siguen pendientes
-      expect(manager.isLettaUp()).toBe(false);
+      // El batch se cortó pero Letta sigue "up": lo decide el ping.
+      expect(manager.isLettaUp()).toBe(true);
+    });
+  });
+
+  describe('provisión del agente (ADR 0018)', () => {
+    function makeManager(localDb: LocalMemory, lettaInst: LettaMemory): MemoryManager {
+      return new MemoryManager(
+        { ...BASE_CONFIG, letta: { base_url: 'http://localhost:8283', agent_id: '' } },
+        makeDeps(),
+        { local: localDb, letta: lettaInst },
+      );
+    }
+
+    it('provisiona y persiste el id cuando agent_id está vacío', async () => {
+      const local2 = new LocalMemory({ dbPath: ':memory:' });
+      const letta2 = makeLetta({ base_url: 'http://localhost:8283', agent_id: '' });
+      vi.spyOn(letta2, 'ping').mockResolvedValue(true);
+      const provisionSpy = vi.spyOn(letta2, 'provisionAgent').mockResolvedValue('agent-new');
+      const setIdSpy = vi.spyOn(letta2, 'setAgentId');
+      const mgr = makeManager(local2, letta2);
+
+      await mgr.runDrainerOnce(); // checkLetta → ensureAgent → provisión
+
+      expect(provisionSpy).toHaveBeenCalledOnce();
+      expect(setIdSpy).toHaveBeenCalledWith('agent-new');
+      expect(local2.getMeta('letta_agent_id')).toBe('agent-new');
+      expect(mgr.isLettaUp()).toBe(true);
+      await mgr.stop();
+    });
+
+    it('reutiliza el agente persistido si todavía existe', async () => {
+      const local2 = new LocalMemory({ dbPath: ':memory:' });
+      local2.setMeta('letta_agent_id', 'agent-stored');
+      const letta2 = makeLetta({ base_url: 'http://localhost:8283', agent_id: '' });
+      vi.spyOn(letta2, 'ping').mockResolvedValue(true);
+      vi.spyOn(letta2, 'agentExists').mockResolvedValue(true);
+      const provisionSpy = vi.spyOn(letta2, 'provisionAgent');
+      const setIdSpy = vi.spyOn(letta2, 'setAgentId');
+      const mgr = makeManager(local2, letta2);
+
+      await mgr.runDrainerOnce();
+
+      expect(provisionSpy).not.toHaveBeenCalled();
+      expect(setIdSpy).toHaveBeenCalledWith('agent-stored');
+      await mgr.stop();
+    });
+
+    it('re-provisiona si el agente persistido ya no existe', async () => {
+      const local2 = new LocalMemory({ dbPath: ':memory:' });
+      local2.setMeta('letta_agent_id', 'agent-gone');
+      const letta2 = makeLetta({ base_url: 'http://localhost:8283', agent_id: '' });
+      vi.spyOn(letta2, 'ping').mockResolvedValue(true);
+      vi.spyOn(letta2, 'agentExists').mockResolvedValue(false);
+      const provisionSpy = vi.spyOn(letta2, 'provisionAgent').mockResolvedValue('agent-fresh');
+      const mgr = makeManager(local2, letta2);
+
+      await mgr.runDrainerOnce();
+
+      expect(provisionSpy).toHaveBeenCalledOnce();
+      expect(local2.getMeta('letta_agent_id')).toBe('agent-fresh');
+      await mgr.stop();
+    });
+
+    it('usa agent_id de la config como override sin provisionar', async () => {
+      vi.spyOn(letta, 'ping').mockResolvedValue(true);
+      const provisionSpy = vi.spyOn(letta, 'provisionAgent');
+      const setIdSpy = vi.spyOn(letta, 'setAgentId');
+
+      await manager.runDrainerOnce();
+
+      expect(provisionSpy).not.toHaveBeenCalled();
+      expect(setIdSpy).toHaveBeenCalledWith('test-agent');
     });
   });
 
