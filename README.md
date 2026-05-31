@@ -117,6 +117,44 @@ El `.env` se carga automáticamente al arrancar el server (flag `--env-file-if-e
 - **Ollama** corriendo en `localhost:11434` con `qwen2.5:3b` descargado (`ollama pull qwen2.5:3b`). Para GPUs con más VRAM, sube a `:7b` o `:14b` editando `config/modules.config.yaml`.
 - **Anthropic API key** (opcional pero recomendada para que el `HybridRouter` pueda escalar a Claude en preguntas complejas).
 
+### Requisitos para el hito Memoria (Letta)
+
+La memoria persistente usa **Letta** (Docker) como almacén canónico, con embeddings **locales vía Ollama** (sin nube, sin API key) sobre el SDK oficial `@letta-ai/letta-client`. Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
+
+Para activarla:
+
+1. **Descarga el modelo de embeddings** en Ollama (obligatorio — archival memory lo exige):
+
+   ```bash
+   ollama pull mxbai-embed-large
+   ```
+
+2. **Pon una password de Letta** en `.env` (la misma var configura el server y el cliente):
+
+   ```bash
+   LETTA_SERVER_PASSWORD=elige-una-cadena-secreta
+   ```
+
+3. **Arranca Letta** (servicio de larga vida, aparte de `npm run dev`):
+
+   ```bash
+   docker compose up -d letta
+   ```
+
+4. **Verifica** que responde:
+
+   ```bash
+   curl http://localhost:8283/v1/health/
+   ```
+
+El agente de Letta se **auto-provisiona** la primera vez que el `core-host` arranca con Letta arriba; su id se persiste en el WAL local (`./data/memory.db`). No hay que crearlo a mano ni pegar ids. El agente se crea con un `embedding_config` explícito hacia Ollama (ver `config/modules.config.yaml`, bloque `memory.letta`).
+
+> **Embeddings**: la config apunta a la API OpenAI-compat de Ollama con `embedding_endpoint: http://host.docker.internal:11434/v1`. El sufijo `/v1` es **obligatorio** (sin él, Letta da `404 page not found` al embeber → 500 en cada turno). En Windows/macOS el contenedor llega al host por `host.docker.internal`, no `localhost`. Si cambias de modelo de embeddings, ajusta también `embedding_dim`. Esto funciona también contra un Letta que ya tengas corriendo, sin recrearlo.
+
+> **Recall instantáneo**: Ollama descarga los modelos tras ~5 min de inactividad, así que el primer turno tras una pausa paga un _cold-start_ de varios segundos (el WAL lo cubre — no se pierde nada). Shiro hace un _warm-up_ del embedding al arrancar para que el recall semántico vaya fino desde el primer turno. Para recall siempre instantáneo aunque haya pausas, arranca Ollama con `OLLAMA_KEEP_ALIVE=-1` (mantiene los modelos cargados en memoria).
+
+Si Letta no está corriendo, el companion **funciona igual**: los turnos se guardan en el WAL local (SQLite) y se drenan a Letta en cuanto vuelva. Cero turnos perdidos.
+
 ## Scripts disponibles (desde la raíz)
 
 | Comando                 | Descripción                                      |

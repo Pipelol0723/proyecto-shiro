@@ -91,7 +91,7 @@ graph LR
             STT[stt/<br>WhisperSTT]
             TTS[tts/<br>ElevenLabs / Kokoro / SystemTTS]
             LLM[llm/<br>Ollama / Anthropic]
-            Mem[memory/<br>Letta / LocalMemory]
+            Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL]
             Av[avatar/<br>Live2D / VRM]
             Rou[router/<br>HybridRouter]
         end
@@ -254,6 +254,36 @@ sequenceDiagram
   el cloud (mejor calidad) según la complejidad estimada del mensaje.
 - La memoria se inserta en dos puntos: lee contexto para el LLM, escribe
   cada turno de la conversación.
+
+## Memoria: Letta canónico + WAL local
+
+La memoria (ver [ADR 0017](adr/0017-memoria-persistente-local-y-letta.md) y
+[ADR 0018](adr/0018-letta-sdk-oficial-embeddings-ollama.md)) la implementa el
+`MemoryManager`, que cumple `IMemoryModule` y orquesta dos backends:
+
+```mermaid
+graph LR
+    Pipe[conversation-flow] -->|save / getRecent / searchSemantic| MM[MemoryManager]
+    MM -->|1 . save síncrono sub-ms| WAL[(LocalMemory<br/>SQLite WAL)]
+    MM -->|2 . push inmediato + reads| Letta[LettaMemory<br/>SDK oficial]
+    Letta -->|HTTP| Server[(Letta server<br/>Docker)]
+    Server -->|embeddings| Ollama[Ollama<br/>mxbai-embed-large]
+    WAL -.entradas pendientes.-> Drainer[drainer<br/>setInterval]
+    Drainer -->|reintenta en orden| Letta
+```
+
+- **Escritura**: cada turno se persiste **primero** en el WAL local (SQLite,
+  síncrono) y **luego** se empuja a Letta. Si Letta está caído, la entrada
+  queda pendiente y el **drainer** la reenvía cuando vuelve. Cero turnos
+  perdidos aunque Letta tartamudee.
+- **Lectura** (`getRecent` cronológico + `searchSemantic` semántico): van a
+  Letta, que es la verdad. Si Letta no está usable, devuelven `[]` rápido y
+  el turno procede sin contexto (Shiro responde "ciego" ese turno).
+- **Letta** se usa como _archival store_ semántico (no invocamos su flujo de
+  agente; el LLM es nuestro). Los embeddings son **locales vía Ollama**.
+- **Auto-provisión**: si no hay `agent_id` configurado, el manager crea el
+  agente Letta al arrancar (con los handles de Ollama) y persiste su id en el
+  WAL local para sobrevivir reinicios.
 
 ## Evolución de transportes
 
