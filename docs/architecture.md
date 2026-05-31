@@ -3,10 +3,11 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-05-31 — tras mergear los hitos **Setup**,
-> **Core**, **Cliente desktop** y **LLM**, y completar la mayor parte del
-> hito **Memoria** (Letta vía SDK oficial + WAL local con drainer, ADRs
-> 0017 y 0018; falta la hidratación del cliente al reconectar).
+> **Última actualización**: 2026-05-31 — hitos **Setup**, **Core**,
+> **Cliente desktop**, **LLM** y **Memoria** completos (este último con
+> Letta vía SDK oficial + WAL local con drainer + auto-provisión del
+> agente + `memory:snapshot` que rehidrata el chat del desktop al
+> reconectar, ADRs 0017 y 0018). Próximo: **STT** (en planificación).
 
 ## Visión a vista de pájaro
 

@@ -71,8 +71,8 @@ y LLM:
 2. **Core** ✅ — EventBus, Orchestrator, ModuleLoader, 9 interfaces.
 3. **Cliente desktop** ✅ — Vite + React + orbe + 3 temas + 5 pantallas + EventBus wiring (ahora via WebSocket).
 4. **LLM** ✅ — split cliente/server (`core-host` proceso Node con WebSocketTransport), `OllamaLLM` (Qwen 2.5), `AnthropicLLM` (Claude Sonnet 4.6) con structured outputs, `HybridRouter` con clasificador LLM + fallback heurístico, pipeline conversacional cableado. Ver ADRs 0012-0016.
-5. **Memoria** 🟡 _en curso_ — Letta como almacén canónico (vía SDK oficial `@letta-ai/letta-client`) con embeddings locales en Ollama (`mxbai-embed-large`), `LocalMemory` SQLite como WAL de continuidad y drainer en background. Auto-provisión del agente Letta al arrancar (sin pegar ids a mano). Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
-6. **STT** ⏸️ pendiente — faster-whisper microservicio Python.
+5. **Memoria** ✅ — Letta como almacén canónico (vía SDK oficial `@letta-ai/letta-client`) con embeddings locales en Ollama (`mxbai-embed-large`), `LocalMemory` SQLite como WAL + drainer, auto-provisión del agente y `memory:snapshot` para rehidratar el chat del desktop al reconectar. Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
+6. **STT** 🟡 _planificando_ — faster-whisper o similar. La arquitectura concreta (microservicio Python vs bindings Node, modelo, VAD, streaming vs final-only) se decide en un ADR antes de codear.
 7. **TTS** ⏸️ pendiente — ElevenLabs + Kokoro + SystemTTS.
 8. **Avatar Live2D** ⏸️ pendiente — reemplaza el orbe dentro de `<Avatar>`.
 9. **Packaging Tauri** ⏸️ pendiente — envuelve el build de Vite en binario nativo.
