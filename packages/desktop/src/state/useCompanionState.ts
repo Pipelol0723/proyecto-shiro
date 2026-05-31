@@ -13,6 +13,7 @@
  *   router:routed    → THINK_START
  *   llm:responded    → SHIRO_REPLY
  *   tts:audio-ended  → SPEAK_END
+ *   memory:snapshot  → HYDRATE_FROM_MEMORY  (rehidrata el chat al reconectar)
  *
  * Por qué `user:message` añade al historial y no `stt:transcribed`:
  *
@@ -68,6 +69,10 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
 
   useBusEvent('tts:audio-ended', () => {
     dispatch({ type: 'SPEAK_END' });
+  });
+
+  useBusEvent('memory:snapshot', (p) => {
+    dispatch({ type: 'HYDRATE_FROM_MEMORY', entries: p.entries });
   });
 
   return [state, dispatch];

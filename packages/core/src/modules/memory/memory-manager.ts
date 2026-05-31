@@ -68,14 +68,23 @@ export const MemoryManagerConfigSchema = z.object({
    * Parámetros que el pipeline conversacional usa al leer contexto
    * (ver ADR 0017). Los consume `wireConversationFlow` vía el getter
    * `getPipelineConfig()` del manager.
+   *
+   * `snapshot_limit` lo consume el bootstrap al pedir el snapshot que
+   * se manda al cliente cuando se conecta (evento `memory:snapshot`).
    */
   pipeline: z
     .object({
       recent_limit: z.number().int().nonnegative().default(5),
       semantic_limit: z.number().int().nonnegative().default(3),
       timeout_ms: z.number().int().positive().default(1_500),
+      snapshot_limit: z.number().int().nonnegative().default(20),
     })
-    .default({ recent_limit: 5, semantic_limit: 3, timeout_ms: 1_500 }),
+    .default({
+      recent_limit: 5,
+      semantic_limit: 3,
+      timeout_ms: 1_500,
+      snapshot_limit: 20,
+    }),
 });
 
 export type MemoryManagerConfig = z.infer<typeof MemoryManagerConfigSchema>;
@@ -256,11 +265,13 @@ export class MemoryManager implements IMemoryModule {
     recentLimit: number;
     semanticLimit: number;
     timeoutMs: number;
+    snapshotLimit: number;
   } {
     return {
       recentLimit: this.config.pipeline.recent_limit,
       semanticLimit: this.config.pipeline.semantic_limit,
       timeoutMs: this.config.pipeline.timeout_ms,
+      snapshotLimit: this.config.pipeline.snapshot_limit,
     };
   }
 
