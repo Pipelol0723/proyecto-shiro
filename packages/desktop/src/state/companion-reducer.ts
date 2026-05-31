@@ -13,7 +13,7 @@
  * (sección Mapeo state ↔ EventBus).
  */
 
-import type { Emotion } from '@proyecto-shiro/core';
+import type { Emotion, MemoryEntry } from '@proyecto-shiro/core';
 
 export type LLMTier = 'local' | 'cloud';
 
@@ -67,7 +67,36 @@ export type CompanionAction =
   | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
   | { type: 'SPEAK_END' }
   | { type: 'SET_EMOTION'; emotion: Emotion }
+  | { type: 'HYDRATE_FROM_MEMORY'; entries: MemoryEntry[] }
   | { type: 'RESET' };
+
+/**
+ * Mapea un `MemoryEntry` (server-side) a un `CompanionMessage` (UI). El
+ * cambio sutil: `MemoryEntry.role` es `'user' | 'assistant'` y el chat de
+ * la UI usa `'user' | 'shiro'`. La metadata rica (emoción, tier,
+ * latencia) viaja en `MemoryEntry.metadata`; aquí la desempacamos.
+ */
+function entryToMessage(entry: MemoryEntry): CompanionMessage {
+  const role: 'user' | 'shiro' = entry.role === 'assistant' ? 'shiro' : 'user';
+  const meta = entry.metadata ?? {};
+  const message: CompanionMessage = {
+    role,
+    text: entry.text,
+    timestamp: entry.timestamp,
+  };
+  if (role === 'shiro') {
+    if (typeof meta.emotion === 'string') {
+      message.emotion = meta.emotion as Emotion;
+    }
+    if (meta.tier === 'local' || meta.tier === 'cloud') {
+      message.tier = meta.tier;
+    }
+    if (typeof meta.latencyMs === 'number') {
+      message.latencyMs = meta.latencyMs;
+    }
+  }
+  return message;
+}
 
 export function companionReducer(state: CompanionState, action: CompanionAction): CompanionState {
   switch (action.type) {
@@ -122,6 +151,15 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
 
     case 'SET_EMOTION':
       return { ...state, emotion: action.emotion };
+
+    case 'HYDRATE_FROM_MEMORY':
+      // Idempotente: solo aplicamos el snapshot si el historial está
+      // vacío. Si el cliente ya tenía turnos en esta sesión (porque ya
+      // se hidrató o porque el usuario habló), ignoramos snapshots
+      // posteriores para no duplicar. RESET vuelve a habilitar la
+      // hidratación.
+      if (state.history.length > 0) return state;
+      return { ...state, history: action.entries.map(entryToMessage) };
 
     case 'RESET':
       return INITIAL_STATE;

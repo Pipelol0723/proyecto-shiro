@@ -3,9 +3,10 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-05-26 — tras mergear los hitos
-> **Setup** y **Core** (Fases 0 + 1A + 1B del plan original) y formalizar
-> el adelanto del **Cliente desktop** vía ADRs 0008-0010.
+> **Última actualización**: 2026-05-31 — tras mergear los hitos **Setup**,
+> **Core**, **Cliente desktop** y **LLM**, y completar la mayor parte del
+> hito **Memoria** (Letta vía SDK oficial + WAL local con drainer, ADRs
+> 0017 y 0018; falta la hidratación del cliente al reconectar).
 
 ## Visión a vista de pájaro
 
@@ -28,8 +29,8 @@ graph TB
         Root[/"raíz<br>tooling compartido"/]
 
         subgraph "packages/"
-            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core listos"]
-            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>🟡 en construcción"]
+            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core + LLM + Memoria"]
+            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>✅ orbe + 5 pantallas + 3 temas"]
             Mobile["mobile<br>cliente futuro<br>@proyecto-shiro/mobile"]
             Arduino["arduino-bridge<br>puente Serial<br>@proyecto-shiro/arduino-bridge"]
             IoT["iot-bridge<br>MQTT/Home Assistant<br>@proyecto-shiro/iot-bridge"]

@@ -122,6 +122,24 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   const memoryManager = orchestrator.getModules().memory as MemoryManager;
   await memoryManager.start();
   const memoryReads = memoryManager.getPipelineConfig();
+  const userId = options.config.modules.memory.config?.user_id;
+  const snapshotUserId = typeof userId === 'string' && userId.length > 0 ? userId : 'default';
+
+  // 4c. Snapshot del historial al conectar — cuando un cliente nuevo entra,
+  //     pedimos los últimos N turnos a Letta y los empujamos vía `memory:snapshot`.
+  //     El cliente decide aplicarlos solo si su historial está vacío
+  //     (idempotencia en el reducer). Ver ADR 0017 sección "Sync con cliente".
+  transport.onConnection(() => {
+    void (async (): Promise<void> => {
+      try {
+        const entries = await memoryManager.getRecent(snapshotUserId, memoryReads.snapshotLimit);
+        if (entries.length === 0) return; // sin historial, nada que hidratar
+        await bus.emit('memory:snapshot', { entries, userId: snapshotUserId });
+      } catch (err) {
+        child.warn('memory:snapshot al conectar falló', { err });
+      }
+    })();
+  });
 
   // 5. System prompt pre-construido — se reusa turn a turn.
   const systemPrompt = buildSystemPrompt(options.character);

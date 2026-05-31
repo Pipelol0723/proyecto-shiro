@@ -146,6 +146,85 @@ describe('companionReducer', () => {
     });
   });
 
+  describe('HYDRATE_FROM_MEMORY', () => {
+    const entries = [
+      {
+        id: 'm1',
+        role: 'user' as const,
+        text: 'hola Shiro',
+        timestamp: '2026-05-30T12:00:00.000Z',
+        userId: 'pipe',
+      },
+      {
+        id: 'm2',
+        role: 'assistant' as const,
+        text: '¡hola Pipe!',
+        timestamp: '2026-05-30T12:00:05.000Z',
+        userId: 'pipe',
+        metadata: { emotion: 'divertida', tier: 'local', latencyMs: 740 },
+      },
+    ];
+
+    it('rellena el historial mapeando role y desempacando metadata', () => {
+      const result = companionReducer(baseState, {
+        type: 'HYDRATE_FROM_MEMORY',
+        entries,
+      });
+      expect(result.history).toHaveLength(2);
+      expect(result.history[0]).toEqual({
+        role: 'user',
+        text: 'hola Shiro',
+        timestamp: '2026-05-30T12:00:00.000Z',
+      });
+      expect(result.history[1]).toEqual({
+        role: 'shiro',
+        text: '¡hola Pipe!',
+        timestamp: '2026-05-30T12:00:05.000Z',
+        emotion: 'divertida',
+        tier: 'local',
+        latencyMs: 740,
+      });
+    });
+
+    it('es idempotente: si ya hay historial, ignora el snapshot', () => {
+      const stateConHistorial: CompanionState = {
+        ...baseState,
+        history: [{ role: 'user', text: 'previo', timestamp: '2026-05-30T11:00:00.000Z' }],
+      };
+      const result = companionReducer(stateConHistorial, {
+        type: 'HYDRATE_FROM_MEMORY',
+        entries,
+      });
+      expect(result).toBe(stateConHistorial); // misma referencia, no toca nada
+      expect(result.history).toHaveLength(1);
+    });
+
+    it('acepta entries vacío sin tocar el state', () => {
+      const result = companionReducer(baseState, {
+        type: 'HYDRATE_FROM_MEMORY',
+        entries: [],
+      });
+      expect(result.history).toEqual([]);
+    });
+
+    it('no inyecta emotion/tier/latencyMs en mensajes de role user', () => {
+      const userEntry = {
+        id: 'mu',
+        role: 'user' as const,
+        text: 'eh',
+        timestamp: '2026-05-30T12:00:00.000Z',
+        userId: 'pipe',
+        metadata: { emotion: 'pensativa' }, // ruido — no debe colarse
+      };
+      const result = companionReducer(baseState, {
+        type: 'HYDRATE_FROM_MEMORY',
+        entries: [userEntry],
+      });
+      expect(result.history[0]?.emotion).toBeUndefined();
+      expect(result.history[0]?.tier).toBeUndefined();
+    });
+  });
+
   describe('RESET', () => {
     it('vuelve al state inicial', () => {
       const result = companionReducer(

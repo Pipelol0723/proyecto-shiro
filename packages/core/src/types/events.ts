@@ -18,6 +18,7 @@
  */
 
 import type { Emotion } from './emotions.js';
+import type { MemoryEntry } from '../interfaces/IMemoryModule.js';
 
 /*
  * EventMap es deliberadamente un interface con keys literales para que
@@ -94,6 +95,19 @@ export interface EventMap {
    * el avatar vuelve a idle.
    */
   'tts:audio-ended': { userId: string };
+
+  // ─── Memoria (sincronización con cliente) ───────────────────────────
+  /**
+   * Snapshot del historial reciente que el server empuja al detectar
+   * una nueva conexión WebSocket. El cliente hidrata su reducer con
+   * estos `entries` para que el chat sobreviva a recargas del navegador
+   * (la memoria de verdad vive en Letta + WAL, ver ADRs 0017 y 0018).
+   *
+   * El reducer del cliente aplica el snapshot **solo si su historial
+   * está vacío** — clientes que ya tienen turnos en sesión lo ignoran
+   * (idempotencia). Ver `companion-reducer.ts`.
+   */
+  'memory:snapshot': { entries: MemoryEntry[]; userId: string };
 }
 
 /**

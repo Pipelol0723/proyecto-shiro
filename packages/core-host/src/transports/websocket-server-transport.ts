@@ -55,6 +55,7 @@ export class WebSocketServerTransport implements ITransport {
   private readonly logger: Logger;
   private readonly readyPromise: Promise<void>;
   private receiver: TransportReceiveHandler | undefined;
+  private connectionHandler: (() => void | Promise<void>) | undefined;
   private closed = false;
 
   constructor(options: WebSocketServerTransportOptions) {
@@ -124,6 +125,19 @@ export class WebSocketServerTransport implements ITransport {
     this.receiver = handler;
   }
 
+  /**
+   * Registra un handler que se invoca cada vez que un cliente nuevo se
+   * conecta. Lo usa el bootstrap para empujar `memory:snapshot` y dejar
+   * que el cliente hidrate su historial al reconectar.
+   *
+   * Solo se admite un handler; llamadas posteriores lo sustituyen. Si el
+   * handler devuelve `Promise`, se ejecuta fire-and-forget (los errores
+   * van al log; nunca tumban la conexión recién aceptada).
+   */
+  onConnection(handler: () => void | Promise<void>): void {
+    this.connectionHandler = handler;
+  }
+
   async close(): Promise<void> {
     this.closed = true;
     for (const c of this.clients) {
@@ -145,6 +159,13 @@ export class WebSocketServerTransport implements ITransport {
   private handleConnection(ws: WebSocket): void {
     this.clients.add(ws);
     this.logger.info(`cliente conectado (total=${this.clients.size})`);
+
+    if (this.connectionHandler !== undefined) {
+      const h = this.connectionHandler;
+      Promise.resolve(h()).catch((err: unknown) => {
+        this.logger.error('connection handler falló', { err });
+      });
+    }
 
     ws.on('message', (data) => {
       const raw = rawDataToString(data);

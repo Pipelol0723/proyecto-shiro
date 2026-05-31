@@ -192,4 +192,48 @@ describe('WebSocketServerTransport', () => {
     await t.close();
     await expect(t.send('user:message', { text: 'x', userId: 'u1' })).resolves.toBeUndefined();
   });
+
+  it('onConnection() se invoca cuando un cliente se conecta', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+
+    const handler = vi.fn();
+    t.onConnection(handler);
+
+    const c1 = new WebSocket(`ws://localhost:${t.port}/bus`);
+    cleanup.push(() => {
+      c1.close();
+    });
+    await new Promise<void>((resolve) => c1.once('open', () => resolve()));
+    await tick(20);
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    const c2 = new WebSocket(`ws://localhost:${t.port}/bus`);
+    cleanup.push(() => {
+      c2.close();
+    });
+    await new Promise<void>((resolve) => c2.once('open', () => resolve()));
+    await tick(20);
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it('onConnection() captura errores del handler sin tumbar la conexión', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+
+    t.onConnection(() => Promise.reject(new Error('boom')));
+
+    const client = new WebSocket(`ws://localhost:${t.port}/bus`);
+    cleanup.push(() => {
+      client.close();
+    });
+    await new Promise<void>((resolve) => client.once('open', () => resolve()));
+    await tick(30);
+
+    // El cliente sigue conectado pese al fallo del handler.
+    expect(t.clientCount).toBe(1);
+    expect(client.readyState).toBe(WebSocket.OPEN);
+  });
 });

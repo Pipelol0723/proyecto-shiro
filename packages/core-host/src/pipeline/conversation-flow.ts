@@ -5,12 +5,18 @@
  *
  * Flujo por turno:
  *   user:message
- *     → memory.save (user)
+ *     → memory.save (user)  [fire-and-forget, en paralelo con todo lo siguiente]
  *     → router.route() → router:routed
  *     → memory.getRecent + searchSemantic (con timeout) → context string
  *     → llm.generate(context) → llm:responded
  *     → memory.save (assistant)
  *     → (transitional) tts:audio-ended simulado por duración del texto
+ *
+ * El save del user msg no bloquea el resto: el WAL local (SQLite síncrono)
+ * captura la entrada en sub-ms y el push a Letta vive en background. Para
+ * el reply del assistant sí esperamos: si el usuario manda dos turnos muy
+ * seguidos, el `getRecent` del segundo necesita ver el reply del primero
+ * en Letta.
  *
  * Errores de memoria nunca rompen el turno — el WAL del MemoryManager
  * garantiza que el user msg ya quedó en SQLite incluso si Letta hace
@@ -95,8 +101,18 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
   const unsubscribe = bus.on('user:message', async (payload) => {
     const startTime = Date.now();
 
-    // 0. Persistir el user msg al WAL (no bloquea el turno si falla).
-    await persistEntry(modules.memory, child, {
+    // 0. Persistir el user msg al WAL — fire-and-forget. `local.save`
+    //    dentro del MemoryManager es síncrono, así que SQLite ya tiene
+    //    la entrada antes de continuar con el router; el push HTTP a
+    //    Letta corre en paralelo con el resto del turno y, si falla,
+    //    el drainer lo recupera. Esto le ahorra al usuario los ~100-300ms
+    //    del push a Letta en el hot path.
+    //
+    //    El user msg NO se incluye en `getRecent` del turno actual de
+    //    todas formas (el contexto es lo previo; el mensaje actual va
+    //    como `request.text`), así que la carrera no introduce
+    //    inconsistencias.
+    void persistEntry(modules.memory, child, {
       id: randomUUID(),
       role: 'user',
       text: payload.text,
