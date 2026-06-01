@@ -1,17 +1,25 @@
 # docker-compose para los servicios de soporte de Proyecto Shiro.
 #
-# Por ahora solo Letta (memoria persistente, ver ADR 0017 y 0018). Se
-# arranca aparte del `npm run dev` porque es un servicio de larga vida que
-# quieres siempre arriba:
+# Servicios:
+#   - letta    Memoria persistente (ADRs 0017, 0018)
+#   - whisper  STT con faster-whisper (ADR 0019)
 #
-#   docker compose up -d letta
+# Se arrancan aparte del `npm run dev` porque son servicios de larga vida
+# que quieres siempre arriba:
+#
+#   docker compose up -d           # ambos
+#   docker compose up -d letta     # solo memoria
+#   docker compose up -d whisper   # solo STT
 #
 # Requisitos previos:
-#   1. Ollama corriendo en el host (localhost:11434) con el modelo de
-#      embeddings descargado:  ollama pull mxbai-embed-large
-#   2. Una password en .env:   LETTA_SERVER_PASSWORD=algo-secreto
+#   1. Ollama corriendo en el host (localhost:11434) con los modelos:
+#        ollama pull mxbai-embed-large   # para Letta
+#   2. En `.env`:
+#        LETTA_SERVER_PASSWORD=algo-secreto
 #
-# Verifica que arrancó:  curl http://localhost:8283/v1/health/
+# Verificar que arrancaron:
+#   curl http://localhost:8283/v1/health/      # Letta
+#   curl http://localhost:8765/health          # Whisper
 
 services:
   letta:
@@ -49,5 +57,37 @@ services:
       retries: 3
       start_period: 40s
 
+  whisper:
+    # Build local: la imagen mete faster-whisper + FastAPI sobre una base
+    # con CUDA runtime. Sin GPU el contenedor sigue funcionando (faster-
+    # whisper detecta y cae a CPU automáticamente). Ver
+    # services/whisper/README.md y ADR 0019.
+    build:
+      context: .
+      dockerfile: services/whisper/Dockerfile
+    image: shiro-whisper:local
+    restart: unless-stopped
+    ports:
+      - '8765:8765'
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
+      - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-es}
+      - WHISPER_PARTIAL_INTERVAL_MS=${WHISPER_PARTIAL_INTERVAL_MS:-1500}
+    volumes:
+      # Cache de modelos de Hugging Face — sobrevive a `docker compose down`.
+      # `down -v` lo borra y la próxima vez re-descarga el modelo.
+      - whisper_models:/root/.cache/huggingface
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8765/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # El modelo `small` tarda ~30 s en cargar la primera vez en CPU,
+      # más si baja de internet. 120 s da margen amplio.
+      start_period: 120s
+
 volumes:
   letta_pgdata:
+  whisper_models:
