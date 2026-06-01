@@ -29,9 +29,17 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
 
 WORKDIR /app
 
+# En Debian/Ubuntu `ensurepip` está deshabilitado para el python del sistema,
+# así que la vía limpia para 3.11 es un venv (el paquete python3.11-venv, ya
+# instalado, lo habilita con su propio pip). Además aísla las deps del sistema.
+# Con el PATH apuntando al venv, `python`/`pip`/`uvicorn` resuelven a 3.11 ahí.
+RUN python3.11 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 # Las dependencias van primero para aprovechar la cache de capas.
 COPY services/whisper/requirements.txt /app/requirements.txt
-RUN pip install --break-system-packages -r /app/requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r /app/requirements.txt
 
 # Código.
 COPY services/whisper /app/services/whisper
@@ -41,4 +49,4 @@ EXPOSE 8765
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD curl -fsS http://localhost:8765/health || exit 1
 
-CMD ["uvicorn", "services.whisper.main:app", "--host", "0.0.0.0", "--port", "8765"]
+CMD ["python", "-m", "uvicorn", "services.whisper.main:app", "--host", "0.0.0.0", "--port", "8765"]

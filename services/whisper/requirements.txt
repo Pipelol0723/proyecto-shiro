@@ -1,4 +1,7 @@
 faster-whisper==1.1.1
+# faster-whisper importa `requests` en utils.py pero no lo declara como
+# dependencia; lo fijamos explícito para que el contenedor arranque.
+requests==2.32.3
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 websockets==14.1
