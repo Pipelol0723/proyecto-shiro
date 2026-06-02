@@ -108,6 +108,41 @@
   filter: brightness(1.05);
 }
 
+/* Botón micro mientras el PTT está activo: rellena con acento y pulsa */
+.micRecording {
+  background: var(--accent);
+  color: var(--surface-solid);
+  animation: micPulse 1s var(--ease-out) infinite;
+}
+
+.micRecording:hover {
+  background: var(--accent);
+  color: var(--surface-solid);
+}
+
+@keyframes micPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.micError {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  max-width: 640px;
+  text-align: center;
+}
+
 .input {
   flex: 1;
   background: transparent;
