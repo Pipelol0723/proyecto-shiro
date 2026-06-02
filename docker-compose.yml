@@ -72,11 +72,13 @@ services:
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}
-      # int8_float16 combina pesos int8 con activaciones float16 — ~2x más
-      # rápido en GPUs ajustadas (GTX 1650) con apenas pérdida de calidad.
-      # Si arrancas sin CUDA, sobreescribe a `int8` en tu .env (faster-
-      # whisper rechaza int8_float16 en CPU).
-      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8_float16}
+      # `int8` baja VRAM ~50% vs float16 y acelera ~1.3-1.5x en CUDA y
+      # CPU. Es el default seguro: funciona en cualquier dispositivo,
+      # incluyendo GPUs Turing sin Tensor Cores (GTX 1650/1660). Las
+      # combinaciones aceleradas (`int8_float16`, `int8_bfloat16`)
+      # requieren Tensor Cores — si las tienes (RTX 2060+, T4, A100,
+      # 5080…), sobreescribe en tu .env para sacarles más jugo.
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
       - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-es}
       # 2500 ms entre partials: con el diseño naive del V1 (retranscribir
       # el buffer entero cada vez) este intervalo controla cuánto cómputo
