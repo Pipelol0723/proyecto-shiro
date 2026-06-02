@@ -39,6 +39,7 @@ def test_defaults_when_no_env() -> None:
         WHISPER_PORT=None,
         WHISPER_PARTIAL_INTERVAL_MS=None,
         WHISPER_SAMPLE_RATE=None,
+        WHISPER_HOTWORDS=None,
     ):
         cfg = Config.from_env()
     assert cfg.model == "small"
@@ -49,6 +50,9 @@ def test_defaults_when_no_env() -> None:
     assert cfg.port == 8765
     assert cfg.partial_interval_ms == 1500
     assert cfg.sample_rate == 16000
+    # Default vacío: el microservicio es neutral si se ejecuta standalone.
+    # El docker-compose del proyecto inyecta las hotwords del personaje.
+    assert cfg.hotwords == ""
 
 
 def test_env_overrides_apply() -> None:
@@ -59,6 +63,7 @@ def test_env_overrides_apply() -> None:
         WHISPER_LANGUAGE="en",
         WHISPER_PORT="9999",
         WHISPER_PARTIAL_INTERVAL_MS="500",
+        WHISPER_HOTWORDS="Aiko sensei",
     ):
         cfg = Config.from_env()
     assert cfg.model == "large-v3"
@@ -67,6 +72,7 @@ def test_env_overrides_apply() -> None:
     assert cfg.language == "en"
     assert cfg.port == 9999
     assert cfg.partial_interval_ms == 500
+    assert cfg.hotwords == "Aiko sensei"
 
 
 def test_invalid_int_falls_back_to_default() -> None:

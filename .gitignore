@@ -49,3 +49,8 @@ data/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Python caches del microservicio Whisper. Lo importamos puntualmente
+# desde checks locales y deja bytecode; nunca debe entrar al repo.
+__pycache__/
+*.pyc

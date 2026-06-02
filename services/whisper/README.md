@@ -17,6 +17,35 @@ La primera vez tarda varios minutos porque construye la imagen y
 descarga el modelo (`small` por defecto, ~244 MB). El cache de modelos
 queda en un volumen Docker, así que reinicios posteriores son rápidos.
 
+### Requisitos para que use la GPU
+
+El `docker-compose.yml` declara la GPU NVIDIA como recurso del
+contenedor. En **Docker Desktop Windows con WSL2** y drivers GeForce
+recientes esto suele funcionar sin configurar nada extra — la GPU del
+host queda visible dentro del contenedor automáticamente.
+
+**Cómo saber si tu setup la ve**:
+
+```bash
+docker compose logs whisper --tail 30
+```
+
+Si aparece `WARNING: The NVIDIA Driver was not detected`, el contenedor
+está corriendo en CPU. Causas frecuentes:
+
+- Setup sin GPU: comenta la sección `deploy:` en `docker-compose.yml` y
+  pon `WHISPER_DEVICE=cpu` en tu `.env`.
+- Docker Desktop sin WSL2 o con WSL2 sin drivers NVIDIA: actualiza los
+  drivers GeForce del host de Windows; reinicia Docker Desktop.
+
+Verifica el modelo cargado mirando los logs después del arranque:
+
+```
+cargando modelo whisper small (device=auto, compute_type=int8)
+modelo cargado en X.XXs (device resuelto: cuda)    ← debe decir `cuda`, no `cpu`
+warm-up de Whisper completado
+```
+
 Verifica que responde:
 
 ```bash
@@ -37,15 +66,20 @@ Debe devolver algo como:
 
 ## Variables de entorno
 
-| Variable                        | Default            | Descripción                                                              |
-| ------------------------------- | ------------------ | ------------------------------------------------------------------------ |
-| `WHISPER_MODEL`                 | `small`            | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`.             |
-| `WHISPER_DEVICE`                | `auto`             | `auto`/`cuda`/`cpu`. `auto` detecta CUDA y degrada si no hay.            |
-| `WHISPER_COMPUTE_TYPE`          | `auto`             | `auto`/`int8`/`float16`/`float32`. `int8` ahorra VRAM en GPUs ajustadas. |
-| `WHISPER_LANGUAGE`              | `es`               | ISO 639-1.                                                               |
-| `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`             | Cada cuánto retranscribir el buffer para emitir un partial.              |
-| `WHISPER_SAMPLE_RATE`           | `16000`            | Sample rate esperado del PCM Int16 LE mono que envía el cliente.         |
-| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765` | Bind del servidor.                                                       |
+El servicio (Python standalone) trae defaults conservadores; el `docker-compose.yml` del proyecto los afina al hardware de Shiro (CUDA esperado).
+
+| Variable                        | Default servicio    | Default compose | Descripción                                                                                                                                                                                                                                    |
+| ------------------------------- | ------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WHISPER_MODEL`                 | `small`             | `small`         | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`.                                                                                                                                                                                   |
+| `WHISPER_DEVICE`                | `auto`              | `auto`          | `auto`/`cuda`/`cpu`. `auto` detecta CUDA y degrada si no hay.                                                                                                                                                                                  |
+| `WHISPER_COMPUTE_TYPE`          | `auto`              | `int8`          | `auto`/`int8`/`int8_float16`/`int8_bfloat16`/`float16`/`float32`. `int8` es el default seguro (CPU + cualquier CUDA). Con Tensor Cores (RTX 2060+) usa `int8_float16` para ~2× más velocidad.                                                  |
+| `WHISPER_LANGUAGE`              | `es`                | `es`            | ISO 639-1.                                                                                                                                                                                                                                     |
+| `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`              | `2500`          | Cada cuánto retranscribir el buffer para emitir un partial. Más alto = menos cómputo acumulado por turno.                                                                                                                                      |
+| `WHISPER_HOTWORDS`              | `""` (sin hotwords) | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Faster-whisper ≥1.1.0. Sesga sin filtrarse al output — usar esto en vez de un prompt completo evita que Whisper escupa la frase como transcripción cuando el audio es ambiguo. |
+| `WHISPER_SAMPLE_RATE`           | `16000`             | `16000`         | Sample rate esperado del PCM Int16 LE mono que envía el cliente.                                                                                                                                                                               |
+| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765`  | mismo           | Bind del servidor.                                                                                                                                                                                                                             |
+
+> **Sobre `compute_type` y Tensor Cores**: `int8_float16` y `int8_bfloat16` son ~2× más rápidos que `int8` puro, pero requieren **Tensor Cores** — los tienen RTX 2060+, Tesla T4, A100, H100, RTX 50-series, etc. La **GTX 1650** y **GTX 1660** son Turing **sin** Tensor Cores: solo aceptan `int8`, `float16`, `float32`. Por eso el default conservador es `int8`. Si tienes Tensor Cores, pon `WHISPER_COMPUTE_TYPE=int8_float16` en tu `.env` para ganar el speedup.
 
 ## Protocolo del WebSocket (`/stt`)
 
