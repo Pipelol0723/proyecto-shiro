@@ -95,7 +95,8 @@ class Transcriber:
         parts: list[str] = []
         for segment in segments_iter:
             parts.append(segment.text)
-        return "".join(parts).strip()
+        text = "".join(parts).strip()
+        return _strip_prompt_hallucination(text, initial_prompt)
 
 
 # Pequeño helper para que el endpoint pueda instanciar un único transcriber
@@ -110,3 +111,37 @@ def get_transcriber() -> Optional[Transcriber]:
 def set_transcriber(t: Transcriber) -> None:
     global _singleton
     _singleton = t
+
+
+def _strip_prompt_hallucination(text: str, prompt: Optional[str]) -> str:
+    """Quita el `initial_prompt` si aparece textualmente en la salida.
+
+    Whisper-small alucina el prompt como output cuando recibe chunks de
+    audio cortos, silenciosos o ambiguos — especialmente en CPU. El
+    síntoma típico: el `sttLive` del cliente muestra la frase del prompt
+    en vez de lo que el usuario dijo. Aquí lo detectamos y limpiamos.
+
+    Reglas:
+    - Si no hay prompt, devolver el texto tal cual.
+    - Si el texto entero coincide con el prompt (con o sin puntuación
+      final, case-insensitive), devolver "".
+    - Si el texto empieza con el prompt y luego añade más contenido,
+      cortar el prefijo y devolver el resto (caso "el modelo halucinó
+      y después añadió lo real").
+    - En cualquier otro caso (prompt mencionado en medio, p. ej. porque
+      el usuario habló sobre el prompt) devolver el texto tal cual.
+    """
+    if not prompt:
+        return text
+    if not text:
+        return text
+    prompt_norm = prompt.strip().rstrip(".").rstrip().lower()
+    text_norm = text.strip().rstrip(".").rstrip().lower()
+    if text_norm == prompt_norm:
+        return ""
+    if text_norm.startswith(prompt_norm):
+        # Cortamos len(prompt_norm) caracteres del original (preservando
+        # capitalización del resto) y limpiamos puntuación/whitespace.
+        remainder = text[len(prompt_norm) :].lstrip(" .,;:")
+        return remainder.strip()
+    return text

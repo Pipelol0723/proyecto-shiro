@@ -17,6 +17,35 @@ La primera vez tarda varios minutos porque construye la imagen y
 descarga el modelo (`small` por defecto, ~244 MB). El cache de modelos
 queda en un volumen Docker, así que reinicios posteriores son rápidos.
 
+### Requisitos para que use la GPU
+
+El `docker-compose.yml` declara la GPU NVIDIA como recurso del
+contenedor. En **Docker Desktop Windows con WSL2** y drivers GeForce
+recientes esto suele funcionar sin configurar nada extra — la GPU del
+host queda visible dentro del contenedor automáticamente.
+
+**Cómo saber si tu setup la ve**:
+
+```bash
+docker compose logs whisper --tail 30
+```
+
+Si aparece `WARNING: The NVIDIA Driver was not detected`, el contenedor
+está corriendo en CPU. Causas frecuentes:
+
+- Setup sin GPU: comenta la sección `deploy:` en `docker-compose.yml` y
+  pon `WHISPER_DEVICE=cpu` en tu `.env`.
+- Docker Desktop sin WSL2 o con WSL2 sin drivers NVIDIA: actualiza los
+  drivers GeForce del host de Windows; reinicia Docker Desktop.
+
+Verifica el modelo cargado mirando los logs después del arranque:
+
+```
+cargando modelo whisper small (device=auto, compute_type=int8)
+modelo cargado en X.XXs (device resuelto: cuda)    ← debe decir `cuda`, no `cpu`
+warm-up de Whisper completado
+```
+
 Verifica que responde:
 
 ```bash

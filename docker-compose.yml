@@ -89,6 +89,20 @@ services:
       # de transcripción para nombres propios poco comunes. Cambialo si
       # tu personaje no se llama Shiro.
       - WHISPER_INITIAL_PROMPT=${WHISPER_INITIAL_PROMPT:-El usuario habla con un asistente llamado Shiro.}
+    # Exponer la GPU NVIDIA del host al contenedor. Sin esta sección el
+    # microservicio cae a CPU silenciosamente (faster-whisper detecta y
+    # degrada) — el WARN "NVIDIA Driver was not detected" en los logs
+    # del contenedor es la pista. En Docker Desktop Windows requiere
+    # WSL2 con drivers NVIDIA visibles (típicamente automático con
+    # drivers GeForce recientes). Si tu setup NO tiene GPU, comenta esta
+    # sección y forzá CPU: WHISPER_DEVICE=cpu, WHISPER_COMPUTE_TYPE=int8.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     volumes:
       # Cache de modelos de Hugging Face — sobrevive a `docker compose down`.
       # `down -v` lo borra y la próxima vez re-descarga el modelo.

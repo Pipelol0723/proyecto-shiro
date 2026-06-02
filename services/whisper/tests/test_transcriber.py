@@ -85,3 +85,77 @@ def test_language_and_beam_settings_respected(fake_whisper_model: MagicMock) -> 
     assert kwargs.get("language") == "en"
     assert kwargs.get("beam_size") == 1
     assert kwargs.get("vad_filter") is True
+
+
+def _make_segment(text: str) -> MagicMock:
+    seg = MagicMock()
+    seg.text = text
+    return seg
+
+
+def test_strips_prompt_when_model_hallucinates_it_exactly(
+    fake_whisper_model: MagicMock,
+) -> None:
+    """Whisper-small alucina el initial_prompt en chunks cortos/silenciosos.
+    Si el output coincide con el prompt, lo descartamos a "".
+    """
+    from services.whisper.transcriber import Transcriber
+
+    prompt = "El usuario habla con un asistente llamado Shiro."
+    fake_whisper_model.transcribe.return_value = (
+        iter([_make_segment(" " + prompt)]),
+        MagicMock(),
+    )
+
+    transcriber = Transcriber(_base_config(initial_prompt=prompt))
+    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
+    assert result == ""
+
+
+def test_strips_prompt_when_appears_as_prefix(fake_whisper_model: MagicMock) -> None:
+    """Si el modelo escupe el prompt seguido de lo que el usuario dijo,
+    cortamos el prefijo y devolvemos solo lo nuevo."""
+    from services.whisper.transcriber import Transcriber
+
+    prompt = "El usuario habla con un asistente llamado Shiro."
+    fake_whisper_model.transcribe.return_value = (
+        iter([_make_segment(" " + prompt + " Hola Shiro, ¿cómo estás?")]),
+        MagicMock(),
+    )
+
+    transcriber = Transcriber(_base_config(initial_prompt=prompt))
+    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
+    assert result == "Hola Shiro, ¿cómo estás?"
+
+
+def test_keeps_text_when_prompt_only_mentioned_mid_sentence(
+    fake_whisper_model: MagicMock,
+) -> None:
+    """Si el prompt aparece en medio del texto (caso raro pero posible si
+    el usuario habla sobre él), no tocamos nada — sería borrar contenido
+    legítimo del usuario."""
+    from services.whisper.transcriber import Transcriber
+
+    prompt = "Shiro"
+    fake_whisper_model.transcribe.return_value = (
+        iter([_make_segment(" Estaba leyendo sobre Shiro y me pareció interesante.")]),
+        MagicMock(),
+    )
+
+    transcriber = Transcriber(_base_config(initial_prompt=prompt))
+    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
+    assert result == "Estaba leyendo sobre Shiro y me pareció interesante."
+
+
+def test_no_stripping_when_prompt_empty(fake_whisper_model: MagicMock) -> None:
+    """Sin prompt no debe transformarse nada — sanity check."""
+    from services.whisper.transcriber import Transcriber
+
+    fake_whisper_model.transcribe.return_value = (
+        iter([_make_segment(" hola mundo")]),
+        MagicMock(),
+    )
+
+    transcriber = Transcriber(_base_config(initial_prompt=""))
+    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
+    assert result == "hola mundo"
