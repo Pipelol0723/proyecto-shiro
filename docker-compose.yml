@@ -72,9 +72,21 @@ services:
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}
-      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
+      # int8_float16 combina pesos int8 con activaciones float16 — ~2x más
+      # rápido en GPUs ajustadas (GTX 1650) con apenas pérdida de calidad.
+      # Si arrancas sin CUDA, sobreescribe a `int8` en tu .env (faster-
+      # whisper rechaza int8_float16 en CPU).
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8_float16}
       - WHISPER_LANGUAGE=${WHISPER_LANGUAGE:-es}
-      - WHISPER_PARTIAL_INTERVAL_MS=${WHISPER_PARTIAL_INTERVAL_MS:-1500}
+      # 2500 ms entre partials: con el diseño naive del V1 (retranscribir
+      # el buffer entero cada vez) este intervalo controla cuánto cómputo
+      # acumulado pagamos por turno. Bajar a 1500 ms hace los partials
+      # más reactivos pero a costa de ~40 % más CPU/GPU.
+      - WHISPER_PARTIAL_INTERVAL_MS=${WHISPER_PARTIAL_INTERVAL_MS:-2500}
+      # Sesga el decoder hacia el nombre del personaje y reduce el error
+      # de transcripción para nombres propios poco comunes. Cambialo si
+      # tu personaje no se llama Shiro.
+      - WHISPER_INITIAL_PROMPT=${WHISPER_INITIAL_PROMPT:-El usuario habla con un asistente llamado Shiro.}
     volumes:
       # Cache de modelos de Hugging Face — sobrevive a `docker compose down`.
       # `down -v` lo borra y la próxima vez re-descarga el modelo.

@@ -1,12 +1,16 @@
 """Wrapper alrededor de faster-whisper.
 
-Hace dos cosas que el endpoint WS necesita:
+Hace tres cosas que el endpoint WS necesita:
 
 1. Carga el modelo y lo deja caliente (un transcript descartable en
    `warmup()` evita el cold-start del primer turno real).
 2. Convierte el buffer crudo PCM Int16 LE @ sample_rate del cliente en
    `np.float32` normalizado, que es lo que `WhisperModel.transcribe`
    acepta directamente sin pasar por ffmpeg.
+3. Propaga `initial_prompt` (cuando viene en la config) a cada llamada
+   al modelo. Sesga el decoder hacia vocabulario específico — barato y
+   muy efectivo para nombres propios poco comunes (p. ej. "Shiro" que
+   los modelos pequeños mapean a "Chiro"/"Ciro").
 
 Faster-whisper no tiene true streaming: cada llamada a `transcribe()`
 procesa el buffer entero. El endpoint emula partials retranscribiendo
@@ -75,11 +79,16 @@ class Transcriber:
         return self._transcribe_array(samples_f32)
 
     def _transcribe_array(self, samples: np.ndarray) -> str:
+        # `initial_prompt=""` confunde al decoder (algunas implementaciones
+        # lo tratan como token vacío). Pasamos None cuando no hay prompt
+        # para que faster-whisper aplique su comportamiento por defecto.
+        initial_prompt = self.config.initial_prompt or None
         segments_iter, _info = self._model.transcribe(
             samples,
             language=self.config.language,
             vad_filter=True,
             beam_size=1,  # priorizar latencia sobre calidad marginal
+            initial_prompt=initial_prompt,
         )
         # Concatenamos todos los segmentos. `Segment.text` ya incluye
         # leading space — al hacer join no doblamos espacios.

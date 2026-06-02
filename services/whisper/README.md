@@ -37,15 +37,20 @@ Debe devolver algo como:
 
 ## Variables de entorno
 
-| Variable                        | Default            | Descripción                                                              |
-| ------------------------------- | ------------------ | ------------------------------------------------------------------------ |
-| `WHISPER_MODEL`                 | `small`            | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`.             |
-| `WHISPER_DEVICE`                | `auto`             | `auto`/`cuda`/`cpu`. `auto` detecta CUDA y degrada si no hay.            |
-| `WHISPER_COMPUTE_TYPE`          | `auto`             | `auto`/`int8`/`float16`/`float32`. `int8` ahorra VRAM en GPUs ajustadas. |
-| `WHISPER_LANGUAGE`              | `es`               | ISO 639-1.                                                               |
-| `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`             | Cada cuánto retranscribir el buffer para emitir un partial.              |
-| `WHISPER_SAMPLE_RATE`           | `16000`            | Sample rate esperado del PCM Int16 LE mono que envía el cliente.         |
-| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765` | Bind del servidor.                                                       |
+El servicio (Python standalone) trae defaults conservadores; el `docker-compose.yml` del proyecto los afina al hardware de Shiro (CUDA esperado).
+
+| Variable                        | Default servicio   | Default compose                                    | Descripción                                                                                                                                        |
+| ------------------------------- | ------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WHISPER_MODEL`                 | `small`            | `small`                                            | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`.                                                                                       |
+| `WHISPER_DEVICE`                | `auto`             | `auto`                                             | `auto`/`cuda`/`cpu`. `auto` detecta CUDA y degrada si no hay.                                                                                      |
+| `WHISPER_COMPUTE_TYPE`          | `auto`             | `int8_float16`                                     | `auto`/`int8`/`int8_float16`/`float16`/`float32`. `int8_float16` es ~2× más rápido en CUDA con apenas pérdida.                                     |
+| `WHISPER_LANGUAGE`              | `es`               | `es`                                               | ISO 639-1.                                                                                                                                         |
+| `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`             | `2500`                                             | Cada cuánto retranscribir el buffer para emitir un partial. Más alto = menos cómputo acumulado por turno.                                          |
+| `WHISPER_INITIAL_PROMPT`        | `""` (sin prompt)  | `El usuario habla con un asistente llamado Shiro.` | Sesga el decoder hacia un vocabulario concreto. Muy efectivo para nombres propios — los modelos pequeños mapean "Shiro" a "Chiro"/"Ciro" sin esto. |
+| `WHISPER_SAMPLE_RATE`           | `16000`            | `16000`                                            | Sample rate esperado del PCM Int16 LE mono que envía el cliente.                                                                                   |
+| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765` | mismo                                              | Bind del servidor.                                                                                                                                 |
+
+> **CPU vs CUDA**: `int8_float16` solo funciona en CUDA. Si arrancas el contenedor sin GPU (faster-whisper degrada con `WHISPER_DEVICE=auto`), pon `WHISPER_COMPUTE_TYPE=int8` en tu `.env` — faster-whisper rechaza `int8_float16` en CPU al cargar.
 
 ## Protocolo del WebSocket (`/stt`)
 
