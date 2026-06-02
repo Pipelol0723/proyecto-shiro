@@ -18,6 +18,10 @@ export default tseslint.config(
       '**/*.config.ts',
       // Bundle del diseño exportado por Claude Design — referencia, no codigo.
       'docs/design-mockup/**',
+      // AudioWorklet processor: archivo .js servido directamente al browser
+      // como módulo independiente (vía `?url` import de Vite). No participa
+      // del proyecto TS, así que linting con type-info no aplica.
+      'packages/desktop/src/audio/pcm-capture-processor.js',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
