@@ -13,6 +13,9 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+# Backups locales (p. ej. .env.corrupt.bak tras recuperar de encoding roto).
+# Solo se generan al hacer rescue manual; nunca deben llegar al repo.
+*.bak
 
 # Editor
 .vscode/*
