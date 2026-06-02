@@ -31,6 +31,7 @@ import {
   ModuleLoader,
   OllamaLLM,
   Orchestrator,
+  WhisperSTT,
   type Character,
   type EventMap,
   type IEventBus,
@@ -39,7 +40,7 @@ import {
 import { MemoryManager } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
-import { NoopAvatar, NoopSTT, NoopTTS } from './mocks/noop-modules.js';
+import { NoopAvatar, NoopTTS } from './mocks/noop-modules.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -105,7 +106,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   loader.register('OllamaLLM', (cfg, deps) => new OllamaLLM(cfg, deps));
   loader.register('AnthropicLLM', (cfg, deps) => new AnthropicLLM(cfg, deps));
   loader.register('HybridRouter', (cfg, deps) => new HybridRouter(cfg, deps));
-  loader.register('WhisperSTT', () => new NoopSTT());
+  loader.register('WhisperSTT', (cfg, deps) => new WhisperSTT(cfg, deps));
   loader.register('ElevenLabsTTS', () => new NoopTTS());
   loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
   loader.register('Live2DAvatar', () => new NoopAvatar());
@@ -121,6 +122,27 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     el slot memory por algo sin start/stop, este cast hay que revisarlo.
   const memoryManager = orchestrator.getModules().memory as MemoryManager;
   await memoryManager.start();
+
+  // 4b'. WhisperSTT: healthcheck no bloqueante. Si el microservicio Python
+  //      no responde (no arrancado, otro puerto, modelo aún cargando), el
+  //      core-host sigue funcionando — STT solo afecta al input por voz.
+  //      Si está activo el módulo real (no un mock), pingamos en background.
+  const sttModule = orchestrator.getModules().stt;
+  if (sttModule instanceof WhisperSTT) {
+    const whisperStt = sttModule;
+    void (async (): Promise<void> => {
+      const ok = await whisperStt.ping();
+      if (ok) {
+        child.info(`WhisperSTT: microservicio reachable en ${whisperStt.serviceUrl}`);
+      } else {
+        child.warn(
+          `WhisperSTT: microservicio NO responde en ${whisperStt.serviceUrl} — el chat por voz no estará disponible. ` +
+            `Levanta el contenedor con: docker compose up -d whisper`,
+        );
+      }
+    })();
+  }
+
   const memoryReads = memoryManager.getPipelineConfig();
   const userId = options.config.modules.memory.config?.user_id;
   const snapshotUserId = typeof userId === 'string' && userId.length > 0 ? userId : 'default';

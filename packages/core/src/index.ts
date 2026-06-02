@@ -84,6 +84,13 @@ export {
 } from './modules/router/hybrid-router.js';
 export type { HybridRouterConfig } from './modules/router/hybrid-router.js';
 
+// STT — cliente HTTP del microservicio Python con faster-whisper.
+// Browser-safe (fetch). El audio en tiempo real va por WS directo desde
+// el cliente al microservicio; este cliente es solo healthcheck + batch
+// para tests/CLI. Ver ADR 0019.
+export { WhisperSTT, WhisperSTTConfigSchema, WhisperSTTError } from './modules/stt/whisper-stt.js';
+export type { WhisperSTTConfig } from './modules/stt/whisper-stt.js';
+
 // Memoria — toda la pila (LettaMemory sobre el SDK de Letta, LocalMemory
 // sobre SQLite nativo, y el MemoryManager que los orquesta) vive en
 // `@proyecto-shiro/core/node`: el SDK de Letta no debe entrar al bundle
