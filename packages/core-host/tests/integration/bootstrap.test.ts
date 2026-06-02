@@ -119,12 +119,14 @@ describe('core-host bootstrap end-to-end', () => {
     // bus:ready ya se emitió durante init — nos suscribimos después,
     // así que verificamos los módulos cargados en su lugar.
     const modules = result.orchestrator.getModules();
-    // LLMs y Router son ya implementaciones reales (PRs 5, 6, 7).
-    // STT/TTS/Memory/Avatar siguen como noops hasta sus hitos.
+    // LLMs, Router, Memory y STT son ya implementaciones reales.
+    // TTS/Avatar siguen como noops hasta sus hitos.
+    // El ping del microservicio Whisper corre en background y no
+    // bloquea — fallará silenciosamente si no hay micro arriba.
     expect(modules.llmLocal.id).toMatch(/^llm:ollama:/);
     expect(modules.llmCloud.id).toMatch(/^llm:anthropic:/);
     expect(modules.router.id).toBe('router:hybrid');
-    expect(modules.stt.id).toBe('stt:noop');
+    expect(modules.stt.id).toBe('stt:whisper');
     expect(modules.tts.id).toBe('tts:noop');
     expect(modules.memory.id).toBe('memory:manager:default');
     expect(modules.avatar.id).toBe('avatar:noop');

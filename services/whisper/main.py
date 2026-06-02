@@ -39,7 +39,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Config
@@ -92,6 +92,30 @@ async def health() -> dict[str, Any]:
         "language": config.language,
         "sample_rate": config.sample_rate,
     }
+
+
+@app.post("/transcribe")
+async def transcribe_batch(
+    body: bytes = Body(..., media_type="application/octet-stream"),
+) -> dict[str, Any]:
+    """Transcripción batch de un buffer PCM Int16 LE mono completo.
+
+    NO es el flujo principal del chat — ese va por WebSocket directo
+    desde el cliente desktop (ver ADR 0019 decisión 3). Este endpoint
+    existe para que el cliente TS `WhisperSTT` pueda implementar
+    `ISTTModule.transcribe(request)` desde tests/CLI sin abrir un WS, y
+    para diagnósticos manuales (`curl --data-binary @audio.pcm`).
+
+    El idioma lo fija la config del servicio (`WHISPER_LANGUAGE`); no se
+    parametriza por request en V1.
+    """
+    transcriber = get_transcriber()
+    if transcriber is None:
+        raise HTTPException(status_code=503, detail="modelo aún cargando")
+    if not body:
+        return {"text": "", "isFinal": True}
+    text = await asyncio.to_thread(transcriber.transcribe_pcm, body)
+    return {"text": text, "isFinal": True}
 
 
 async def _emit_error(ws: WebSocket, message: str) -> None:
