@@ -1,8 +1,8 @@
 """Tests del wrapper `Transcriber`.
 
 Verifica que la config se propaga correctamente al modelo de
-faster-whisper — en particular `initial_prompt`, que es la pieza nueva
-que aporta valor para nombres propios poco comunes. Mockeamos
+faster-whisper — en particular `hotwords`, que es la pieza nueva que
+aporta valor para nombres propios poco comunes. Mockeamos
 `faster_whisper.WhisperModel` para no descargar el modelo real.
 """
 
@@ -29,7 +29,11 @@ def fake_whisper_model(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
     class FakeWhisperModel:
         def __init__(self, *_args, **_kwargs) -> None:  # noqa: ANN002, ANN003
-            self.device = "cpu"
+            # Imitamos la estructura real de faster-whisper: el `device`
+            # vive en `self.model.device`, no en el wrapper. Así el test
+            # del healthcheck también valida el camino real.
+            self.model = MagicMock()
+            self.model.device = "cpu"
 
         def transcribe(self, *args, **kwargs):  # noqa: ANN002, ANN003
             return captured.transcribe(*args, **kwargs)
@@ -45,37 +49,35 @@ def _base_config(**overrides: object) -> Config:
     return replace(base, **overrides)  # type: ignore[arg-type]
 
 
-def test_initial_prompt_propagated_when_set(fake_whisper_model: MagicMock) -> None:
-    """Si `config.initial_prompt` viene poblado, llega al modelo."""
+def test_hotwords_propagated_when_set(fake_whisper_model: MagicMock) -> None:
+    """Si `config.hotwords` viene poblado, llega al modelo."""
     from services.whisper.transcriber import Transcriber
 
-    transcriber = Transcriber(
-        _base_config(initial_prompt="El usuario habla con un asistente llamado Shiro."),
-    )
+    transcriber = Transcriber(_base_config(hotwords="Shiro"))
     # Buffer mínimo no-vacío (>= 2 bytes para que no se descarte).
     transcriber.transcribe_pcm(b"\x00\x00" * 100)
 
     assert fake_whisper_model.transcribe.called
     _args, kwargs = fake_whisper_model.transcribe.call_args
-    assert kwargs.get("initial_prompt") == "El usuario habla con un asistente llamado Shiro."
+    assert kwargs.get("hotwords") == "Shiro"
 
 
-def test_initial_prompt_none_when_empty(fake_whisper_model: MagicMock) -> None:
-    """Si `initial_prompt` es la cadena vacía, pasamos None — algunos
-    decoders tratan "" como token vacío y eso degrada calidad."""
+def test_hotwords_none_when_empty(fake_whisper_model: MagicMock) -> None:
+    """Si `hotwords` es la cadena vacía, pasamos None — algunos
+    decoders tratan "" como token vacío y degradan."""
     from services.whisper.transcriber import Transcriber
 
-    transcriber = Transcriber(_base_config(initial_prompt=""))
+    transcriber = Transcriber(_base_config(hotwords=""))
     transcriber.transcribe_pcm(b"\x00\x00" * 100)
 
     assert fake_whisper_model.transcribe.called
     _args, kwargs = fake_whisper_model.transcribe.call_args
-    assert kwargs.get("initial_prompt") is None
+    assert kwargs.get("hotwords") is None
 
 
 def test_language_and_beam_settings_respected(fake_whisper_model: MagicMock) -> None:
     """Los otros parámetros (language, beam_size, vad_filter) siguen
-    propagándose tras añadir initial_prompt — sanity check de regresión."""
+    propagándose tras añadir hotwords — sanity check de regresión."""
     from services.whisper.transcriber import Transcriber
 
     transcriber = Transcriber(_base_config(language="en"))
@@ -87,75 +89,12 @@ def test_language_and_beam_settings_respected(fake_whisper_model: MagicMock) -> 
     assert kwargs.get("vad_filter") is True
 
 
-def _make_segment(text: str) -> MagicMock:
-    seg = MagicMock()
-    seg.text = text
-    return seg
-
-
-def test_strips_prompt_when_model_hallucinates_it_exactly(
-    fake_whisper_model: MagicMock,
-) -> None:
-    """Whisper-small alucina el initial_prompt en chunks cortos/silenciosos.
-    Si el output coincide con el prompt, lo descartamos a "".
-    """
+def test_device_resolved_from_inner_model(fake_whisper_model: MagicMock) -> None:
+    """El `device` lo leemos de `_model.model.device` (atributo real
+    del ctranslate2 interno), no del wrapper. Regresión del bug que
+    mostraba "auto" en el healthcheck en vez del device resuelto."""
     from services.whisper.transcriber import Transcriber
 
-    prompt = "El usuario habla con un asistente llamado Shiro."
-    fake_whisper_model.transcribe.return_value = (
-        iter([_make_segment(" " + prompt)]),
-        MagicMock(),
-    )
-
-    transcriber = Transcriber(_base_config(initial_prompt=prompt))
-    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
-    assert result == ""
-
-
-def test_strips_prompt_when_appears_as_prefix(fake_whisper_model: MagicMock) -> None:
-    """Si el modelo escupe el prompt seguido de lo que el usuario dijo,
-    cortamos el prefijo y devolvemos solo lo nuevo."""
-    from services.whisper.transcriber import Transcriber
-
-    prompt = "El usuario habla con un asistente llamado Shiro."
-    fake_whisper_model.transcribe.return_value = (
-        iter([_make_segment(" " + prompt + " Hola Shiro, ¿cómo estás?")]),
-        MagicMock(),
-    )
-
-    transcriber = Transcriber(_base_config(initial_prompt=prompt))
-    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
-    assert result == "Hola Shiro, ¿cómo estás?"
-
-
-def test_keeps_text_when_prompt_only_mentioned_mid_sentence(
-    fake_whisper_model: MagicMock,
-) -> None:
-    """Si el prompt aparece en medio del texto (caso raro pero posible si
-    el usuario habla sobre él), no tocamos nada — sería borrar contenido
-    legítimo del usuario."""
-    from services.whisper.transcriber import Transcriber
-
-    prompt = "Shiro"
-    fake_whisper_model.transcribe.return_value = (
-        iter([_make_segment(" Estaba leyendo sobre Shiro y me pareció interesante.")]),
-        MagicMock(),
-    )
-
-    transcriber = Transcriber(_base_config(initial_prompt=prompt))
-    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
-    assert result == "Estaba leyendo sobre Shiro y me pareció interesante."
-
-
-def test_no_stripping_when_prompt_empty(fake_whisper_model: MagicMock) -> None:
-    """Sin prompt no debe transformarse nada — sanity check."""
-    from services.whisper.transcriber import Transcriber
-
-    fake_whisper_model.transcribe.return_value = (
-        iter([_make_segment(" hola mundo")]),
-        MagicMock(),
-    )
-
-    transcriber = Transcriber(_base_config(initial_prompt=""))
-    result = transcriber.transcribe_pcm(b"\x00\x00" * 100)
-    assert result == "hola mundo"
+    transcriber = Transcriber(_base_config())
+    # El fixture pone `cpu` en `model.device` — debe propagarse.
+    assert transcriber.device == "cpu"

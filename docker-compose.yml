@@ -85,10 +85,9 @@ services:
       # acumulado pagamos por turno. Bajar a 1500 ms hace los partials
       # más reactivos pero a costa de ~40 % más CPU/GPU.
       - WHISPER_PARTIAL_INTERVAL_MS=${WHISPER_PARTIAL_INTERVAL_MS:-2500}
-      # Sesga el decoder hacia el nombre del personaje y reduce el error
-      # de transcripción para nombres propios poco comunes. Cambialo si
-      # tu personaje no se llama Shiro.
-      - WHISPER_INITIAL_PROMPT=${WHISPER_INITIAL_PROMPT:-El usuario habla con un asistente llamado Shiro.}
+      # Palabras clave que sesgan el decoder sin filtrarse al output.
+      # Separadas por espacios. Cambialo si tu personaje no se llama Shiro.
+      - WHISPER_HOTWORDS=${WHISPER_HOTWORDS:-Shiro}
     # Exponer la GPU NVIDIA del host al contenedor. Sin esta sección el
     # microservicio cae a CPU silenciosamente (faster-whisper detecta y
     # degrada) — el WARN "NVIDIA Driver was not detected" en los logs

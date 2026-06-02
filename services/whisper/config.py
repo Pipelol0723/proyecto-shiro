@@ -49,14 +49,13 @@ class Config:
     # convierte desde la frecuencia del micro (típicamente 44.1/48 kHz).
     sample_rate: int
 
-    # Prompt inicial que se pasa al decoder para sesgarlo hacia un
-    # vocabulario concreto (nombres propios, jerga, romanizaciones).
-    # Especialmente efectivo para nombres poco comunes que un modelo
-    # pequeño suele transcribir mal — p. ej. "Shiro" → "Chiro"/"Ciro".
-    # Default vacío para que el microservicio sea neutral si se ejecuta
-    # standalone; en el `docker-compose.yml` del proyecto se inyecta el
-    # prompt específico de Shiro.
-    initial_prompt: str
+    # Palabras clave que el decoder boostea para reducir el error en
+    # nombres propios poco comunes (p. ej. "Shiro" → "Chiro"/"Ciro" en
+    # modelos pequeños). String corto separado por espacios. Faster-
+    # whisper ≥1.1.0; sesga sin filtrarse al output (a diferencia del
+    # `initial_prompt`, que Whisper alucinaba como salida en chunks con
+    # perplejidad alta).
+    hotwords: str
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -69,5 +68,5 @@ class Config:
             port=_env_int("WHISPER_PORT", 8765),
             partial_interval_ms=_env_int("WHISPER_PARTIAL_INTERVAL_MS", 1500),
             sample_rate=_env_int("WHISPER_SAMPLE_RATE", 16000),
-            initial_prompt=_env("WHISPER_INITIAL_PROMPT", ""),
+            hotwords=_env("WHISPER_HOTWORDS", ""),
         )

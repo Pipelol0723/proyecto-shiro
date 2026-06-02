@@ -7,10 +7,16 @@ Hace tres cosas que el endpoint WS necesita:
 2. Convierte el buffer crudo PCM Int16 LE @ sample_rate del cliente en
    `np.float32` normalizado, que es lo que `WhisperModel.transcribe`
    acepta directamente sin pasar por ffmpeg.
-3. Propaga `initial_prompt` (cuando viene en la config) a cada llamada
-   al modelo. Sesga el decoder hacia vocabulario específico — barato y
-   muy efectivo para nombres propios poco comunes (p. ej. "Shiro" que
-   los modelos pequeños mapean a "Chiro"/"Ciro").
+3. Propaga `hotwords` (cuando viene en la config) a cada llamada al
+   modelo. Sesga el decoder hacia palabras concretas (nombres propios,
+   jerga) sin filtrarse al output — la herramienta correcta para que
+   "Shiro" deje de mapear a "Chiro"/"Ciro" en modelos pequeños.
+
+Por qué `hotwords` y no `initial_prompt`: probamos `initial_prompt`
+primero pero Whisper-small lo escupía como output cuando el audio era
+ambiguo (perplejidad alta), inundando el `sttLive` con la frase del
+prompt en vez de la transcripción real. `hotwords` (faster-whisper
+≥1.1.0) sesga sin contaminar.
 
 Faster-whisper no tiene true streaming: cada llamada a `transcribe()`
 procesa el buffer entero. El endpoint emula partials retranscribiendo
@@ -45,16 +51,24 @@ class Transcriber:
             compute_type=config.compute_type,
         )
         self.load_time = time.monotonic() - t0
-        # `device` queda resuelto a "cuda"/"cpu" tras instanciar. Lo
-        # exponemos para el healthcheck.
-        self.device: str = getattr(self._model, "device", config.device)
+        # `device` queda resuelto a "cuda"/"cpu" tras instanciar. En
+        # faster-whisper el atributo vive en `_model.model.device` (el
+        # ctranslate2 Whisper interno) — no en el wrapper. Bajamos al
+        # fallback solo si por alguna razón el atributo no aparece.
+        inner = getattr(self._model, "model", None)
+        self.device: str = getattr(inner, "device", config.device)
 
-    async def warmup(self) -> None:
+    def warmup(self) -> None:
         """Transcribe ~250 ms de silencio para forzar la primera inferencia.
 
         El primer `transcribe()` paga cargar CUDA, alocar buffers, etc.
         Hacerlo al arranque evita que el primer cliente pague la
         latencia (varios segundos en GPU, hasta decenas en CPU).
+
+        Sync a propósito: el llamador en `main.py` usa
+        `asyncio.to_thread(transcriber.warmup)` que espera callable
+        síncrono — si esto fuera `async def`, el coroutine se devolvería
+        sin awaitarse y el warmup nunca correría (RuntimeWarning).
         """
         sample_count = int(self.config.sample_rate * 0.25)
         silence = np.zeros(sample_count, dtype=np.float32)
@@ -79,24 +93,23 @@ class Transcriber:
         return self._transcribe_array(samples_f32)
 
     def _transcribe_array(self, samples: np.ndarray) -> str:
-        # `initial_prompt=""` confunde al decoder (algunas implementaciones
-        # lo tratan como token vacío). Pasamos None cuando no hay prompt
-        # para que faster-whisper aplique su comportamiento por defecto.
-        initial_prompt = self.config.initial_prompt or None
+        # `hotwords=""` puede ser tratado como token vacío por algunos
+        # decoders. Pasamos None cuando no hay hotwords para que
+        # faster-whisper aplique su comportamiento por defecto.
+        hotwords = self.config.hotwords or None
         segments_iter, _info = self._model.transcribe(
             samples,
             language=self.config.language,
             vad_filter=True,
             beam_size=1,  # priorizar latencia sobre calidad marginal
-            initial_prompt=initial_prompt,
+            hotwords=hotwords,
         )
         # Concatenamos todos los segmentos. `Segment.text` ya incluye
         # leading space — al hacer join no doblamos espacios.
         parts: list[str] = []
         for segment in segments_iter:
             parts.append(segment.text)
-        text = "".join(parts).strip()
-        return _strip_prompt_hallucination(text, initial_prompt)
+        return "".join(parts).strip()
 
 
 # Pequeño helper para que el endpoint pueda instanciar un único transcriber
@@ -111,37 +124,3 @@ def get_transcriber() -> Optional[Transcriber]:
 def set_transcriber(t: Transcriber) -> None:
     global _singleton
     _singleton = t
-
-
-def _strip_prompt_hallucination(text: str, prompt: Optional[str]) -> str:
-    """Quita el `initial_prompt` si aparece textualmente en la salida.
-
-    Whisper-small alucina el prompt como output cuando recibe chunks de
-    audio cortos, silenciosos o ambiguos — especialmente en CPU. El
-    síntoma típico: el `sttLive` del cliente muestra la frase del prompt
-    en vez de lo que el usuario dijo. Aquí lo detectamos y limpiamos.
-
-    Reglas:
-    - Si no hay prompt, devolver el texto tal cual.
-    - Si el texto entero coincide con el prompt (con o sin puntuación
-      final, case-insensitive), devolver "".
-    - Si el texto empieza con el prompt y luego añade más contenido,
-      cortar el prefijo y devolver el resto (caso "el modelo halucinó
-      y después añadió lo real").
-    - En cualquier otro caso (prompt mencionado en medio, p. ej. porque
-      el usuario habló sobre el prompt) devolver el texto tal cual.
-    """
-    if not prompt:
-        return text
-    if not text:
-        return text
-    prompt_norm = prompt.strip().rstrip(".").rstrip().lower()
-    text_norm = text.strip().rstrip(".").rstrip().lower()
-    if text_norm == prompt_norm:
-        return ""
-    if text_norm.startswith(prompt_norm):
-        # Cortamos len(prompt_norm) caracteres del original (preservando
-        # capitalización del resto) y limpiamos puntuación/whitespace.
-        remainder = text[len(prompt_norm) :].lstrip(" .,;:")
-        return remainder.strip()
-    return text
