@@ -72,8 +72,8 @@ y LLM:
 3. **Cliente desktop** ✅ — Vite + React + orbe + 3 temas + 5 pantallas + EventBus wiring (ahora via WebSocket).
 4. **LLM** ✅ — split cliente/server (`core-host` proceso Node con WebSocketTransport), `OllamaLLM` (Qwen 2.5), `AnthropicLLM` (Claude Sonnet 4.6) con structured outputs, `HybridRouter` con clasificador LLM + fallback heurístico, pipeline conversacional cableado. Ver ADRs 0012-0016.
 5. **Memoria** ✅ — Letta como almacén canónico (vía SDK oficial `@letta-ai/letta-client`) con embeddings locales en Ollama (`mxbai-embed-large`), `LocalMemory` SQLite como WAL + drainer, auto-provisión del agente y `memory:snapshot` para rehidratar el chat del desktop al reconectar. Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
-6. **STT** 🟡 _planificando_ — faster-whisper o similar. La arquitectura concreta (microservicio Python vs bindings Node, modelo, VAD, streaming vs final-only) se decide en un ADR antes de codear.
-7. **TTS** ⏸️ pendiente — ElevenLabs + Kokoro + SystemTTS.
+6. **STT** ✅ — microservicio Python con **faster-whisper** sobre CUDA (Docker + NVIDIA Container Toolkit, fallback CPU), captura PCM 16 kHz en el desktop vía AudioWorklet, push-to-talk con `Space` o click-and-hold, WebSocket directo cliente↔microservicio (el `core-host` no participa del audio — solo healthcheck `ping()` no bloqueante al arrancar), partials cada 2.5 s, `hotwords` para nombres propios, wiring `stt:transcribed → user:message` para unificar entrada texto/voz. Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md).
+7. **TTS** 🟡 _planificando_ — ElevenLabs + Kokoro + SystemTTS.
 8. **Avatar Live2D** ⏸️ pendiente — reemplaza el orbe dentro de `<Avatar>`.
 9. **Packaging Tauri** ⏸️ pendiente — envuelve el build de Vite en binario nativo.
 

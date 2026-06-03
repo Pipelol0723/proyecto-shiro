@@ -3,11 +3,15 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-05-31 — hitos **Setup**, **Core**,
-> **Cliente desktop**, **LLM** y **Memoria** completos (este último con
-> Letta vía SDK oficial + WAL local con drainer + auto-provisión del
-> agente + `memory:snapshot` que rehidrata el chat del desktop al
-> reconectar, ADRs 0017 y 0018). Próximo: **STT** (en planificación).
+> **Última actualización**: 2026-06-03 — hitos **Setup**, **Core**,
+> **Cliente desktop**, **LLM**, **Memoria** y **STT** completos. STT
+> añade un microservicio Python con faster-whisper sobre CUDA, captura
+> Web Audio (AudioWorklet) en el desktop con push-to-talk, WebSocket
+> directo cliente↔microservicio (sin pasar por el `core-host`),
+> partials cada 2.5 s y wiring `stt:transcribed → user:message` para
+> que la voz entre al pipeline conversacional por el mismo camino que
+> el texto. Ver [ADR 0019](adr/0019-stt-faster-whisper-microservicio-python.md).
+> Próximo: **TTS** (en planificación).
 
 ## Visión a vista de pájaro
 
@@ -30,8 +34,8 @@ graph TB
         Root[/"raíz<br>tooling compartido"/]
 
         subgraph "packages/"
-            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core + LLM + Memoria"]
-            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>✅ orbe + 5 pantallas + 3 temas"]
+            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core + LLM + Memoria + STT"]
+            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>✅ orbe + 5 pantallas + 3 temas + PTT"]
             Mobile["mobile<br>cliente futuro<br>@proyecto-shiro/mobile"]
             Arduino["arduino-bridge<br>puente Serial<br>@proyecto-shiro/arduino-bridge"]
             IoT["iot-bridge<br>MQTT/Home Assistant<br>@proyecto-shiro/iot-bridge"]
@@ -89,13 +93,13 @@ graph LR
             IBus[IEventBus]
         end
 
-        subgraph "modules/ (pendientes)"
-            STT[stt/<br>WhisperSTT]
-            TTS[tts/<br>ElevenLabs / Kokoro / SystemTTS]
-            LLM[llm/<br>Ollama / Anthropic]
-            Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL]
-            Av[avatar/<br>Live2D / VRM]
-            Rou[router/<br>HybridRouter]
+        subgraph "modules/ (✅ implementados / ⏸️ pendientes)"
+            STT["stt/<br>WhisperSTT ✅<br>(cliente HTTP del micro)"]
+            TTS[tts/<br>ElevenLabs / Kokoro / SystemTTS ⏸️]
+            LLM[llm/<br>Ollama / Anthropic ✅]
+            Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL ✅]
+            Av[avatar/<br>Live2D / VRM ⏸️]
+            Rou[router/<br>HybridRouter ✅]
         end
 
         Character[character/<br>Loader + personalidad]
@@ -186,18 +190,26 @@ recompilar. Ver el bundle de diseño en
 El reducer del cliente se alimenta de eventos del core, y dispara
 acciones cuando el usuario actúa:
 
-| Acción del reducer | Origen                               | Evento del EventBus    |
-| ------------------ | ------------------------------------ | ---------------------- |
-| `LISTEN_START`     | `bus.on('stt:listening')` (futuro)   | `stt:listening`        |
-| `STT_PARTIAL`      | `bus.on('stt:partial')`              | `stt:partial`          |
-| `STT_FINAL`        | `bus.on('stt:transcribed')`          | `stt:transcribed`      |
-| `THINK_START`      | `bus.on('router:routed')`            | `router:routed`        |
-| `SHIRO_REPLY`      | `bus.on('llm:responded')`            | `llm:responded`        |
-| `SPEAK_END`        | `bus.on('tts:audio-ended')`          | `tts:audio-ended`      |
-| (usuario escribe)  | `bus.emit('user:message', { text })` | `user:message` (nuevo) |
+| Acción del reducer    | Origen                                                          | Evento del EventBus |
+| --------------------- | --------------------------------------------------------------- | ------------------- |
+| `LISTEN_START`        | `bus.on('stt:listening')` — emitido por el hook PTT al arrancar | `stt:listening`     |
+| `STT_PARTIAL`         | `bus.on('stt:partial')` — partial del microservicio whisper     | `stt:partial`       |
+| `STT_FINAL`           | `bus.on('stt:transcribed')` — final del microservicio whisper   | `stt:transcribed`   |
+| `USER_SAID`           | `bus.on('user:message')` — texto tipeado **o** transcrito       | `user:message`      |
+| `THINK_START`         | `bus.on('router:routed')`                                       | `router:routed`     |
+| `SHIRO_REPLY`         | `bus.on('llm:responded')`                                       | `llm:responded`     |
+| `SPEAK_END`           | `bus.on('tts:audio-ended')`                                     | `tts:audio-ended`   |
+| `HYDRATE_FROM_MEMORY` | `bus.on('memory:snapshot')` — server empuja al reconectar       | `memory:snapshot`   |
+
+> **Wiring voz → texto unificado**: `useCompanionState` re-emite
+> `user:message` al recibir `stt:transcribed` con texto no vacío. Así
+> el historial y el pipeline conversacional ven un solo camino,
+> independiente de si el origen fue tipeado o hablado. El texto vacío
+> (silencio puro, ruido) NO emite — evita disparar un turno en blanco.
 
 Convenios documentados en
-[ADR 0010](adr/0010-wiring-cliente-core-eventbus.md).
+[ADR 0010](adr/0010-wiring-cliente-core-eventbus.md) y
+[ADR 0019 §5](adr/0019-stt-faster-whisper-microservicio-python.md).
 
 ## Flujo de una conversación típica
 
@@ -205,9 +217,9 @@ Convenios documentados en
 sequenceDiagram
     participant User as Usuario
     participant Client as Cliente desktop<br>(React + EventBus)
-    participant Mic as Micro / Audio in
-    participant STT
-    participant Bus as EventBus
+    participant Mic as Micro / AudioWorklet
+    participant Whisper as services/whisper<br>(Python + faster-whisper)
+    participant Bus as EventBus<br>(server-side)
     participant Router as HybridRouter
     participant LLM as Ollama / Claude
     participant Mem as Memory
@@ -218,12 +230,21 @@ sequenceDiagram
     alt Usuario escribe
         User->>Client: tipea + Enter
         Client->>Bus: emit("user:message", { text })
-    else Usuario habla
-        User->>Mic: habla
-        Mic->>STT: audio chunk
-        STT->>Bus: emit("stt:transcribed", { text, isFinal: true })
-        Bus->>Client: deliver (UI actualiza subtítulos)
-        STT->>Bus: emit("user:message", { text })
+    else Usuario habla (push-to-talk)
+        User->>Mic: keydown(Space) → captura audio
+        Client->>Bus: emit("stt:listening")
+        loop ~250 ms acumulados por chunk
+            Mic->>Whisper: chunk PCM Int16 LE @ 16 kHz (WS binario)
+        end
+        loop cada partial_interval_ms
+            Whisper-->>Client: { type:"partial", text }
+            Client->>Bus: emit("stt:partial", { text })
+        end
+        User->>Mic: keyup(Space) → stop
+        Client->>Whisper: { type:"stop" }
+        Whisper-->>Client: { type:"transcribed", text, isFinal:true }
+        Client->>Bus: emit("stt:transcribed", { text, isFinal:true })
+        Client->>Bus: emit("user:message", { text })
     end
 
     Bus->>Router: deliver
@@ -256,6 +277,67 @@ sequenceDiagram
   el cloud (mejor calidad) según la complejidad estimada del mensaje.
 - La memoria se inserta en dos puntos: lee contexto para el LLM, escribe
   cada turno de la conversación.
+
+## STT: microservicio Whisper + push-to-talk
+
+La entrada de voz (ver [ADR 0019](adr/0019-stt-faster-whisper-microservicio-python.md)) se reparte en tres piezas:
+
+```mermaid
+graph LR
+    subgraph "Cliente desktop"
+        Mic[Micrófono]
+        Worklet[pcm-capture-processor<br/>AudioWorklet]
+        Hook[useMicrophonePTT<br/>React hook]
+        WSC[WhisperSttClient]
+    end
+
+    subgraph "Microservicio Python (Docker)"
+        FastAPI[FastAPI<br/>/health, /transcribe, /stt]
+        Transcriber[Transcriber<br/>faster-whisper]
+        Model[(small / large-v3<br/>CUDA / CPU)]
+    end
+
+    subgraph "core-host (Node)"
+        Boot[bootstrap.ts<br/>WhisperSTT.ping]
+    end
+
+    Mic -->|Float32 @ 48 kHz| Worklet
+    Worklet -->|PCM Int16 LE @ 16 kHz<br/>chunks ~250 ms| Hook
+    Hook --> WSC
+    WSC -->|WS binario + JSON| FastAPI
+    FastAPI --> Transcriber
+    Transcriber --> Model
+
+    Boot -.GET /health.-> FastAPI
+
+    style FastAPI fill:#4a9eff,stroke:#333,color:#fff
+    style Worklet fill:#f4b400,stroke:#333,color:#fff
+```
+
+- **Captura** vive en el cliente desktop, no en el core-host. `pcm-capture-processor.js` corre en el AudioWorklet thread, convierte Float32 a Int16 LE y decima al sample rate objetivo si el browser no respeta `sampleRate: 16000` al crear el `AudioContext`. El hook `useMicrophonePTT` enlaza `MediaStream` → AudioWorklet → WebSocket.
+- **Microservicio Python** (`services/whisper/`) corre como contenedor Docker de larga vida, expone `GET /health`, `POST /transcribe` (batch) y `WS /stt` (streaming). Modelo `small` por defecto sobre CUDA con `int8`; se cambia a `large-v3` con `int8_float16` cuando hay Tensor Cores (RTX 2060+).
+- **`WhisperSTT` en el core** es **solo** healthcheck + batch para tests/CLI. El bootstrap del core-host hace `ping()` no bloqueante al arrancar y avisa por `warn` si el micro no responde — el chat textual sigue funcionando sin él. El audio en vivo **nunca pasa por el core-host**.
+
+### Protocolo del WebSocket `/stt`
+
+Diseñado para que el **cliente desktop** lo consuma directamente (ver ADR 0019, decisión 3).
+
+| Dirección      | Tipo de frame | Payload                                              | Cuándo                                       |
+| -------------- | ------------- | ---------------------------------------------------- | -------------------------------------------- |
+| Cliente→Server | binario       | PCM Int16 LE mono @ 16 kHz                           | Cada chunk de ~250 ms del worklet            |
+| Cliente→Server | texto (JSON)  | `{"type":"stop"}`                                    | Al soltar Space / botón                      |
+| Server→Cliente | texto (JSON)  | `{"type":"partial","text":"..."}`                    | Cada `partial_interval_ms` (default 2500 ms) |
+| Server→Cliente | texto (JSON)  | `{"type":"transcribed","text":"...","isFinal":true}` | Después de `stop`. Cierra la conexión.       |
+| Server→Cliente | texto (JSON)  | `{"type":"error","message":"..."}`                   | Cualquier fallo                              |
+
+Una conexión = un turno. Tras `transcribed` el cliente cierra y abre otra para el siguiente PTT.
+
+### Quirks importantes
+
+- **`hotwords` no `initial_prompt`**: Whisper-small alucina el `initial_prompt` como output en chunks con perplejidad alta. `hotwords` (faster-whisper ≥1.1.0) sesga sin contaminar.
+- **`device resuelto` no es trivial**: faster-whisper expone el device real en `WhisperModel._model.model.device`, no en el wrapper. El healthcheck lo lee de ahí.
+- **GPU en Docker Desktop Windows**: requiere la sección `deploy.resources.reservations.devices: [{driver: nvidia, count: all, capabilities: [gpu]}]` en el compose **y** drivers GeForce recientes en el host. Sin esto el contenedor cae a CPU silenciosamente.
+- **VRAM ajustada** (GTX 1650 4 GB): Whisper `small` + Ollama `qwen2.5:3b` + embeddings `mxbai-embed-large` cabe pero ajustado. La solución limpia es **sacar Whisper de la GPU** (`WHISPER_DEVICE=cpu` en `.env`) y dejar la VRAM para Ollama. Latencia STT × 2-4 pero todo funciona.
 
 ## Memoria: Letta canónico + WAL local
 
