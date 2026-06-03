@@ -143,6 +143,28 @@
   text-align: center;
 }
 
+.muteToggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  transition:
+    background 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+.muteToggle:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.muteToggle[aria-pressed='true'] {
+  color: var(--ink-faint);
+}
+
 .input {
   flex: 1;
   background: transparent;

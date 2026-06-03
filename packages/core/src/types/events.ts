@@ -91,10 +91,34 @@ export interface EventMap {
 
   // ─── TTS (salida de voz) ────────────────────────────────────────────
   /**
-   * El TTS terminó de reproducir el audio. La UI quita subtítulos y
-   * el avatar vuelve a idle.
+   * Audio sintetizado disponible para reproducir. El `core-host` cachea
+   * el buffer en memoria y expone una URL HTTP efímera; cada cliente
+   * conectado decide si lo reproduce (toggle de mute por cliente). Ver
+   * ADR 0020, decisión 3.
+   *
+   * `url` apunta al endpoint HTTP del core-host. `mimeType` ayuda al
+   * cliente a configurar el elemento `<audio>`. `duration` no viene del
+   * server — el cliente la mide post-fetch.
    */
-  'tts:audio-ended': { userId: string };
+  'tts:audio': {
+    url: string;
+    audioId: string;
+    mimeType: string;
+    userId: string;
+  };
+  /**
+   * Cancelación de la reproducción en curso. El cliente lo emite cuando
+   * detecta nuevo input mientras Shiro habla (PTT o user:message). El
+   * server invalida el `audioId` del cache; clientes que reproducían ese
+   * id paran el audio. Ver ADR 0020, decisión 4.
+   */
+  'tts:cancel': { audioId: string; userId: string };
+  /**
+   * El cliente terminó de reproducir el audio. La UI quita subtítulos y
+   * el avatar vuelve a idle. El cliente lo emite cuando el
+   * `HTMLAudioElement` dispara `ended` (o tras `tts:cancel`).
+   */
+  'tts:audio-ended': { userId: string; audioId?: string };
 
   // ─── Memoria (sincronización con cliente) ───────────────────────────
   /**
