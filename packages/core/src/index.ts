@@ -91,6 +91,17 @@ export type { HybridRouterConfig } from './modules/router/hybrid-router.js';
 export { WhisperSTT, WhisperSTTConfigSchema, WhisperSTTError } from './modules/stt/whisper-stt.js';
 export type { WhisperSTTConfig } from './modules/stt/whisper-stt.js';
 
+// TTS — cliente HTTP del API de ElevenLabs. Browser-safe (fetch), pero
+// por contrato se instancia solo en core-host server-side: la API key
+// vive en process.env.ELEVENLABS_API_KEY y no debe llegar al browser.
+// Ver ADR 0020.
+export {
+  ElevenLabsTTS,
+  ElevenLabsTTSConfigSchema,
+  ElevenLabsTTSError,
+} from './modules/tts/elevenlabs-tts.js';
+export type { ElevenLabsTTSConfig, ElevenLabsTTSOptions } from './modules/tts/elevenlabs-tts.js';
+
 // Memoria — toda la pila (LettaMemory sobre el SDK de Letta, LocalMemory
 // sobre SQLite nativo, y el MemoryManager que los orquesta) vive en
 // `@proyecto-shiro/core/node`: el SDK de Letta no debe entrar al bundle
