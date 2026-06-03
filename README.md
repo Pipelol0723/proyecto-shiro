@@ -4,14 +4,16 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **Memoria** ✅ completo. Letta vía SDK oficial con
-> embeddings locales en Ollama, `LocalMemory` SQLite como WAL +
-> drainer en background, auto-provisión del agente Letta al arrancar,
-> y `memory:snapshot` que rehidrata el chat del desktop al reconectar
-> (PRs #28-#35). Hitos previos: **Setup**, **Core**, **Cliente
-> desktop**, **LLM**. Próximo hito en planificación: **STT**.
-> Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y
-> [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
+> **Estado**: hito **STT** ✅ completo. Microservicio Python con
+> **faster-whisper** sobre CUDA, captura PCM Int16 LE @ 16 kHz en el
+> desktop vía AudioWorklet, push-to-talk con `Space` o click-and-hold,
+> WebSocket directo cliente↔microservicio (el `core-host` no participa
+> del audio), partials cada 2.5 s, `hotwords` para nombres propios y
+> wiring `stt:transcribed` → `user:message` para que un turno hablado
+> entre al pipeline conversacional por el mismo camino que uno tipeado
+> (PRs #37-#42). Hitos previos: **Setup**, **Core**, **Cliente desktop**,
+> **LLM**, **Memoria**. Próximo hito en planificación: **TTS**.
+> Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
 
@@ -23,23 +25,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado          | Notas                                                                                                                   |
-| ------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                        |
-| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                      |
-| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                          |
-| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional            |
-| **Memoria**         | ✅ completo     | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018. |
-| **STT**             | 🟡 planificando | faster-whisper o similar. Arquitectura por decidir (microservicio Python vs Node bindings, modelo, VAD, streaming).     |
-| **TTS**             | ⏸️ pendiente    | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks)                                                                   |
-| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                                                      |
-| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                             |
-| **Post-MVP**        |                 |                                                                                                                         |
-| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                                  |
-| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                              |
-| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                                      |
-| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                           |
-| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                                    |
+| Hito                | Estado          | Notas                                                                                                                                             |
+| ------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                  |
+| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                |
+| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                    |
+| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                      |
+| **Memoria**         | ✅ completo     | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                           |
+| **STT**             | ✅ completo     | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019. |
+| **TTS**             | 🟡 planificando | ElevenLabs → Kokoro → SystemTTS (cadena de fallbacks). Próximo hito.                                                                              |
+| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                                                                                |
+| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                                                       |
+| **Post-MVP**        |                 |                                                                                                                                                   |
+| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                                                            |
+| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                        |
+| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                                                                |
+| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                     |
+| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                                                              |
 
 ## Stack
 
@@ -156,6 +158,42 @@ El agente de Letta se **auto-provisiona** la primera vez que el `core-host` arra
 > **Recall instantáneo**: Ollama descarga los modelos tras ~5 min de inactividad, así que el primer turno tras una pausa paga un _cold-start_ de varios segundos (el WAL lo cubre — no se pierde nada). Shiro hace un _warm-up_ del embedding al arrancar para que el recall semántico vaya fino desde el primer turno. Para recall siempre instantáneo aunque haya pausas, arranca Ollama con `OLLAMA_KEEP_ALIVE=-1` (mantiene los modelos cargados en memoria).
 
 Si Letta no está corriendo, el companion **funciona igual**: los turnos se guardan en el WAL local (SQLite) y se drenan a Letta en cuanto vuelva. Cero turnos perdidos.
+
+### Requisitos para el hito STT (Whisper)
+
+La entrada de voz usa **faster-whisper** en un microservicio Python aparte (Docker). El cliente desktop captura PCM Int16 LE @ 16 kHz vía `AudioWorklet` y abre un WebSocket directo al microservicio (`ws://localhost:8765/stt`). El `core-host` no participa del audio. Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md).
+
+Para activarlo:
+
+1. **Arranca el microservicio** (servicio de larga vida, aparte de `npm run dev`):
+
+   ```bash
+   docker compose up -d whisper
+   ```
+
+2. **Verifica** que cargó modelo y device:
+
+   ```bash
+   docker compose logs whisper --tail 20
+   curl http://localhost:8765/health
+   ```
+
+   Deberías ver `device resuelto: cuda` (si tu Docker Desktop expone la GPU) o `cpu`.
+
+3. **Hablar a Shiro**: en la pantalla de Conversación del desktop, mantén pulsado `Space` (o el botón del micro) y habla. Al soltar, la transcripción entra al chat como turno del usuario y Shiro responde.
+
+**Sin GPU**: el contenedor cae a CPU automáticamente y la latencia se multiplica (~2-4× tiempo real con `small` y `int8`). En `.env` pon `WHISPER_DEVICE=cpu` y `WHISPER_COMPUTE_TYPE=int8`; y comenta la sección `deploy: resources` del `docker-compose.yml` para que arranque sin pedir GPU.
+
+**Tunings disponibles** (todos opcionales en `.env`, defaults en el compose):
+
+| Variable                      | Default compose | Para qué                                                                                     |
+| ----------------------------- | --------------- | -------------------------------------------------------------------------------------------- |
+| `WHISPER_MODEL`               | `small`         | Sube a `large-v3` cuando tengas Tensor Cores (RTX 2060+).                                    |
+| `WHISPER_COMPUTE_TYPE`        | `int8`          | Con Tensor Cores cambia a `int8_float16` para ~2× speedup.                                   |
+| `WHISPER_PARTIAL_INTERVAL_MS` | `2500`          | Cuánto tarda en emitir partials. Bajar gasta más CPU/GPU; subir te da subtítulos más lentos. |
+| `WHISPER_HOTWORDS`            | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Útil para nombres propios.   |
+
+Ver `services/whisper/README.md` para detalles del microservicio.
 
 ## Scripts disponibles (desde la raíz)
 

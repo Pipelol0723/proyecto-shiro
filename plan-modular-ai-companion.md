@@ -353,16 +353,18 @@ git merge develop               # mezclar develop en tu branch
 
 ---
 
-### FASE 4 — STT: voz de entrada
-**Semanas 11-12 · Un@**
+### FASE 4 — STT: voz de entrada ✅
 
-- [ ] Implementar faster-whisper como microservicio Python (FastAPI, puerto 8765)
-- [ ] Implementar `WhisperSTT.ts` que llama al microservicio
-- [ ] Manejar VAD (detectar cuándo termina de hablar el usuario)
-- [ ] Test: transcripción correcta de 5 frases en español
-- [ ] Test: detecta correctamente el fin de la frase
+**Completada 2026-06-03** (PRs #37-#42 sobre la rama `develop`).
 
-**✅ Listo cuando:** hablas y el texto transcrito llega al LLM correctamente.
+- [x] Implementar faster-whisper como microservicio Python (FastAPI, puerto 8765) — `services/whisper/`, Docker con CUDA 12.6 base, sample rate 16 kHz, modelo `small` por defecto.
+- [x] Implementar `WhisperSTT.ts` que llama al microservicio — `packages/core/src/modules/stt/whisper-stt.ts`. Su rol es **acotado** (ADR 0019, decisión 8): `ping()` para healthcheck en el bootstrap del `core-host` + `transcribe()` batch contra `POST /transcribe` para tests/CLI. El flujo de chat en vivo va por WebSocket directo desde el cliente desktop.
+- [x] Captura en el cliente con AudioWorklet y push-to-talk (`Space` o click-and-hold del botón). Hook `useMicrophonePTT` produce PCM Int16 LE @ 16 kHz y abre WS al microservicio.
+- [x] **VAD pospuesto a futuro hito**: en V1 el corte de turno lo hace el push-to-talk (keyup), no un VAD. faster-whisper tiene `vad_filter` interno para recortar silencios dentro del audio enviado, pero la detección "fin de frase" hands-free (Silero/WebRTC) queda como deuda explícita para cuando el PTT no cubra suficiente. Esto está marcado como tarea futura (PR #12 del hito, no implementado en V1).
+- [x] Wiring `stt:transcribed` → `user:message` para que un turno hablado entre al pipeline conversacional por el mismo camino que un turno tipeado. Tests E2E del flujo completo voz→user:message→router→llm→tts en `packages/desktop/tests/useCompanionState.test.tsx`.
+- [x] Tests del cliente WS (`WhisperSttClient`), del hook PTT (caso `unsupported`), del wiring del reducer, del microservicio Python (config, transcribe batch, hotwords).
+
+**✅ Listo:** hablas (mantén Space) y la transcripción llega al historial automáticamente, Shiro responde sin que tengas que tocar nada más. Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md) y el [README](README.md) para setup y tunings.
 
 ---
 
