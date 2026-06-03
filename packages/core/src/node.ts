@@ -37,3 +37,9 @@ export type {
   MemoryManagerConfig,
   MemoryManagerBackends,
 } from './modules/memory/memory-manager.js';
+
+// SystemTTS — wrapper de `say.js` para usar la voz nativa del OS como
+// fallback cuando ElevenLabs cae (ADR 0020). Usa child_process + FS
+// para exportar a WAV; estrictamente Node-only.
+export { SystemTTS, SystemTTSConfigSchema, SystemTTSError } from './modules/tts/system-tts.js';
+export type { SystemTTSConfig, SystemTTSDeps } from './modules/tts/system-tts.js';
