@@ -119,15 +119,15 @@ describe('core-host bootstrap end-to-end', () => {
     // bus:ready ya se emitió durante init — nos suscribimos después,
     // así que verificamos los módulos cargados en su lugar.
     const modules = result.orchestrator.getModules();
-    // LLMs, Router, Memory y STT son ya implementaciones reales.
-    // TTS/Avatar siguen como noops hasta sus hitos.
-    // El ping del microservicio Whisper corre en background y no
-    // bloquea — fallará silenciosamente si no hay micro arriba.
+    // LLMs, Router, Memory, STT y TTS son ya implementaciones reales.
+    // Avatar sigue como noop hasta el hito Live2D. El ping del
+    // microservicio Whisper y la API key de ElevenLabs solo se
+    // verifican al usarse — la instanciación no requiere conectividad.
     expect(modules.llmLocal.id).toMatch(/^llm:ollama:/);
     expect(modules.llmCloud.id).toMatch(/^llm:anthropic:/);
     expect(modules.router.id).toBe('router:hybrid');
     expect(modules.stt.id).toBe('stt:whisper');
-    expect(modules.tts.id).toBe('tts:noop');
+    expect(modules.tts.id).toBe('tts:elevenlabs:mock');
     expect(modules.memory.id).toBe('memory:manager:default');
     expect(modules.avatar.id).toBe('avatar:noop');
 

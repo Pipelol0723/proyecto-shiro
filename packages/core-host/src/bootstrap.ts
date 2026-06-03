@@ -25,6 +25,7 @@
 import {
   AnthropicLLM,
   buildSystemPrompt,
+  ElevenLabsTTS,
   EventBus,
   HybridRouter,
   Logger,
@@ -40,7 +41,7 @@ import {
 import { MemoryManager } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
-import { NoopAvatar, NoopTTS } from './mocks/noop-modules.js';
+import { NoopAvatar } from './mocks/noop-modules.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -107,7 +108,14 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   loader.register('AnthropicLLM', (cfg, deps) => new AnthropicLLM(cfg, deps));
   loader.register('HybridRouter', (cfg, deps) => new HybridRouter(cfg, deps));
   loader.register('WhisperSTT', (cfg, deps) => new WhisperSTT(cfg, deps));
-  loader.register('ElevenLabsTTS', () => new NoopTTS());
+  // ElevenLabsTTS necesita el mapeo de emociones del character para
+  // traducir `emotion → stability` por turno. Lo pasamos via closure
+  // sobre `options.character.emotions` — mantiene el contrato del
+  // factory `(cfg, deps)` y el cast explícito al character vive aquí.
+  loader.register(
+    'ElevenLabsTTS',
+    (cfg, deps) => new ElevenLabsTTS(cfg, deps, { emotions: options.character.emotions }),
+  );
   loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
   loader.register('Live2DAvatar', () => new NoopAvatar());
 
