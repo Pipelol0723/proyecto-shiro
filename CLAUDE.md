@@ -73,7 +73,7 @@ y LLM:
 4. **LLM** ✅ — split cliente/server (`core-host` proceso Node con WebSocketTransport), `OllamaLLM` (Qwen 2.5), `AnthropicLLM` (Claude Sonnet 4.6) con structured outputs, `HybridRouter` con clasificador LLM + fallback heurístico, pipeline conversacional cableado. Ver ADRs 0012-0016.
 5. **Memoria** ✅ — Letta como almacén canónico (vía SDK oficial `@letta-ai/letta-client`) con embeddings locales en Ollama (`mxbai-embed-large`), `LocalMemory` SQLite como WAL + drainer, auto-provisión del agente y `memory:snapshot` para rehidratar el chat del desktop al reconectar. Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
 6. **STT** ✅ — microservicio Python con **faster-whisper** sobre CUDA (Docker + NVIDIA Container Toolkit, fallback CPU), captura PCM 16 kHz en el desktop vía AudioWorklet, push-to-talk con `Space` o click-and-hold, WebSocket directo cliente↔microservicio (el `core-host` no participa del audio — solo healthcheck `ping()` no bloqueante al arrancar), partials cada 2.5 s, `hotwords` para nombres propios, wiring `stt:transcribed → user:message` para unificar entrada texto/voz. Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md).
-7. **TTS** 🟡 _planificando_ — ElevenLabs + Kokoro + SystemTTS.
+7. **TTS** 🟡 _planificando_ — ElevenLabs primary + SystemTTS fallback (sin Kokoro). Audio generado server-side y reproducido en el cliente. Voz sintética/UTAU diferida a hito post-5080. Ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
 8. **Avatar Live2D** ⏸️ pendiente — reemplaza el orbe dentro de `<Avatar>`.
 9. **Packaging Tauri** ⏸️ pendiente — envuelve el build de Vite en binario nativo.
 

@@ -22,10 +22,10 @@ import { z } from 'zod';
  * Forma genérica de un "slot" de módulo: indica qué implementación está
  * activa, su config específica, y opcionalmente una cadena de fallbacks.
  *
- * Ejemplo (TTS):
+ * Ejemplo (TTS, ver ADR 0020):
  *   active: ElevenLabsTTS
- *   fallback_chain: [KokoroTTS, SystemTTS]
- *   config: { voice_id: '...', stability: 0.5 }
+ *   fallback_chain: [SystemTTS]
+ *   config: { voice_id: '...', model_id: 'eleven_multilingual_v2', ... }
  */
 const ModuleSlotSchema = z.object({
   active: z.string().min(1, 'el nombre del módulo activo no puede estar vacío'),

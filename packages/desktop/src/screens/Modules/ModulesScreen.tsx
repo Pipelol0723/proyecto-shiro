@@ -51,9 +51,9 @@ const SLOTS: readonly Slot[] = [
     id: 'tts',
     label: 'TTS (texto → voz)',
     active: 'ElevenLabsTTS',
-    fallbacks: ['KokoroTTS', 'SystemTTS'],
+    fallbacks: ['SystemTTS'],
     status: 'pendiente',
-    note: 'Cadena de fallbacks si la primaria falla.',
+    note: 'ElevenLabs primary, SystemTTS fallback. Sin Kokoro (ADR 0020).',
   },
   {
     id: 'memory',

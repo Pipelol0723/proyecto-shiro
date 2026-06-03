@@ -27,14 +27,15 @@ export interface TTSResponse {
 /**
  * Contrato de un módulo TTS (síntesis de voz).
  *
- * Implementaciones previstas:
- * - `ElevenLabsTTS` (cloud, alta calidad)
- * - `KokoroTTS` (local, offline fallback)
- * - `SystemTTS` (voz del SO, último recurso)
+ * Implementaciones previstas (ver [ADR 0020](../../docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)):
+ * - `ElevenLabsTTS` (cloud, alta calidad — primary)
+ * - `SystemTTS` (voz del SO, fallback offline)
  *
  * El TTS forma parte de una **cadena de fallbacks** definida en
  * `modules.config.yaml`: si ElevenLabsTTS lanza error, el orchestrator
- * intenta con KokoroTTS, luego SystemTTS.
+ * intenta con SystemTTS. Kokoro fue descartado por ADR 0020; la voz
+ * sintética estilo UTAU queda diferida a un hito futuro post-5080
+ * (será otro microservicio aparte, mismo patrón que Whisper).
  */
 export interface ITTSModule {
   readonly id: string;
