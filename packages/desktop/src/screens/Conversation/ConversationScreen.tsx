@@ -40,10 +40,15 @@ export function ConversationScreen(): JSX.Element {
   const [draft, setDraft] = useState('');
   const [chatOpen, setChatOpen] = useState(true);
 
-  const ptt = useMicrophonePTT({ bus, userId: LOCAL_USER_ID });
-  const micActive = ptt.state === 'recording' || ptt.state === 'requesting';
   // Mientras hay turno en vuelo (texto o voz) no aceptamos nuevo input.
   const sending = state.thinking || state.speaking;
+  // `enabled: !sending` desactiva los listeners de teclado del hook (Space
+  // mientras Shiro responde) — el botón visual también queda disabled. Si
+  // dejamos los listeners activos y el usuario pulsa Space durante una
+  // respuesta, dispararía un turno paralelo y getUserMedia volvería a
+  // pedir permiso. Evitarlo en el origen es más limpio.
+  const ptt = useMicrophonePTT({ bus, userId: LOCAL_USER_ID, enabled: !sending });
+  const micActive = ptt.state === 'recording' || ptt.state === 'requesting';
   // El botón de micro se deshabilita en `unsupported` (no hay API en este
   // browser) o si hay un turno en vuelo (no podemos hablar y procesar a la vez).
   const micDisabled = ptt.state === 'unsupported' || sending;

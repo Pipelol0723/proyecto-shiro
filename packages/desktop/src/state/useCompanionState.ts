@@ -8,25 +8,42 @@
  *
  *   stt:listening    → LISTEN_START
  *   stt:partial      → STT_PARTIAL
- *   stt:transcribed  → STT_FINAL  (apaga listening, limpia sttLive)
- *   user:message     → USER_SAID  (añade el mensaje del usuario al historial)
+ *   stt:transcribed  → STT_FINAL (apaga listening, limpia sttLive)
+ *                      + re-emite `user:message` con el texto final,
+ *                        para que un turno hablado entre al pipeline
+ *                        conversacional por el MISMO camino que un
+ *                        turno tipeado. Ver "Por qué…" abajo.
+ *   user:message     → USER_SAID (añade el mensaje del usuario al historial)
  *   router:routed    → THINK_START
  *   llm:responded    → SHIRO_REPLY
  *   tts:audio-ended  → SPEAK_END
- *   memory:snapshot  → HYDRATE_FROM_MEMORY  (rehidrata el chat al reconectar)
+ *   memory:snapshot  → HYDRATE_FROM_MEMORY (rehidrata el chat al reconectar)
  *
  * Por qué `user:message` añade al historial y no `stt:transcribed`:
  *
- * El cliente emite `user:message` tanto cuando el usuario tipea como
- * cuando STT entrega una transcripción final (futuro). Unificar el
- * historial sobre ese evento mantiene el código DRY y permite que el
- * mensaje "Tú: hola" aparezca incluso sin STT (estado actual).
+ * El cliente emite `user:message` tanto cuando el usuario tipea (input
+ * de texto) como cuando STT entrega una transcripción final (PTT real
+ * del micro). Unificar el historial sobre ese evento mantiene el
+ * código DRY y, más importante, hace que el flujo conversacional
+ * server-side (router → LLM → memoria → tts) sea idéntico para texto
+ * y voz — el server no distingue.
+ *
+ * Texto vacío del STT: si Whisper devuelve `""` (silencio puro, ruido,
+ * VAD que cortó todo) NO emitimos `user:message`. Evita disparar un
+ * turno sin contenido.
+ *
+ * Race condition multi-cliente: si dos clientes del mismo bus están
+ * conectados y ambos suscriben este hook, ambos emitirían
+ * `user:message` al recibir el mismo `stt:transcribed` broadcasted.
+ * En V1 el desktop es el único origen de STT, así que el riesgo es
+ * teórico — el día que múltiples clientes hablen habrá que añadir un
+ * `origin` al payload del STT y filtrar aquí.
  *
  * `llm:chunk` no se consume aquí — lo procesará el TTS cuando llegue.
  */
 
 import { useReducer } from 'react';
-import { useBusEvent } from '../use-bus';
+import { useBus, useBusEvent } from '../use-bus';
 import {
   companionReducer,
   INITIAL_STATE,
@@ -35,6 +52,7 @@ import {
 } from './companion-reducer';
 
 export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAction>] {
+  const bus = useBus();
   const [state, dispatch] = useReducer(companionReducer, INITIAL_STATE);
 
   useBusEvent('stt:listening', () => {
@@ -47,6 +65,13 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
 
   useBusEvent('stt:transcribed', (p) => {
     dispatch({ type: 'STT_FINAL', text: p.text, userId: p.userId });
+    // Solo turnos con contenido real. Whisper devuelve "" en silencios
+    // puros o cuando el VAD recorta todo — no queremos invocar al LLM
+    // por un PTT en blanco.
+    const trimmed = p.text.trim();
+    if (trimmed.length > 0) {
+      void bus.emit('user:message', { text: trimmed, userId: p.userId });
+    }
   });
 
   useBusEvent('user:message', (p) => {
