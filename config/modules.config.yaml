@@ -50,18 +50,25 @@ modules:
 
   # ─────────────────────────────────────────────────────────────
   # TTS — texto → voz (con cadena de fallbacks)
-  # Si el primero falla, el siguiente se activa.
+  # Si el primero falla, el siguiente se activa. Ver ADR 0020:
+  # Kokoro descartado; voz sintética/UTAU diferida a hito post-5080.
   # ─────────────────────────────────────────────────────────────
   tts:
     active: ElevenLabsTTS
     fallback_chain:
-      - KokoroTTS
       - SystemTTS
     config:
-      voice_id: '' # rellenar con voice_id de ElevenLabs
-      model: 'eleven_multilingual_v2'
-      stability: 0.5
-      similarity_boost: 0.75
+      # Voice ID elegido por el usuario tras explorar Voice Design /
+      # Voice Remix de ElevenLabs para una voz alineada con el personaje
+      # kuudere de Shiro. Cambiarlo aquí basta — no requiere recompilar.
+      voice_id: 'fgclHaSXgXdri8Z7CHiu'
+      model_id: 'eleven_multilingual_v2'
+      # `stability` por turno lo lee el TTS del bloque `emotions:` del
+      # character YAML (default.yaml). Estos son los demás parámetros
+      # que NO varían por emoción.
+      similarity_boost: 0.78
+      style: 0.15
+      use_speaker_boost: true
 
   # ─────────────────────────────────────────────────────────────
   # Memory — memoria persistente

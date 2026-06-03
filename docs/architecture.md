@@ -95,7 +95,7 @@ graph LR
 
         subgraph "modules/ (✅ implementados / ⏸️ pendientes)"
             STT["stt/<br>WhisperSTT ✅<br>(cliente HTTP del micro)"]
-            TTS[tts/<br>ElevenLabs / Kokoro / SystemTTS ⏸️]
+            TTS[tts/<br>ElevenLabs / SystemTTS ⏸️]
             LLM[llm/<br>Ollama / Anthropic ✅]
             Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL ✅]
             Av[avatar/<br>Live2D / VRM ⏸️]

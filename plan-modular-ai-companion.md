@@ -56,7 +56,7 @@ puede reemplazarse sin romper el resto. Diseñado para crecer.
 | LLM local | Ollama + Qwen 2.5 14B | 16 GB VRAM, mejor español open-source |
 | LLM cloud | Claude Sonnet (Anthropic SDK) | Máxima calidad conversacional |
 | STT | faster-whisper (Python microservicio) | Local, privado, preciso |
-| TTS | ElevenLabs + Kokoro (fallback) | Calidad + fallback offline |
+| TTS | ElevenLabs + SystemTTS (fallback) | Calidad cloud + garantía offline mínima (ver ADR 0020) |
 | Avatar 2D | Live2D Cubism SDK Web | Sin necesidad de saber diseño 3D |
 | Avatar 3D | @pixiv/three-vrm (futuro) | Migración sin cambiar otros módulos |
 | Memoria | Letta self-hosted (Docker) | Long-term memory, privado |
@@ -83,7 +83,7 @@ Ollama + Qwen 2.5 14B              Claude Sonnet API
                     ↓
            Respuesta generada
                     ↓
-          ElevenLabs / Kokoro TTS
+          ElevenLabs TTS (cloud)
                     ↓
      Avatar Live2D animado + lip sync
                     ↓
@@ -116,7 +116,7 @@ Ollama + Qwen 2.5 14B              Claude Sonnet API
 │   │   │   └── WhisperSTT.ts
 │   │   ├── tts/
 │   │   │   ├── ElevenLabsTTS.ts
-│   │   │   ├── KokoroTTS.ts
+│   │   │   ├── SystemTTS.ts
 │   │   │   └── SystemTTS.ts       ← Fallback del OS
 │   │   ├── llm/
 │   │   │   ├── OllamaLLM.ts
@@ -163,7 +163,7 @@ Ollama + Qwen 2.5 14B              Claude Sonnet API
 - **Interfaces primero**: el contrato se define antes de implementar.
 - **Un módulo, una responsabilidad**: STT solo transcribe, TTS solo sintetiza.
 - **Config sobre código**: cambiar modelo o proveedor = cambiar una línea en YAML.
-- **Fail gracefully**: si Claude falla → cae a local. Si ElevenLabs falla → Kokoro → SystemTTS.
+- **Fail gracefully**: si Claude falla → cae a local. Si ElevenLabs falla → SystemTTS (ver ADR 0020).
 
 ---
 
@@ -252,7 +252,7 @@ chore: tareas de mantenimiento   → chore: actualizar dependencias
 | 2 | OllamaLLM + HybridRouter | AnthropicLLM + CharacterLoader |
 | 3 | LettaMemory | LocalMemory + integración |
 | 4 | WhisperSTT | (Fase 5 en paralelo) |
-| 5 | (Fase 4 en paralelo) | ElevenLabsTTS + KokoroTTS |
+| 5 | (Fase 4 en paralelo) | ElevenLabsTTS + SystemTTS |
 | 6 | Live2D renderer | Lip sync + expresiones |
 | 7 | Empaquetado Tauri | Tests de integración |
 
@@ -372,10 +372,10 @@ git merge develop               # mezclar develop en tu branch
 **Semanas 13-14 · El/la otr@** (en paralelo con Fase 4)
 
 - [ ] Implementar `ElevenLabsTTS` con mapeo de emociones
-- [ ] Implementar `KokoroTTS` (offline, fallback)
+- [ ] ~~Implementar `KokoroTTS` (offline, fallback)~~ — descartado por ADR 0020; SystemTTS cubre el caso offline, UTAU/voz sintética post-5080.
 - [ ] Implementar `SystemTTS` (último recurso, voz del OS)
 - [ ] Test: sintetiza texto con cada emoción
-- [ ] Test: fallback a Kokoro cuando ElevenLabs falla
+- [ ] Test: fallback a SystemTTS cuando ElevenLabs falla
 
 **✅ Listo cuando:** el companion responde con voz natural del personaje.
 
