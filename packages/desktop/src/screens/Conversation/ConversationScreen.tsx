@@ -24,7 +24,7 @@
  */
 
 import { useState } from 'react';
-import { Orb } from '../../components/Orb';
+import { Avatar } from '../../components/Avatar';
 import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
 import { useCompanionState } from '../../state/useCompanionState';
@@ -102,7 +102,7 @@ export function ConversationScreen(): JSX.Element {
   return (
     <div className={styles.screen}>
       <section className={styles.stage}>
-        <Orb
+        <Avatar
           emotion={state.emotion}
           speaking={state.speaking}
           listening={state.listening}

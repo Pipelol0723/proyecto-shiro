@@ -259,6 +259,43 @@ El **`stability` por turno** lo lee el TTS del bloque `emotions:` del character 
 
 **Multi-device**: cada cliente conectado recibe `tts:audio`. Por defecto el primer cliente reproduce y los demás llevan el toggle "audio off". Cada cliente persiste su preferencia en `localStorage`. La lógica de "elegir dispositivo activo" queda para ADR futuro cuando llegue el segundo cliente.
 
+### Requisitos para el hito Avatar Live2D
+
+El avatar visual usa **`pixi-live2d-display`** (wrapper de PixiJS sobre el Cubism SDK oficial) renderizando el modelo dentro del componente `<Avatar>`. Si el SDK o el modelo no están instalados, `<Avatar>` cae al `<Orb>` (ADR 0009) automáticamente — el companion sigue 100% funcional sin avatar visual. Ver [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
+
+**Lo propietario (no entra al repo)**:
+
+1. **Cubism Core SDK Web**: archivo `live2dcubismcore.js`.
+   - Bajar el ZIP "Cubism SDK for Web" desde <https://www.live2d.com/sdk/download/web/>.
+   - Extraer y copiar `Core/live2dcubismcore.js` a:
+
+     ```
+     packages/desktop/public/live2d/Core/live2dcubismcore.js
+     ```
+
+2. **Modelo Hiyori** (placeholder hasta tener uno definitivo): viene dentro del mismo ZIP del SDK, en `Samples/TypeScript/Demo/public/Resources/Hiyori/`.
+   - Copia la carpeta entera a:
+
+     ```
+     packages/desktop/public/live2d/models/Hiyori/
+     ```
+
+   - La estructura final dentro de `Hiyori/` debe contener al menos `Hiyori.model3.json`, `Hiyori.moc3`, `expressions/*.exp3.json`, `motions/*.motion3.json`, y las texturas.
+
+**Verificación**: arranca el cliente desktop (`npm run dev -w @proyecto-shiro/desktop`). Si ves a Hiyori en lugar del orbe, todo está cableado. Si sigues viendo el orbe, abre la consola del navegador — verás 404 en `/live2d/Core/live2dcubismcore.js` o `/live2d/models/Hiyori/Hiyori.model3.json` que te dice qué falta.
+
+**Tuneables** (en `config/modules.config.yaml`, slot `avatar.config`):
+
+| Variable          | Default                                    | Para qué                                                                          |
+| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
+| `model_path`      | `/live2d/models/Hiyori/Hiyori.model3.json` | URL del `.model3.json`. Cámbialo cuando bajes el modelo definitivo de Shiro.      |
+| `cubism_core_url` | `/live2d/Core/live2dcubismcore.js`         | URL del Cubism Core JS.                                                           |
+| `max_fps`         | `30`                                       | Cap del render. 30 para GTX 1650; sube a 60 con la 5080.                          |
+| `idle_animation`  | `true`                                     | Animación idle automática del modelo (definida en su `.model3.json`).             |
+| `idle_expression` | `idle`                                     | Expresión por defecto. Para Hiyori se traduce a `default` via alias en el código. |
+
+**Disonancia visual del placeholder**: Hiyori es expresiva y cute; Shiro es kuudere y reservada. Esta disonancia es **deuda explícita** hasta que llegue el modelo definitivo. El mapeo provisional `emoción Shiro → expresión Hiyori` vive en `packages/core/src/modules/avatar/hiyori-expression-aliases.ts` y desaparece cuando el modelo definitivo tenga expresiones alineadas con el YAML del personaje (`idle`, `smirk`, `thinking`, `annoyed`, `soft`).
+
 ## Scripts disponibles (desde la raíz)
 
 | Comando                 | Descripción                                      |

@@ -1,0 +1,21 @@
+/**
+ * Estilos del wrapper Avatar.
+ *
+ * El wrapper es flex centrado para que tanto el Orb como el canvas
+ * Live2D queden alineados al center. El canvas no necesita más que
+ * un tamaño exacto (lo aplica inline).
+ */
+
+.avatarWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.live2dCanvas {
+  display: block;
+  pointer-events: none;
+  /* Evita scrollbars accidentales si el canvas ligero excede el wrap. */
+  overflow: hidden;
+}

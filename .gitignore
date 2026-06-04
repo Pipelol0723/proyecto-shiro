@@ -29,9 +29,18 @@ Thumbs.db
 # Tauri
 src-tauri/target/
 
-# Live2D SDK (propietario, descarga manual cada dev)
+# Live2D SDK + modelos (propietarios, descarga manual cada dev)
 **/Live2DCubismCore.*
 **/CubismSdkForWeb-*/
+**/live2d/Core/
+**/live2d/models/
+*.moc3
+*.cmo3
+*.model3.json
+*.exp3.json
+*.physics3.json
+*.motion3.json
+*.cdi3.json
 
 # Tests
 coverage/
