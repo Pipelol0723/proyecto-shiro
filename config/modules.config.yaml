@@ -123,12 +123,31 @@ modules:
 
   # ─────────────────────────────────────────────────────────────
   # Avatar — render visual
+  # Ver ADR 0021. El módulo Live2DAvatar es lógico server-side; el
+  # render real corre en el cliente desktop con pixi-live2d-display.
+  # Modelo + Cubism Core SDK se descargan manualmente (fuera del repo).
   # ─────────────────────────────────────────────────────────────
   avatar:
     active: Live2DAvatar
     config:
-      model_path: './assets/avatars/default/model.model3.json'
+      # Path al `.model3.json` del modelo placeholder Hiyori. El cliente
+      # lo sirve desde `packages/desktop/public/live2d/models/Hiyori/`,
+      # que el dev rellena manualmente con los samples del Cubism SDK.
+      # Si no existe, el `<Avatar>` cae al `<Orb>` (fallback automático).
+      model_path: '/live2d/models/Hiyori/Hiyori.model3.json'
+      # URL del `Live2DCubismCore.js` (propietario, descarga manual desde
+      # https://www.live2d.com/sdk/download/web/). Se sirve desde
+      # `packages/desktop/public/live2d/Core/`.
+      cubism_core_url: '/live2d/Core/live2dcubismcore.js'
+      # Cap de fps. 30 para hardware actual (GTX 1650 compartida con
+      # Ollama/Whisper/Letta). Subir a 60 con RTX 5080.
+      max_fps: 30
+      # Animación idle automática del modelo (definida en model3.json).
       idle_animation: true
+      # Expresión de descanso — el avatar la muestra al arrancar y
+      # vuelve a ella tras tts:audio-ended. Se alinea con el YAML del
+      # personaje; el alias de Hiyori la traduce a `default` en runtime.
+      idle_expression: 'idle'
 
 # ─────────────────────────────────────────────────────────────
 # Personaje activo

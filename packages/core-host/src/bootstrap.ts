@@ -27,7 +27,9 @@ import {
   buildSystemPrompt,
   ElevenLabsTTS,
   EventBus,
+  HIYORI_EXPRESSION_ALIASES,
   HybridRouter,
+  Live2DAvatar,
   Logger,
   ModuleLoader,
   OllamaLLM,
@@ -42,7 +44,6 @@ import {
 import { MemoryManager, SystemTTS } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
-import { NoopAvatar } from './mocks/noop-modules.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { TtsWithFallback } from './tts/tts-with-fallback.js';
@@ -125,7 +126,19 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   // para envolverlo en `TtsWithFallback`. Ver ADR 0020.
   loader.register('SystemTTS', (cfg, deps) => new SystemTTS(cfg, deps));
   loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
-  loader.register('Live2DAvatar', () => new NoopAvatar());
+  // Live2DAvatar es lógico server-side (no carga PIXI). Recibe las
+  // emociones del character YAML para resolver `emotion → expressionName`
+  // y los aliases de Hiyori mientras es el modelo placeholder. Ver
+  // ADR 0021. Cuando llegue el modelo definitivo con nombres alineados
+  // al YAML, este alias desaparece.
+  loader.register(
+    'Live2DAvatar',
+    (cfg, deps) =>
+      new Live2DAvatar(cfg, deps, {
+        emotions: options.character.emotions,
+        expressionAliases: HIYORI_EXPRESSION_ALIASES,
+      }),
+  );
 
   // 4. Orchestrator: instancia los 7 módulos y emite `bus:ready`.
   const orchestrator = new Orchestrator({ bus, loader, logger, config: options.config });
