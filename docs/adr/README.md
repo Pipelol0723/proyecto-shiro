@@ -72,6 +72,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0018](0018-letta-sdk-oficial-embeddings-ollama.md)                      | Integración Letta — SDK oficial + embeddings Ollama            | Accepted |
 | [0019](0019-stt-faster-whisper-microservicio-python.md)                  | STT — microservicio Python con faster-whisper                  | Accepted |
 | [0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) | TTS — ElevenLabs + SystemTTS fallback, in-process en core-host | Accepted |
+| [0021](0021-avatar-live2d-pixi-display-fallback-orbe.md)                 | Avatar Live2D — pixi-live2d-display, 30 fps, fallback al Orbe  | Accepted |
 
 ## Referencias externas
 
