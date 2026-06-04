@@ -102,6 +102,18 @@ export {
 } from './modules/tts/elevenlabs-tts.js';
 export type { ElevenLabsTTSConfig, ElevenLabsTTSOptions } from './modules/tts/elevenlabs-tts.js';
 
+// Avatar — Live2DAvatar (módulo lógico server-side). El render real
+// vive en el cliente desktop con `pixi-live2d-display`; este módulo
+// maneja la resolución emoción → expressionName y el estado server-side.
+// Browser-safe (no toca PIXI). Ver ADR 0021.
+export {
+  Live2DAvatar,
+  Live2DAvatarConfigSchema,
+  Live2DAvatarError,
+} from './modules/avatar/live2d-avatar.js';
+export type { Live2DAvatarConfig, Live2DAvatarOptions } from './modules/avatar/live2d-avatar.js';
+export { HIYORI_EXPRESSION_ALIASES } from './modules/avatar/hiyori-expression-aliases.js';
+
 // Memoria — toda la pila (LettaMemory sobre el SDK de Letta, LocalMemory
 // sobre SQLite nativo, y el MemoryManager que los orquesta) vive en
 // `@proyecto-shiro/core/node`: el SDK de Letta no debe entrar al bundle

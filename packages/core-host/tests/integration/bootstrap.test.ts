@@ -119,9 +119,8 @@ describe('core-host bootstrap end-to-end', () => {
     // bus:ready ya se emitió durante init — nos suscribimos después,
     // así que verificamos los módulos cargados en su lugar.
     const modules = result.orchestrator.getModules();
-    // LLMs, Router, Memory, STT y TTS son ya implementaciones reales.
-    // Avatar sigue como noop hasta el hito Live2D. El ping del
-    // microservicio Whisper y la API key de ElevenLabs solo se
+    // LLMs, Router, Memory, STT, TTS y Avatar son ya implementaciones reales.
+    // El ping del microservicio Whisper y la API key de ElevenLabs solo se
     // verifican al usarse — la instanciación no requiere conectividad.
     expect(modules.llmLocal.id).toMatch(/^llm:ollama:/);
     expect(modules.llmCloud.id).toMatch(/^llm:anthropic:/);
@@ -133,7 +132,9 @@ describe('core-host bootstrap end-to-end', () => {
     // orchestrator es solo el primary.
     expect(modules.tts.id).toBe('tts:elevenlabs:mock');
     expect(modules.memory.id).toBe('memory:manager:default');
-    expect(modules.avatar.id).toBe('avatar:noop');
+    // Live2DAvatar es lógico server-side — el render real vive en el
+    // cliente desktop (siguiente PR del hito). Ver ADR 0021.
+    expect(modules.avatar.id).toBe('avatar:live2d');
 
     // El transport está escuchando.
     expect(result.transport.port).toBeGreaterThan(0);

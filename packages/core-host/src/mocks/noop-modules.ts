@@ -1,15 +1,12 @@
 /**
- * Mocks no-op para los slots del Orchestrator que todavía no tienen
- * implementación real.
+ * Mocks no-op para los slots del Orchestrator.
  *
- * El Orchestrator (`@proyecto-shiro/core`) carga los 7 módulos definidos
- * en `modules.config.yaml` al arranque. A partir de PR 7 los slots LLM
- * (local + cloud) y Router ya son implementaciones reales — quedan
- * solo STT/TTS/Memory/Avatar como noops hasta sus respectivos hitos.
- *
- * `NoopLLM` sigue exportado por si algún test quiere registrarlo en
- * lugar del OllamaLLM/AnthropicLLM real (e.g. tests que no quieren
- * tocar red).
+ * Tras el hito Avatar Live2D, todos los slots tienen implementación
+ * real registrada en el bootstrap (LLM, Router, STT, TTS, Memory,
+ * Avatar). Estos noops se conservan exportados para tests que quieran
+ * registrarlos en lugar del módulo real — útil cuando se quiere evitar
+ * red, GPU, o efectos colaterales (p.ej. tests que no levantan el
+ * microservicio Whisper).
  */
 
 import type {
