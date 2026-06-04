@@ -21,9 +21,17 @@
  * Ver ADR 0012 (split cliente/server) y ADR 0013 (protocolo).
  */
 
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { parseEnvelope, serializeEnvelope } from '@proyecto-shiro/core';
 import type { ITransport, Logger, TransportReceiveHandler } from '@proyecto-shiro/core';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
+
+/**
+ * Handler de un request HTTP no-upgrade. Devuelve `true` si el handler
+ * gestionó la respuesta (escribió status + body). Si todos devuelven
+ * `false`, el transport responde 404 por defecto.
+ */
+export type HttpRequestHandler = (req: IncomingMessage, res: ServerResponse) => boolean;
 
 /**
  * `ws` entrega payloads como `Buffer | ArrayBuffer | Buffer[]`. Para
@@ -50,36 +58,77 @@ export interface WebSocketServerTransportOptions {
 export class WebSocketServerTransport implements ITransport {
   readonly id = 'websocket-server';
 
+  /**
+   * `http.Server` propio que aloja tanto el WebSocketServer como las
+   * rutas HTTP registradas via `onRequest`. Creamos uno nuestro (no
+   * dejar que `WebSocketServer` lo cree internamente) para poder
+   * añadirle handlers de `request` para servir audio del TTS — ver
+   * ADR 0020 sección "audio en V1".
+   */
+  private readonly httpServer: Server;
   private readonly server: WebSocketServer;
   private readonly clients = new Set<WebSocket>();
   private readonly logger: Logger;
   private readonly readyPromise: Promise<void>;
+  private readonly httpHandlers: HttpRequestHandler[] = [];
   private receiver: TransportReceiveHandler | undefined;
   private connectionHandler: (() => void | Promise<void>) | undefined;
   private closed = false;
 
   constructor(options: WebSocketServerTransportOptions) {
     this.logger = options.logger.child({ module: 'WebSocketServerTransport' });
+    this.httpServer = createServer((req, res) => {
+      this.handleHttpRequest(req, res);
+    });
     this.server = new WebSocketServer({
-      port: options.port,
+      server: this.httpServer,
       path: options.path ?? '/bus',
     });
 
     this.readyPromise = new Promise<void>((resolve, reject) => {
-      this.server.once('listening', () => {
-        const addr = this.server.address();
+      this.httpServer.once('listening', () => {
+        const addr = this.httpServer.address();
         const where = typeof addr === 'string' ? addr : `puerto ${addr?.port ?? '?'}`;
         this.logger.info(`escuchando en ${where} (path ${options.path ?? '/bus'})`);
         resolve();
       });
-      this.server.once('error', (err) => {
+      this.httpServer.once('error', (err) => {
         reject(err);
       });
+      this.httpServer.listen(options.port);
     });
 
     this.server.on('connection', (ws) => {
       this.handleConnection(ws);
     });
+  }
+
+  /**
+   * Registra un handler HTTP. Múltiples handlers se prueban en orden
+   * de registro; el primero que devuelve `true` gana. Si ninguno
+   * gestiona el request, el transport responde 404.
+   */
+  onRequest(handler: HttpRequestHandler): void {
+    this.httpHandlers.push(handler);
+  }
+
+  private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+    for (const handler of this.httpHandlers) {
+      try {
+        if (handler(req, res)) return;
+      } catch (err) {
+        this.logger.error('http handler falló', { err });
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end('Internal Server Error');
+        }
+        return;
+      }
+    }
+    if (!res.headersSent) {
+      res.statusCode = 404;
+      res.end('Not Found');
+    }
   }
 
   /** Espera al evento `listening`. Resuelve cuando el server está vinculado. */
@@ -92,7 +141,7 @@ export class WebSocketServerTransport implements ITransport {
    * resuelva. Útil cuando construiste con `port: 0`.
    */
   get port(): number {
-    const addr = this.server.address();
+    const addr = this.httpServer.address();
     if (!addr || typeof addr === 'string') {
       throw new Error('WebSocketServerTransport: server no vinculado todavía');
     }
@@ -148,8 +197,16 @@ export class WebSocketServerTransport implements ITransport {
       }
     }
     this.clients.clear();
+    // Cierra primero el WebSocketServer (libera el upgrade handler);
+    // después el httpServer que aloja también las rutas HTTP.
     await new Promise<void>((resolve, reject) => {
       this.server.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      this.httpServer.close((err) => {
         if (err) reject(err);
         else resolve();
       });

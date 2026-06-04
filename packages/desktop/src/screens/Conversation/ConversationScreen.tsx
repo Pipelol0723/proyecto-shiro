@@ -29,6 +29,7 @@ import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
 import { useCompanionState } from '../../state/useCompanionState';
 import { useMicrophonePTT } from '../../audio/useMicrophonePTT';
+import { useTtsPlayback } from '../../audio/useTtsPlayback';
 import { ChatPanel } from './ChatPanel';
 import styles from './ConversationScreen.module.css';
 
@@ -40,21 +41,25 @@ export function ConversationScreen(): JSX.Element {
   const [draft, setDraft] = useState('');
   const [chatOpen, setChatOpen] = useState(true);
 
-  // Mientras hay turno en vuelo (texto o voz) no aceptamos nuevo input.
-  const sending = state.thinking || state.speaking;
-  // `enabled: !sending` desactiva los listeners de teclado del hook (Space
-  // mientras Shiro responde) — el botón visual también queda disabled. Si
-  // dejamos los listeners activos y el usuario pulsa Space durante una
-  // respuesta, dispararía un turno paralelo y getUserMedia volvería a
-  // pedir permiso. Evitarlo en el origen es más limpio.
-  const ptt = useMicrophonePTT({ bus, userId: LOCAL_USER_ID, enabled: !sending });
+  // Reproduce el audio TTS que el server emite por `tts:audio`. Mute
+  // persistido en localStorage por cliente (ver ADR 0020) — el toggle
+  // de la UI cambia esta preferencia.
+  const ttsPlayback = useTtsPlayback({ bus });
+
+  // Mientras el LLM piensa, bloqueamos input. Mientras Shiro habla
+  // (speaking) SÍ permitimos input — pero antes emitimos `tts:cancel`
+  // para cortar el audio actual (ADR 0020 decisión 4: cancelable
+  // mid-speech). Sin esta distinción el usuario no podría corregir
+  // hasta que la frase obsoleta terminara.
+  const thinking = state.thinking;
+  const sending = thinking; // alias semántico para los disables
+  const ptt = useMicrophonePTT({ bus, userId: LOCAL_USER_ID, enabled: !thinking });
   const micActive = ptt.state === 'recording' || ptt.state === 'requesting';
-  // El botón de micro se deshabilita en `unsupported` (no hay API en este
-  // browser) o si hay un turno en vuelo (no podemos hablar y procesar a la vez).
-  const micDisabled = ptt.state === 'unsupported' || sending;
+  const micDisabled = ptt.state === 'unsupported' || thinking;
 
   async function sendMessage(text: string): Promise<void> {
-    if (sending || !text.trim()) return;
+    if (thinking || !text.trim()) return;
+    if (state.speaking) ttsPlayback.cancel();
     await bus.emit('user:message', { text: text.trim(), userId: LOCAL_USER_ID });
   }
 
@@ -73,6 +78,9 @@ export function ConversationScreen(): JSX.Element {
     if (micDisabled) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
+    // Si Shiro está hablando, interrumpir antes de empezar a capturar
+    // (cancelable mid-speech, ADR 0020 decisión 4).
+    if (state.speaking) ttsPlayback.cancel();
     void ptt.start();
   }
   function onMicPointerUp(): void {
@@ -83,8 +91,13 @@ export function ConversationScreen(): JSX.Element {
     if (ptt.state === 'unsupported') return 'Tu navegador no soporta captura de audio';
     if (sending) return 'Espera a que termine el turno actual';
     if (micActive) return 'Soltando para terminar…';
+    if (state.speaking) return 'Interrumpir y hablar';
     return 'Mantén pulsado (o Space) para hablar';
   })();
+
+  const muteTitle = ttsPlayback.muted
+    ? 'Audio silenciado en este dispositivo — click para activar'
+    : 'Audio activo — click para silenciar';
 
   return (
     <div className={styles.screen}>
@@ -105,6 +118,18 @@ export function ConversationScreen(): JSX.Element {
             </span>
           )}
           {state.speaking && <span className={styles.status}>Hablando…</span>}
+          <button
+            type="button"
+            className={styles.muteToggle}
+            onClick={() => {
+              ttsPlayback.setMuted(!ttsPlayback.muted);
+            }}
+            title={muteTitle}
+            aria-label={muteTitle}
+            aria-pressed={ttsPlayback.muted}
+          >
+            {ttsPlayback.muted ? 'audio off' : 'audio on'}
+          </button>
         </div>
 
         {/* Subtítulos / transcripción en vivo */}

@@ -36,12 +36,16 @@ import {
   type Character,
   type EventMap,
   type IEventBus,
+  type ITTSModule,
   type ModulesConfig,
 } from '@proyecto-shiro/core';
-import { MemoryManager } from '@proyecto-shiro/core/node';
+import { MemoryManager, SystemTTS } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
 import { NoopAvatar } from './mocks/noop-modules.js';
+import { AudioCache } from './audio/audio-cache.js';
+import { createAudioRouteHandler } from './audio/audio-route.js';
+import { TtsWithFallback } from './tts/tts-with-fallback.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -116,6 +120,10 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     'ElevenLabsTTS',
     (cfg, deps) => new ElevenLabsTTS(cfg, deps, { emotions: options.character.emotions }),
   );
+  // SystemTTS no recibe config del YAML (el slot `tts` solo describe el
+  // primary). Lo registramos vacío y el bootstrap lo instanciará después
+  // para envolverlo en `TtsWithFallback`. Ver ADR 0020.
+  loader.register('SystemTTS', (cfg, deps) => new SystemTTS(cfg, deps));
   loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
   loader.register('Live2DAvatar', () => new NoopAvatar());
 
@@ -171,19 +179,56 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     })();
   });
 
-  // 5. System prompt pre-construido — se reusa turn a turn.
+  // 5. TTS con cadena de fallback (ADR 0020). El YAML define el primary
+  //    (ElevenLabsTTS) en `tts.active`; aquí instanciamos SystemTTS
+  //    aparte y los envolvemos en un wrapper que el pipeline ve como un
+  //    solo `ITTSModule`. Si la API key de ElevenLabs no está o falla,
+  //    SystemTTS toma el turno.
+  const modules = orchestrator.getModules();
+  const primaryTts = modules.tts;
+  const systemTts = new SystemTTS({}, { logger, bus });
+  const ttsChain: ITTSModule = new TtsWithFallback({
+    primary: primaryTts,
+    fallbacks: [systemTts],
+    logger,
+  });
+  child.info(`TTS cadena: ${ttsChain.id}`);
+
+  // 5b. AudioCache + route HTTP para servir los buffers TTS. El pipeline
+  //     emite `tts:audio { url, audioId, mimeType }` apuntando aquí y el
+  //     cliente hace fetch. TTL 60s sobra para que cualquier cliente
+  //     descargue. El sweep timer se apaga en shutdown.
+  //
+  //     `simulationSpeed === 0` es la señal de "modo test" — en ese
+  //     caso saltamos el audioCache y el pipeline cae al simulador
+  //     legacy de `tts:audio-ended`. Necesario para que tests de
+  //     integración que no levantan red real (sin Ollama, sin Letta)
+  //     no se queden esperando al TTS real (que también tarda o cuelga
+  //     sin API key + sin binarios del OS).
+  const ttsRealEnabled = options.simulationSpeed !== 0;
+  const audioCache = ttsRealEnabled ? new AudioCache() : undefined;
+  if (audioCache !== undefined) {
+    audioCache.start();
+    transport.onRequest(createAudioRouteHandler(audioCache, logger));
+  }
+  const serverOrigin = ttsRealEnabled ? `http://localhost:${String(transport.port)}` : undefined;
+
+  // 6. System prompt pre-construido — se reusa turn a turn.
   const systemPrompt = buildSystemPrompt(options.character);
 
-  // 6. Cablea el pipeline conversacional real. `user:message` arranca
-  //    el flujo router → LLM → llm:responded → tts:audio-ended (este
-  //    último simulado hasta el hito TTS). Ver ADR 0016.
+  // 7. Cablea el pipeline conversacional real. `user:message` arranca
+  //    el flujo router → LLM → llm:responded → tts.synthesize → tts:audio.
+  //    El cliente reproduce y emite `tts:audio-ended` cuando termina.
+  //    Ver ADR 0016 y ADR 0020.
+  const modulesWithTtsChain = { ...modules, tts: ttsChain };
   const disposeFlow = wireConversationFlow({
     bus,
-    modules: orchestrator.getModules(),
+    modules: modulesWithTtsChain,
     systemPrompt,
     logger,
     simulationSpeed: options.simulationSpeed,
     memoryReads,
+    ...(audioCache !== undefined && serverOrigin !== undefined ? { audioCache, serverOrigin } : {}),
   });
 
   child.info(
@@ -199,6 +244,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     systemPrompt,
     shutdown: async () => {
       disposeFlow();
+      audioCache?.stop();
       await memoryManager.stop();
       await orchestrator.shutdown();
       await transport.close();
