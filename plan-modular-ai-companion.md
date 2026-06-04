@@ -368,16 +368,24 @@ git merge develop               # mezclar develop en tu branch
 
 ---
 
-### FASE 5 — TTS: voz de salida
-**Semanas 13-14 · El/la otr@** (en paralelo con Fase 4)
+### FASE 5 — TTS: voz de salida ✅
 
-- [ ] Implementar `ElevenLabsTTS` con mapeo de emociones
-- [ ] ~~Implementar `KokoroTTS` (offline, fallback)~~ — descartado por ADR 0020; SystemTTS cubre el caso offline, UTAU/voz sintética post-5080.
-- [ ] Implementar `SystemTTS` (último recurso, voz del OS)
-- [ ] Test: sintetiza texto con cada emoción
-- [ ] Test: fallback a SystemTTS cuando ElevenLabs falla
+**Completada 2026-06-03** (PRs #44-#48 sobre la rama `develop`).
 
-**✅ Listo cuando:** el companion responde con voz natural del personaje.
+- [x] Implementar `ElevenLabsTTS` con mapeo de emociones — `packages/core/src/modules/tts/elevenlabs-tts.ts`. Cliente HTTP REST del API de ElevenLabs (`POST /v1/text-to-speech/{voice_id}`), browser-safe (`fetch`). Mapeo emoción → `stability` lee `character.emotions[emotion].tts_stability` del YAML por turno. El resto (`similarity_boost`, `style`, `use_speaker_boost`, `model_id`) son constantes en `config/modules.config.yaml`. Errores específicos para 401 (key rechazada) y 429 (cuota / rate limit).
+- [x] ~~Implementar `KokoroTTS` (offline, fallback)~~ — descartado por ADR 0020; SystemTTS cubre el caso offline, UTAU/voz sintética post-5080.
+- [x] Implementar `SystemTTS` (último recurso, voz del OS) — `packages/core/src/modules/tts/system-tts.ts`. Node-only (usa `child_process` via `say.js`). SAPI en Windows, NSSpeechSynthesizer en macOS, festival/espeak en Linux. Exporta a WAV temporal, lee buffer, cleanup. Promise wrapper con timeout (default 15s) para no colgarse en Linux sin motor instalado.
+- [x] **`TtsWithFallback`** — wrapper que envuelve primary + N fallbacks como un solo `ITTSModule`. El pipeline conversacional ve solo este. Itera la cadena, loguea warnings, lanza el último error si todos fallan.
+- [x] **Audio en V1: server genera, cliente reproduce** (ADR 0020 decisión 3). `AudioCache` en memoria con TTL 60s; HTTP route `GET /audio/<id>.<ext>` en core-host; `tts:audio { url, audioId, mimeType }` por el bus; cliente fetch + `HTMLAudioElement` con `useTtsPlayback` hook.
+- [x] **Cancelable mid-speech** — `tts:cancel { audioId }` por el bus; server invalida el cache, cliente para el audio.
+- [x] **Mute por cliente** persistido en `localStorage` — preparación para multi-device. Lógica de "elegir dispositivo activo" diferida a ADR futuro.
+- [x] Test: sintetiza texto con emoción mapeada y con fallback a `default_stability` (24 tests en `elevenlabs-tts.test.ts`).
+- [x] Test: fallback a SystemTTS cuando ElevenLabs falla (5 tests en `tts-with-fallback.test.ts` + integración del bootstrap).
+- [x] Tests del wrapper de `say.js` con inyección de FS (16 tests en `system-tts.test.ts`).
+- [x] Tests del `useTtsPlayback` con FakeAudio (12 tests).
+- [x] Tests del `AudioCache` con timers fake (11 tests).
+
+**✅ Listo:** el companion responde con voz natural del personaje (ElevenLabs si hay API key + voice_id; SystemTTS como fallback siempre disponible). Cancelable, multi-cliente, mute por dispositivo. Ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) y el [README](README.md) para setup y tunings.
 
 ---
 
