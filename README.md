@@ -4,16 +4,20 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **STT** ✅ completo. Microservicio Python con
-> **faster-whisper** sobre CUDA, captura PCM Int16 LE @ 16 kHz en el
-> desktop vía AudioWorklet, push-to-talk con `Space` o click-and-hold,
-> WebSocket directo cliente↔microservicio (el `core-host` no participa
-> del audio), partials cada 2.5 s, `hotwords` para nombres propios y
-> wiring `stt:transcribed` → `user:message` para que un turno hablado
-> entre al pipeline conversacional por el mismo camino que uno tipeado
-> (PRs #37-#42). Hitos previos: **Setup**, **Core**, **Cliente desktop**,
-> **LLM**, **Memoria**. Próximo hito en planificación: **TTS**.
-> Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md).
+> **Estado**: hito **TTS** ✅ completo. Cadena **ElevenLabs primary +
+> SystemTTS fallback** in-process en el `core-host` (sin microservicio
+> aparte — ElevenLabs es API REST trivial; UTAU/voz sintética se
+> reserva para microservicio post-5080). Audio generado server-side y
+> servido por HTTP efímero (`GET /audio/<id>.<ext>`, TTL 60s); el
+> cliente reproduce con `HTMLAudioElement` y emite `tts:audio-ended`.
+> Mapeo emoción → `stability` desde el bloque `emotions:` del character
+> YAML. Cancelable mid-speech (`tts:cancel` invalida el cache y para
+> el audio). Toggle mute por cliente persistido en `localStorage`
+> (preparación para multi-device, lógica de "cliente activo" diferida
+> a ADR futuro). (PRs #44-#48.) Hitos previos: **Setup**, **Core**,
+> **Cliente desktop**, **LLM**, **Memoria**, **STT**. Próximo hito en
+> planificación: **Avatar Live2D**.
+> Ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
 
@@ -25,23 +29,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado          | Notas                                                                                                                                              |
-| ------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                   |
-| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                 |
-| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                     |
-| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                       |
-| **Memoria**         | ✅ completo     | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                            |
-| **STT**             | ✅ completo     | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.  |
-| **TTS**             | 🟡 planificando | ElevenLabs primary + SystemTTS fallback (sin Kokoro). Audio server-side, reproducción en cliente. Voz sintética/UTAU diferida post-5080. ADR 0020. |
-| **Avatar Live2D**   | ⏸️ pendiente    | Reemplaza el orbe dentro del componente `<Avatar>`                                                                                                 |
-| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                                                        |
-| **Post-MVP**        |                 |                                                                                                                                                    |
-| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                                                             |
-| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                         |
-| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                                                                 |
-| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                      |
-| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                                                               |
+| Hito                | Estado          | Notas                                                                                                                                                       |
+| ------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                            |
+| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                          |
+| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                              |
+| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                |
+| **Memoria**         | ✅ completo     | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                     |
+| **STT**             | ✅ completo     | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.           |
+| **TTS**             | ✅ completo     | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020. |
+| **Avatar Live2D**   | 🟡 planificando | Reemplaza el orbe dentro del componente `<Avatar>`. Próximo hito.                                                                                           |
+| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                                                                 |
+| **Post-MVP**        |                 |                                                                                                                                                             |
+| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                                                                      |
+| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                  |
+| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                                                                          |
+| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                               |
+| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                                                                        |
 
 ## Stack
 
@@ -52,7 +56,7 @@ histórico.
 - **Ollama + Qwen 2.5** para LLM local
 - **Claude Sonnet** vía Anthropic SDK para LLM cloud
 - **faster-whisper** (microservicio Python) para STT
-- **ElevenLabs** (cloud) + **SystemTTS** (voz del OS) para TTS
+- **ElevenLabs** (cloud, primary) + **SystemTTS** (voz del OS, fallback) para TTS (in-process en core-host, audio HTTP efímero)
 - **Letta** (Docker) para memoria larga, **LocalMemory** SQLite como fallback
 - **Live2D Cubism SDK Web** para avatar 2D
 - **Vitest** para tests
@@ -194,6 +198,66 @@ Para activarlo:
 | `WHISPER_HOTWORDS`            | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Útil para nombres propios.   |
 
 Ver `services/whisper/README.md` para detalles del microservicio.
+
+### Requisitos para el hito TTS (ElevenLabs)
+
+La salida de voz usa **ElevenLabs** como primary y **SystemTTS** (voz del SO via `say.js`) como fallback. Ambos corren in-process en el `core-host` (no hay microservicio aparte — ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)).
+
+Para activarlo:
+
+1. **API key de ElevenLabs** en `.env` (raíz del repo, NO en `packages/core-host/.env`):
+
+   ```bash
+   ELEVENLABS_API_KEY=sk_xxxxxxxxxxxx
+   ```
+
+   Cuídate de:
+   - El nombre exacto es `ELEVENLABS_API_KEY` (sin guión bajo entre "eleven" y "labs").
+   - **Sin comillas** alrededor del valor.
+   - **Sin espacios** alrededor del `=`.
+
+   Si la key no está, el `core-host` arranca igual con un `WARN` esperado y todos los turnos salen por SystemTTS (voz nativa del OS).
+
+2. **Voice ID** en `config/modules.config.yaml` (slot `tts.config.voice_id`):
+
+   ```yaml
+   tts:
+     config:
+       voice_id: '<id de tu voz de ElevenLabs>'
+   ```
+
+   El catálogo está en <https://elevenlabs.io/app/voice-library>. Filtra por idioma y estilo; copia el `voice_id` del detalle. Si tu voice fue diseñada (Voice Design / Voice Remix), está en "My Voices".
+
+3. **(Linux solamente, opcional)** Instala `festival` o `espeak` para que el fallback SystemTTS funcione. En Windows y macOS no se requiere instalación extra (SAPI / NSSpeechSynthesizer son nativos).
+
+**Cómo verificarlo en logs**:
+
+```
+[bootstrap] TTS cadena: tts:chain:tts:elevenlabs:<voice_id>→tts:system
+```
+
+Si la cadena dice `tts:chain:tts:elevenlabs:<voice_id>→tts:system`, todo cableado. Cuando hables con Shiro:
+
+- Si oyes voz neuronal natural → ElevenLabs está activo.
+- Si oyes voz sintética del SO (Microsoft Aria en Windows) → ElevenLabs cayó al fallback (revisa la API key).
+
+**Tunings disponibles** (en `config/modules.config.yaml`, slot `tts.config`):
+
+| Variable            | Default                  | Para qué                                                                    |
+| ------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| `voice_id`          | `''` (vacío)             | Voz de ElevenLabs. Sin esto, el primary falla y cae a SystemTTS.            |
+| `model_id`          | `eleven_multilingual_v2` | Modelo de ElevenLabs. `eleven_turbo_v2_5` para latencia más baja.           |
+| `similarity_boost`  | `0.78`                   | 0-1. Más alto = más fiel a la voz elegida.                                  |
+| `style`             | `0.15`                   | 0-1. Exageración. Bajo a propósito para Shiro (kuudere, no exagera).        |
+| `use_speaker_boost` | `true`                   | Mejora la claridad sin tocar timbre.                                        |
+| `default_stability` | `0.75`                   | Cuando no hay mapeo de emoción en `default.yaml` para una emoción concreta. |
+| `timeout_ms`        | `30000`                  | Timeout HTTP. Frases cortas tardan <2s en GPU/Cloud; 30s deja margen.       |
+
+El **`stability` por turno** lo lee el TTS del bloque `emotions:` del character YAML (`packages/core/src/character/characters/default.yaml`) en lugar de la config global — eso hace que la voz varíe entre emociones según el personaje.
+
+**Cancelable mid-speech**: si interrumpes a Shiro (apretas el mic durante speaking, o tipeas Enter), el audio actual se corta y arranca el nuevo turno.
+
+**Multi-device**: cada cliente conectado recibe `tts:audio`. Por defecto el primer cliente reproduce y los demás llevan el toggle "audio off". Cada cliente persiste su preferencia en `localStorage`. La lógica de "elegir dispositivo activo" queda para ADR futuro cuando llegue el segundo cliente.
 
 ## Scripts disponibles (desde la raíz)
 

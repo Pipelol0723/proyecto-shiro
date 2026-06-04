@@ -4,14 +4,14 @@ Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
 > **Última actualización**: 2026-06-03 — hitos **Setup**, **Core**,
-> **Cliente desktop**, **LLM**, **Memoria** y **STT** completos. STT
-> añade un microservicio Python con faster-whisper sobre CUDA, captura
-> Web Audio (AudioWorklet) en el desktop con push-to-talk, WebSocket
-> directo cliente↔microservicio (sin pasar por el `core-host`),
-> partials cada 2.5 s y wiring `stt:transcribed → user:message` para
-> que la voz entre al pipeline conversacional por el mismo camino que
-> el texto. Ver [ADR 0019](adr/0019-stt-faster-whisper-microservicio-python.md).
-> Próximo: **TTS** (en planificación).
+> **Cliente desktop**, **LLM**, **Memoria**, **STT** y **TTS**
+> completos. TTS añade cadena `ElevenLabsTTS → SystemTTS` in-process
+> en el `core-host`, audio servido por HTTP efímero (`GET /audio/<id>.<ext>`
+> con TTL 60s), reproducción en el cliente con `HTMLAudioElement`,
+> cancelable mid-speech vía `tts:cancel`, mapeo emoción → `stability`
+> desde el character YAML. Ver
+> [ADR 0020](adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
+> Próximo: **Avatar Live2D** (en planificación).
 
 ## Visión a vista de pájaro
 
@@ -34,8 +34,8 @@ graph TB
         Root[/"raíz<br>tooling compartido"/]
 
         subgraph "packages/"
-            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core + LLM + Memoria + STT"]
-            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>✅ orbe + 5 pantallas + 3 temas + PTT"]
+            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core + LLM + Memoria + STT + TTS"]
+            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>✅ orbe + 5 pantallas + 3 temas + PTT + TTS playback"]
             Mobile["mobile<br>cliente futuro<br>@proyecto-shiro/mobile"]
             Arduino["arduino-bridge<br>puente Serial<br>@proyecto-shiro/arduino-bridge"]
             IoT["iot-bridge<br>MQTT/Home Assistant<br>@proyecto-shiro/iot-bridge"]
@@ -95,7 +95,7 @@ graph LR
 
         subgraph "modules/ (✅ implementados / ⏸️ pendientes)"
             STT["stt/<br>WhisperSTT ✅<br>(cliente HTTP del micro)"]
-            TTS[tts/<br>ElevenLabs / SystemTTS ⏸️]
+            TTS["tts/<br>ElevenLabs (primary) ✅<br>SystemTTS (fallback) ✅"]
             LLM[llm/<br>Ollama / Anthropic ✅]
             Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL ✅]
             Av[avatar/<br>Live2D / VRM ⏸️]
@@ -190,16 +190,18 @@ recompilar. Ver el bundle de diseño en
 El reducer del cliente se alimenta de eventos del core, y dispara
 acciones cuando el usuario actúa:
 
-| Acción del reducer    | Origen                                                          | Evento del EventBus |
-| --------------------- | --------------------------------------------------------------- | ------------------- |
-| `LISTEN_START`        | `bus.on('stt:listening')` — emitido por el hook PTT al arrancar | `stt:listening`     |
-| `STT_PARTIAL`         | `bus.on('stt:partial')` — partial del microservicio whisper     | `stt:partial`       |
-| `STT_FINAL`           | `bus.on('stt:transcribed')` — final del microservicio whisper   | `stt:transcribed`   |
-| `USER_SAID`           | `bus.on('user:message')` — texto tipeado **o** transcrito       | `user:message`      |
-| `THINK_START`         | `bus.on('router:routed')`                                       | `router:routed`     |
-| `SHIRO_REPLY`         | `bus.on('llm:responded')`                                       | `llm:responded`     |
-| `SPEAK_END`           | `bus.on('tts:audio-ended')`                                     | `tts:audio-ended`   |
-| `HYDRATE_FROM_MEMORY` | `bus.on('memory:snapshot')` — server empuja al reconectar       | `memory:snapshot`   |
+| Acción del reducer    | Origen                                                                    | Evento del EventBus |
+| --------------------- | ------------------------------------------------------------------------- | ------------------- |
+| `LISTEN_START`        | `bus.on('stt:listening')` — emitido por el hook PTT al arrancar           | `stt:listening`     |
+| `STT_PARTIAL`         | `bus.on('stt:partial')` — partial del microservicio whisper               | `stt:partial`       |
+| `STT_FINAL`           | `bus.on('stt:transcribed')` — final del microservicio whisper             | `stt:transcribed`   |
+| `USER_SAID`           | `bus.on('user:message')` — texto tipeado **o** transcrito                 | `user:message`      |
+| `THINK_START`         | `bus.on('router:routed')`                                                 | `router:routed`     |
+| `SHIRO_REPLY`         | `bus.on('llm:responded')`                                                 | `llm:responded`     |
+| (sin acción)          | `bus.on('tts:audio')` → `useTtsPlayback` hace fetch + reproduce el blob   | `tts:audio`         |
+| (cliente origina)     | `bus.emit('tts:cancel')` cuando el usuario interrumpe a Shiro mid-speech  | `tts:cancel`        |
+| `SPEAK_END`           | `bus.on('tts:audio-ended')` — emitido por el cliente al `ended` del audio | `tts:audio-ended`   |
+| `HYDRATE_FROM_MEMORY` | `bus.on('memory:snapshot')` — server empuja al reconectar                 | `memory:snapshot`   |
 
 > **Wiring voz → texto unificado**: `useCompanionState` re-emite
 > `user:message` al recibir `stt:transcribed` con texto no vacío. Así
@@ -256,13 +258,20 @@ sequenceDiagram
     LLM->>Bus: emit("llm:responded", { text, emotion })
 
     Bus->>Client: deliver (orbe cambia color, subtítulos)
-    Bus->>TTS: deliver
     Bus->>Avatar: deliver (mismo evento → expresión)
     Bus->>Mem: deliver (registra respuesta assistant)
 
-    TTS->>Speaker: synth audio
+    LLM->>TTS: tts.synthesize(text, emotion)
+    TTS-->>LLM: { audio: Buffer, mimeType }
+    Note over TTS: TtsWithFallback intenta ElevenLabs<br/>y cae a SystemTTS si falla
+    LLM->>Bus: emit("tts:audio", { url, audioId, mimeType })
+    Bus->>Client: deliver
+    Client->>TTS: GET /audio/&lt;id&gt;.&lt;ext&gt;
+    TTS-->>Client: bytes
+    Client->>Speaker: HTMLAudioElement.play()
     Avatar->>Speaker: lip sync sincronizado
     Speaker->>User: voz + animación
+    Client->>Bus: emit("tts:audio-ended", { audioId })
 ```
 
 **Notas del flujo:**
@@ -277,6 +286,64 @@ sequenceDiagram
   el cloud (mejor calidad) según la complejidad estimada del mensaje.
 - La memoria se inserta en dos puntos: lee contexto para el LLM, escribe
   cada turno de la conversación.
+
+## TTS: ElevenLabs + SystemTTS, audio HTTP efímero
+
+La salida de voz (ver [ADR 0020](adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)) se reparte así:
+
+```mermaid
+graph LR
+    subgraph "core-host (Node)"
+        Pipe[conversation-flow]
+        Chain[TtsWithFallback]
+        EL[ElevenLabsTTS<br/>primary]
+        Sys[SystemTTS<br/>fallback]
+        Cache[(AudioCache<br/>TTL 60s)]
+        Route[GET /audio/&lt;id&gt;.&lt;ext&gt;<br/>HTTP route]
+    end
+
+    subgraph "Cliente desktop"
+        Hook[useTtsPlayback]
+        Audio[HTMLAudioElement]
+    end
+
+    Pipe -->|llm:responded → tts.synthesize| Chain
+    Chain -->|primero| EL
+    Chain -->|si falla| Sys
+    EL -.HTTPS.-> EL11[(ElevenLabs API)]
+    Sys -.child_process.-> SO[say.js → SAPI / NSSpeech / festival]
+    Chain -->|Buffer + mimeType| Cache
+    Cache -->|audioId + relativeUrl| Pipe
+    Pipe -->|tts:audio { url, audioId, mimeType }| Hook
+    Hook -->|GET| Route
+    Route -->|bytes| Audio
+    Audio -->|ended| Hook
+    Hook -->|tts:audio-ended| Pipe
+
+    style Chain fill:#4a9eff,stroke:#333,color:#fff
+    style Cache fill:#f4b400,stroke:#333,color:#fff
+    style Hook fill:#4a9eff,stroke:#333,color:#fff
+```
+
+- **Cadena `TtsWithFallback`**: el pipeline ve un solo `ITTSModule`. Por dentro, intenta `ElevenLabsTTS` (primary); si lanza (sin internet, cuota, 401, 5xx), prueba `SystemTTS` (voz del SO). Solo cuando los dos fallan, el server emite `tts:audio-ended` directo para desbloquear al cliente.
+- **In-process en core-host**, no microservicio aparte. ElevenLabs es API REST trivial — encapsularlo en Docker es overkill. La asimetría con Whisper (que sí es microservicio) refleja la realidad: **cloud APIs in-process, motores locales pesados en microservicio**. Cuando llegue UTAU/voz sintética post-5080, ese SÍ será microservicio.
+- **Audio HTTP efímero**: el server cachea el buffer con un `audioId` único (TTL 60s) y expone `GET /audio/<audioId>.<ext>`. El bus solo lleva la URL (`tts:audio { url, audioId, mimeType }`) — bytes binarios no caben naturalmente en el wire-schema JSON, y servir por HTTP permite que solo los clientes que reproducen hagan el fetch.
+- **Reproducción en el cliente**: `useTtsPlayback(bus)` crea un `HTMLAudioElement`, hace `fetch(url)`, reproduce, y emite `tts:audio-ended` al `ended` (o al `error`). El **`speaking: true`** del reducer se mantiene hasta entonces.
+- **Cancelable mid-speech**: el cliente emite `tts:cancel { audioId }` cuando el usuario interrumpe (PTT o tipeo durante speaking). El server invalida el `audioId` en el cache (cualquier fetch posterior recibe 410). El cliente que estaba reproduciendo hace `audio.pause(); audio.src = ''`.
+- **Mute por cliente**: `useTtsPlayback` persiste la preferencia en `localStorage` (`shiro:tts:muted`). Cuando `muted=true`, el cliente sigue emitiendo `tts:audio-ended` (para desbloquear el reducer) pero no reproduce. Preparación para multi-device — la lógica de "elegir dispositivo activo" queda para ADR futuro cuando aparezca el segundo cliente.
+
+### Mapeo emoción → `stability`
+
+`ElevenLabsTTS` lee `character.emotions[emotion].tts_stability` del YAML del personaje y lo usa como `voice_settings.stability` por turno. El resto de `voice_settings` (`similarity_boost`, `style`, `use_speaker_boost`) son constantes desde `config/modules.config.yaml`. Si la emoción no está mapeada o no hay character, cae a `default_stability` (0.75).
+
+`SystemTTS` **ignora** la emoción con un debug log — `say.js` no expone parámetros emocionales y forzarlos vía pitch manual no compensa la complejidad.
+
+### Quirks importantes
+
+- **`ELEVENLABS_API_KEY` server-side**: vive solo en `process.env` del `core-host`. Sin ella, ElevenLabsTTS arranca con un `WARN` (no aborta) y todos los turnos caen al fallback.
+- **El bootstrap solo crea el AudioCache si `simulationSpeed !== 0`** — `simulationSpeed === 0` es la señal de "modo test" y mantiene el simulador legacy de `tts:audio-ended` para tests que no levantan red real.
+- **Sin auth en `GET /audio/`**: V1 local-only. CORS abierto (`Access-Control-Allow-Origin: *`). Cuando llegue multi-device público, habrá que firmar/limitar las URLs.
+- **WAV de SystemTTS son ~50-200 KB** para frases cortas — manejable en memoria sin streaming. Si el contenido crece, habrá que stream-pipe el archivo.
 
 ## STT: microservicio Whisper + push-to-talk
 
