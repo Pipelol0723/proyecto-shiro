@@ -211,9 +211,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     audioCache.start();
     transport.onRequest(createAudioRouteHandler(audioCache, logger));
   }
-  const serverOrigin = ttsRealEnabled
-    ? `http://localhost:${String(transport.port)}`
-    : undefined;
+  const serverOrigin = ttsRealEnabled ? `http://localhost:${String(transport.port)}` : undefined;
 
   // 6. System prompt pre-construido — se reusa turn a turn.
   const systemPrompt = buildSystemPrompt(options.character);
@@ -230,9 +228,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     logger,
     simulationSpeed: options.simulationSpeed,
     memoryReads,
-    ...(audioCache !== undefined && serverOrigin !== undefined
-      ? { audioCache, serverOrigin }
-      : {}),
+    ...(audioCache !== undefined && serverOrigin !== undefined ? { audioCache, serverOrigin } : {}),
   });
 
   child.info(
