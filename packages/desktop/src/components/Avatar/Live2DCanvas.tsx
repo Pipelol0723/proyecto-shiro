@@ -17,7 +17,15 @@
 
 import { useEffect, useRef } from 'react';
 import { Application, Ticker } from 'pixi.js';
-import { Live2DModel } from 'pixi-live2d-display';
+// `pixi-live2d-display-lipsyncpatch` es el fork mantenido activamente
+// que arregla bugs del original `pixi-live2d-display@0.5.0-beta` —
+// principalmente el crash `Cannot read properties of undefined (reading '0')`
+// en `CubismRenderer_WebGL.doDrawModel` con Cubism Core v5+ (SDK v5).
+// Misma API pública, drop-in. Importamos el bundle Cubism 4 únicamente:
+// el bundle por defecto carga también el plugin Cubism 2 que requiere
+// `live2d.min.js`, que no incluimos. Hiyori y los modelos modernos son
+// Cubism 4.
+import { Live2DModel } from 'pixi-live2d-display-lipsyncpatch/cubism4';
 import type { AvatarRuntimeConfig } from './config';
 import styles from './Avatar.module.css';
 
@@ -69,21 +77,38 @@ export function Live2DCanvas({ size, config, onLoadError }: Live2DCanvasProps): 
     void (async () => {
       try {
         const model = await Live2DModel.from(config.modelPath, {
-          autoInteract: false,
+          // `autoInteract` está deprecated en v0.5+ — la API moderna lo
+          // separa en `autoHitTest` (clicks/hit areas) y `autoFocus`
+          // (mirada que sigue al cursor). Ambos `false` por V1 — eye
+          // tracking y click interactions están deferred en ADR 0021.
+          autoHitTest: false,
+          autoFocus: false,
           autoUpdate: config.idleAnimation,
         });
         if (disposed) {
           model.destroy();
           return;
         }
-        // Ajusta el modelo para que quepa centrado en el canvas. Los
-        // modelos del Cubism SDK suelen venir con dimensiones nativas
-        // mayores que el canvas; calculamos el `scale` que lo hace
-        // caber sin recortes y lo centramos.
-        const scale = Math.min(size / model.width, size / model.height);
-        model.scale.set(scale);
-        model.x = (size - model.width * scale) / 2;
-        model.y = (size - model.height * scale) / 2;
+        // Ajusta el modelo para que quepa centrado en el canvas.
+        //
+        // Los modelos Live2D son verticales (Hiyori ~1100x2200) y el
+        // bounding box que reporta `model.width/height` incluye padding
+        // interno para animaciones (brazos extendidos, pelo, etc.).
+        // Usar `Math.min(width, height)` deja el cuerpo visible muy
+        // pequeño y descentrado.
+        //
+        // Patrón: anchor al centro del modelo, escala al alto del
+        // canvas con factor extra, posición central. El bounding box
+        // del modelo incluye ~30-40% de padding alrededor del cuerpo
+        // visible (espacio para manos extendidas, pelo agitándose,
+        // etc.) — sin el factor, el avatar se ve diminuto. 1.18 lo
+        // mantiene grande dentro del canvas de la pantalla principal,
+        // pero deja margen para que no se recorten pelo ni pies.
+        const FILL_FACTOR = 1.18;
+        model.anchor.set(0.5, 0.5);
+        model.scale.set((size / model.height) * FILL_FACTOR);
+        model.x = size / 2;
+        model.y = size / 2;
         app.stage.addChild(model);
       } catch (err) {
         if (disposed) return;

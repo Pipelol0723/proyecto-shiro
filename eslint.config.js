@@ -22,6 +22,11 @@ export default tseslint.config(
       // como módulo independiente (vía `?url` import de Vite). No participa
       // del proyecto TS, así que linting con type-info no aplica.
       'packages/desktop/src/audio/pcm-capture-processor.js',
+      // Assets propietarios de Live2D que cada dev baja manualmente —
+      // no son código del proyecto y rompen el linter con type-info.
+      // Ya en .gitignore; añadidos aquí para que ESLint los ignore
+      // localmente. Ver ADR 0021 y README sección "Avatar Live2D".
+      'packages/desktop/public/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,

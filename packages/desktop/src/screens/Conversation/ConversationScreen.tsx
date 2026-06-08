@@ -23,7 +23,7 @@
  * eventos `stt:*` se publican; falta el último wire.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
@@ -34,12 +34,40 @@ import { ChatPanel } from './ChatPanel';
 import styles from './ConversationScreen.module.css';
 
 const LOCAL_USER_ID = 'me';
+const DEFAULT_AVATAR_SIZE = 560;
+const MIN_AVATAR_SIZE = 360;
+const MAX_AVATAR_SIZE = 720;
+
+function clampAvatarSize(size: number): number {
+  return Math.min(MAX_AVATAR_SIZE, Math.max(MIN_AVATAR_SIZE, Math.floor(size)));
+}
 
 export function ConversationScreen(): JSX.Element {
   const bus = useBus();
   const [state] = useCompanionState();
   const [draft, setDraft] = useState('');
   const [chatOpen, setChatOpen] = useState(true);
+  const stageRef = useRef<HTMLElement | null>(null);
+  const [avatarSize, setAvatarSize] = useState(DEFAULT_AVATAR_SIZE);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null) return;
+
+    const updateAvatarSize = (): void => {
+      const { width, height } = stage.getBoundingClientRect();
+      const nextSize = clampAvatarSize(Math.min(width * 0.56, height - 260));
+      setAvatarSize((current) => (current === nextSize ? current : nextSize));
+    };
+
+    updateAvatarSize();
+    const resizeObserver = new ResizeObserver(updateAvatarSize);
+    resizeObserver.observe(stage);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Reproduce el audio TTS que el server emite por `tts:audio`. Mute
   // persistido en localStorage por cliente (ver ADR 0020) — el toggle
@@ -101,13 +129,13 @@ export function ConversationScreen(): JSX.Element {
 
   return (
     <div className={styles.screen}>
-      <section className={styles.stage}>
+      <section ref={stageRef} className={styles.stage}>
         <Avatar
           emotion={state.emotion}
           speaking={state.speaking}
           listening={state.listening}
           thinking={state.thinking}
-          size={300}
+          size={avatarSize}
         />
 
         <div className={styles.statusBar}>
