@@ -4,22 +4,16 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **TTS** ✅ completo. Cadena **ElevenLabs primary +
-> SystemTTS fallback** in-process en el `core-host` (sin microservicio
-> aparte — ElevenLabs es API REST trivial; UTAU/voz sintética se
-> reserva para microservicio post-5080). Audio generado server-side y
-> servido por HTTP efímero (`GET /audio/<id>.<ext>`, TTL 60s); el
-> cliente reproduce con `HTMLAudioElement` y emite `tts:audio-ended`.
-> Mapeo emoción → `stability` desde el bloque `emotions:` del character
-> YAML. Cancelable mid-speech (`tts:cancel` invalida el cache y para
-> el audio). Toggle mute por cliente persistido en `localStorage`
-> (preparación para multi-device, lógica de "cliente activo" diferida
-> a ADR futuro). (PRs #44-#48.) Hitos previos: **Setup**, **Core**,
-> **Cliente desktop**, **LLM**, **Memoria**, **STT**. Hito en curso:
-> **Avatar Live2D** 🟡 — render de Hiyori (`pixi-live2d-display-lipsyncpatch`
-> sobre PixiJS v7) con fallback automático al orbe, y **lip-sync** de la
-> boca con la voz del TTS, ya funcionando. Faltan las expresiones por
-> emoción (PR #4). Ver
+> **Estado**: hito **Avatar Live2D** ✅ completo. Render del modelo Hiyori
+> (`pixi-live2d-display-lipsyncpatch` sobre PixiJS v7, Cubism Core **4.2.2**;
+> el Core del SDK 5 crashea) dentro de `<Avatar>`, con **fallback automático
+> al orbe** si faltan los assets. **Lip-sync** de la boca con la voz del TTS
+> (Web Audio → `ParamMouthOpenY`) y **expresiones faciales por emoción**
+> (`llm:responded` → parámetros Cubism; seam listo para `model.expression()`
+> con un modelo que traiga `.exp3.json`). Idle off por default (sus motions
+> competían con el lip-sync). (PRs #51-#54 + expresiones.) Hitos previos:
+> **Setup**, **Core**, **Cliente desktop**, **LLM**, **Memoria**, **STT**,
+> **TTS**. Próximo hito: **Packaging Tauri**. Ver
 > [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
@@ -32,23 +26,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado         | Notas                                                                                                                                                                                       |
-| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Setup**           | ✅ completo    | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                                                            |
-| **Core**            | ✅ completo    | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                          |
-| **Cliente desktop** | ✅ completo    | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                              |
-| **LLM**             | ✅ completo    | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                                                |
-| **Memoria**         | ✅ completo    | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                                                     |
-| **STT**             | ✅ completo    | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.                                           |
-| **TTS**             | ✅ completo    | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                 |
-| **Avatar Live2D**   | 🟡 en progreso | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe + lip-sync con el audio del TTS ✅. Faltan expresiones por emoción. ADR 0021. |
-| **Packaging Tauri** | ⏸️ pendiente   | Envuelve el build de Vite en binario nativo                                                                                                                                                 |
-| **Post-MVP**        |                |                                                                                                                                                                                             |
-| Plugins             | ⏳ futuro      | Sistema de extensiones                                                                                                                                                                      |
-| Móvil               | ⏳ futuro      | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                  |
-| Avatar 3D (VRM)     | ⏳ futuro      | `@pixiv/three-vrm`                                                                                                                                                                          |
-| Arduino bridge      | ⏳ futuro      | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                                                               |
-| IoT bridge          | ⏳ futuro      | MQTT, Home Assistant                                                                                                                                                                        |
+| Hito                | Estado       | Notas                                                                                                                                                                                      |
+| ------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Setup**           | ✅ completo  | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                                                           |
+| **Core**            | ✅ completo  | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                         |
+| **Cliente desktop** | ✅ completo  | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                             |
+| **LLM**             | ✅ completo  | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                                               |
+| **Memoria**         | ✅ completo  | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                                                    |
+| **STT**             | ✅ completo  | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.                                          |
+| **TTS**             | ✅ completo  | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                |
+| **Avatar Live2D**   | ✅ completo  | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe, lip-sync con el audio del TTS y expresiones faciales por emoción. ADR 0021. |
+| **Packaging Tauri** | ⏸️ pendiente | Envuelve el build de Vite en binario nativo                                                                                                                                                |
+| **Post-MVP**        |              |                                                                                                                                                                                            |
+| Plugins             | ⏳ futuro    | Sistema de extensiones                                                                                                                                                                     |
+| Móvil               | ⏳ futuro    | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                 |
+| Avatar 3D (VRM)     | ⏳ futuro    | `@pixiv/three-vrm`                                                                                                                                                                         |
+| Arduino bridge      | ⏳ futuro    | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                                                              |
+| IoT bridge          | ⏳ futuro    | MQTT, Home Assistant                                                                                                                                                                       |
 
 ## Stack
 
@@ -302,6 +296,8 @@ El avatar visual usa **`pixi-live2d-display-lipsyncpatch`** (fork mantenido de `
 | `idle_expression` | `idle`                                     | Expresión por defecto. Para Hiyori se traduce a `default` via alias en el código.                                                  |
 
 **Lip-sync** (ADR 0021 §5): la boca (`ParamMouthOpenY`) se mueve analizando con Web Audio API el mismo `HTMLAudioElement` que reproduce el TTS — cero coste de red y sincronización exacta. En mute no hay lip-sync (boca cerrada).
+
+**Expresiones** (ADR 0021 §6): la cara refleja la emoción de la respuesta de Shiro (`llm:responded { emotion }`) interpolando parámetros faciales Cubism (`ParamMouthForm`, cejas, mejillas, ojos sonrientes). Hiyori no trae archivos `.exp3.json`, así que se usan parámetros directos; el seam para `model.expression()` queda listo en `expression-map.ts`. La _precisión_ de la emoción depende del LLM (Qwen 3b local clasifica mal; Claude o un modelo local mayor lo hacen mucho mejor) — el avatar refleja fielmente la emoción que recibe.
 
 **Disonancia visual del placeholder**: Hiyori es expresiva y cute; Shiro es kuudere y reservada. Esta disonancia es **deuda explícita** hasta que llegue el modelo definitivo. El mapeo provisional `emoción Shiro → expresión Hiyori` vive en `packages/core/src/modules/avatar/hiyori-expression-aliases.ts` y desaparece cuando el modelo definitivo tenga expresiones alineadas con el YAML del personaje (`idle`, `smirk`, `thinking`, `annoyed`, `soft`).
 
