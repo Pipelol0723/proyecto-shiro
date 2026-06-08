@@ -1,56 +1,73 @@
 /**
- * AvatarScreen — placeholder hasta que llegue Live2D.
+ * AvatarScreen — pantalla full-screen del avatar.
  *
- * Por ahora explica el orbe como avatar y deja un slot visible para el
- * upload de modelos .moc3 que se implementará en el hito Avatar Live2D.
+ * Tras el hito Avatar Live2D, esta pantalla pasa a ser un "view grande"
+ * del avatar: muestra el Live2D (o el Orbe como fallback) en tamaño
+ * cómodo + un panel de info al lado con el modelo activo y un placeholder
+ * para el selector de modelos futuro.
+ *
+ * El destino final de esta pantalla (¿selector de modelos?, ¿settings
+ * del avatar?, ¿se merge con ConversationScreen?) queda diferido para
+ * verlo en uso — ver ADR 0021 "Lo que el usuario quiere dejar fuera
+ * de V1".
  */
 
+import { Avatar } from '../../components/Avatar';
+import { useCompanionState } from '../../state/useCompanionState';
 import styles from './AvatarScreen.module.css';
 
 export function AvatarScreen(): JSX.Element {
+  const [state] = useCompanionState();
+
   return (
     <div className={styles.screen}>
-      <header className={styles.head}>
-        <h1 className={styles.title}>Avatar</h1>
-        <p className={styles.subtitle}>
-          Selector y configuración del avatar visual. Ahora mismo usamos un orbe SVG como
-          placeholder; Live2D llegará en su propio hito.
-        </p>
-      </header>
+      <section className={styles.stage}>
+        <Avatar
+          emotion={state.emotion}
+          speaking={state.speaking}
+          listening={state.listening}
+          thinking={state.thinking}
+          size={420}
+        />
+      </section>
 
-      <div className={styles.cards}>
+      <aside className={styles.sidebar}>
+        <header className={styles.head}>
+          <h1 className={styles.title}>Avatar</h1>
+          <p className={styles.subtitle}>
+            Vista ampliada del avatar. Live2D si está configurado, Orbe SVG como fallback
+            automático.
+          </p>
+        </header>
+
         <section className={`${styles.card} ${styles.cardActive}`}>
           <div className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>Orbe SVG</h2>
+            <h2 className={styles.cardTitle}>Live2D — Hiyori (placeholder)</h2>
             <span className={styles.badge}>activo</span>
           </div>
           <p className={styles.bodyText}>
-            Componente metaball animado reactivo a emoción y estado del companion. Sirve como avatar
-            funcional hasta que importes un modelo Live2D.
+            Modelo placeholder del Cubism SDK. Si los assets propietarios no están descargados, esta
+            vista cae automáticamente al Orbe.
           </p>
           <ul className={styles.checks}>
-            <li>Pulsa con la voz (speaking)</li>
-            <li>Cambia color según emoción</li>
-            <li>Partículas cuando piensa</li>
-            <li>Animación idle de respiración</li>
+            <li>Cambia expresión por emoción del LLM</li>
+            <li>Lip-sync con el audio del TTS (próximo PR)</li>
+            <li>Animación idle automática</li>
+            <li>Cap de 30 fps para hardware actual</li>
           </ul>
         </section>
 
         <section className={`${styles.card} ${styles.cardDisabled}`}>
           <div className={styles.cardHead}>
-            <h2 className={styles.cardTitle}>Live2D (próximamente)</h2>
+            <h2 className={styles.cardTitle}>Modelo definitivo</h2>
             <span className={styles.badge}>pendiente</span>
           </div>
-          <div className={styles.dropzone}>
-            <strong>Subir modelo</strong>
-            <span>.moc3 / .model3.json</span>
-          </div>
           <p className={styles.bodyText}>
-            En el hito Avatar Live2D habrá un selector con upload de modelos comprados o creados, y
-            parámetros de lip sync.
+            El modelo final de Shiro se elegirá tras probar el placeholder. El upload / swap de
+            modelos vendrá en su propio hito.
           </p>
         </section>
-      </div>
+      </aside>
     </div>
   );
 }
