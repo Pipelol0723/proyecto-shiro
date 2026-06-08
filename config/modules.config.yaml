@@ -142,8 +142,11 @@ modules:
       # Cap de fps. 30 para hardware actual (GTX 1650 compartida con
       # Ollama/Whisper/Letta). Subir a 60 con RTX 5080.
       max_fps: 30
-      # Animación idle automática del modelo (definida en model3.json).
-      idle_animation: true
+      # Animación idle (motions de cuerpo) del modelo. OFF por default:
+      # las motions idle de Hiyori tocan ParamMouthOpenY y compiten con el
+      # lip-sync. El modelo igual respira/parpadea. Súbelo a true si
+      # quieres las motions de cuerpo (ver ADR 0021 §5).
+      idle_animation: false
       # Expresión de descanso — el avatar la muestra al arrancar y
       # vuelve a ella tras tts:audio-ended. Se alinea con el YAML del
       # personaje; el alias de Hiyori la traduce a `default` en runtime.

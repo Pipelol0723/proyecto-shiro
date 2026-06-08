@@ -31,6 +31,7 @@ function wrap(bus: IEventBus<EventMap>) {
 
 interface FakeAudio {
   src: string;
+  crossOrigin: string | null;
   paused: boolean;
   _listeners: Map<string, (() => void)[]>;
   play: () => Promise<void>;
@@ -42,6 +43,7 @@ interface FakeAudio {
 function makeFakeAudio(): FakeAudio {
   const fake: FakeAudio = {
     src: '',
+    crossOrigin: null,
     paused: true,
     _listeners: new Map<string, (() => void)[]>(),
     play: () => {
@@ -286,6 +288,69 @@ describe('useTtsPlayback', () => {
     });
 
     expect(cancels).toHaveLength(0);
+  });
+
+  it('expone audioElement con crossOrigin anonymous y lo limpia al terminar', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const { result } = renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+
+    expect(result.current.audioElement).toBeNull();
+
+    await act(async () => {
+      await bus.emit('tts:audio', {
+        url: 'http://x/a.mp3',
+        audioId: 'a',
+        mimeType: 'audio/mpeg',
+        userId: 'me',
+      });
+    });
+
+    // Expuesto para el lip-sync, y con crossOrigin para que el análisis
+    // cross-origin no quede tainted (ADR 0021 §5 / ADR 0020 CORS).
+    expect(result.current.audioElement).toBe(audio as unknown as HTMLAudioElement);
+    expect(audio.crossOrigin).toBe('anonymous');
+
+    act(() => {
+      audio.trigger('ended');
+    });
+
+    await waitFor(() => {
+      expect(result.current.audioElement).toBeNull();
+    });
+  });
+
+  it('muted=true no expone audioElement (lip-sync inactivo)', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const { result } = renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: true,
+        }),
+      { wrapper: wrap(bus) },
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', {
+        url: 'http://x/a.mp3',
+        audioId: 'a',
+        mimeType: 'audio/mpeg',
+        userId: 'me',
+      });
+    });
+
+    expect(result.current.audioElement).toBeNull();
   });
 
   it('setMuted persiste en localStorage', () => {

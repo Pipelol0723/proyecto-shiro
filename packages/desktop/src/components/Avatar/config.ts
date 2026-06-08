@@ -33,5 +33,9 @@ export const AVATAR_CONFIG: AvatarRuntimeConfig = {
   modelPath: '/live2d/models/Hiyori/Hiyori.model3.json',
   cubismCoreUrl: '/live2d/Core/live2dcubismcore.js',
   maxFps: 30,
-  idleAnimation: true,
+  // Idle OFF por default: las motions idle de Hiyori tocan el parámetro
+  // de boca y compiten con el lip-sync (la boca parece desincronizada).
+  // El modelo igual respira y parpadea. Ponlo en `true` (y en el YAML)
+  // si quieres las motions de cuerpo de vuelta. Ver ADR 0021 §5.
+  idleAnimation: false,
 };

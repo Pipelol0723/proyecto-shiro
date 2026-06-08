@@ -46,7 +46,8 @@ describe('Live2DAvatarConfigSchema', () => {
     expect(cfg.model_path).toBe('/live2d/models/Hiyori/Hiyori.model3.json');
     expect(cfg.cubism_core_url).toBe('/live2d/Core/live2dcubismcore.js');
     expect(cfg.max_fps).toBe(30);
-    expect(cfg.idle_animation).toBe(true);
+    // Idle OFF por default: las motions idle compiten con el lip-sync.
+    expect(cfg.idle_animation).toBe(false);
     expect(cfg.idle_expression).toBe('idle');
   });
 
