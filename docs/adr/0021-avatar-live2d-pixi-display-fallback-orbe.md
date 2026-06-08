@@ -240,6 +240,22 @@ Cada PR es enviable y verificable de forma independiente:
 4. **Expresiones** — hook `useAvatarExpression`, mapeo Hiyori desde character YAML.
 5. **Docs cierre** — README + architecture + CLAUDE + plan reflejan Avatar Live2D ✅, próximo Packaging Tauri.
 
+## Actualización (2026-06-08) — implementación real
+
+Durante la implementación (PRs #51-#53 y el del lip-sync) la realidad divergió de la decisión original en tres puntos. Se documentan aquí en vez de reescribir el cuerpo del ADR (que captura el pensamiento del momento).
+
+### 1. Librería: `pixi-live2d-display-lipsyncpatch`, no `pixi-live2d-display`
+
+La decisión nombró `pixi-live2d-display` (guansss) sobre **PixiJS v8**. En la práctica esa librería **no soporta PixiJS v8 ni el Cubism Core nuevo**: el render crashea con `Cannot read properties of undefined (reading '0')` en `CubismRenderer_WebGL.doDrawModel`. Se adoptó el fork **`pixi-live2d-display-lipsyncpatch@0.5.0-ls-8`** sobre **PixiJS v7**, que parchea ese bug y trae soporte de lip-sync. El wiring del avatar (emoción + audio) no cambia; solo el renderer interno y la API de Pixi (`app.view` v7).
+
+### 2. Cubism Core: versión 4.2.2 (SDK 4), NO la del SDK 5
+
+El Cubism Core es propietario y cada dev lo descarga manualmente. El Core que trae el **SDK for Web 5** reporta versión **6.0.1** y **crashea** el renderer del fork. El que funciona es el del **SDK for Web 4** (Core **4.2.2**). Como el Core está gitignored, dos devs con SDKs distintos obtienen resultados distintos ("me funciona en mi máquina"). **El README fija la versión 4.2.2 como requisito.** Migrar a un stack que soporte Core 6 (p.ej. `@naari3/pixi-live2d-display` sobre Pixi v8) queda como posible ADR futuro.
+
+### 3. Lip-sync (§5): implementado, e idle OFF por default
+
+El lip-sync se implementó como describe la §5: hook `useLipSync` que conecta el `HTMLAudioElement` del TTS (`useTtsPlayback` lo expone con `crossOrigin="anonymous"` para que el análisis cross-origin no quede tainted) a un `AnalyserNode`, y mapea la amplitud RMS del espectro a `ParamMouthOpenY` cada frame. Hallazgo: **las motions idle de Hiyori tocan `ParamMouthOpenY`** y compiten con el lip-sync (la boca parece desincronizada). Por eso `idle_animation` pasa a **`false` por default** (el modelo igual respira y parpadea, managers aparte) y `autoUpdate` es siempre `true` (necesario para que el parámetro se aplique al mesh; la idle se apaga vía `idleMotionGroup`). Eye tracking, touch y expresiones por emoción (PR #4) siguen pendientes.
+
 ## Referencias
 
 - [ADR 0009](0009-orbe-placeholder-avatar.md) — Orbe placeholder. Este ADR supersede su rol primario pero mantiene el Orbe como fallback.

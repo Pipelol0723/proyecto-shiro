@@ -136,6 +136,7 @@ export function ConversationScreen(): JSX.Element {
           listening={state.listening}
           thinking={state.thinking}
           size={avatarSize}
+          audioElement={ttsPlayback.audioElement}
         />
 
         <div className={styles.statusBar}>

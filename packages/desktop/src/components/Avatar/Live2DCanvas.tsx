@@ -10,12 +10,12 @@
  *
  * Cap de fps: `app.ticker.maxFPS = config.maxFps` (default 30, ADR 0021 §4).
  *
- * **No expone refs al modelo** todavía. La interacción real
- * (`setExpression`, lip-sync, etc.) llega en los próximos PRs del
- * hito; este PR solo monta y renderiza.
+ * **Lip-sync** (ADR 0021 §5): recibe el `<audio>` del TTS por props y,
+ * vía `useLipSync`, mapea su amplitud al parámetro `ParamMouthOpenY` del
+ * modelo cada frame. Las expresiones por emoción llegan en el PR #4.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Application, Ticker } from 'pixi.js';
 // `pixi-live2d-display-lipsyncpatch` es el fork mantenido activamente
 // que arregla bugs del original `pixi-live2d-display@0.5.0-beta` —
@@ -26,6 +26,7 @@ import { Application, Ticker } from 'pixi.js';
 // `live2d.min.js`, que no incluimos. Hiyori y los modelos modernos son
 // Cubism 4.
 import { Live2DModel } from 'pixi-live2d-display-lipsyncpatch/cubism4';
+import { useLipSync } from './useLipSync';
 import type { AvatarRuntimeConfig } from './config';
 import styles from './Avatar.module.css';
 
@@ -35,11 +36,31 @@ import styles from './Avatar.module.css';
 // la propia lib hace dedupe interno.
 Live2DModel.registerTicker(Ticker);
 
+/**
+ * Acceso mínimo al parámetro de boca del modelo Cubism. Estructural a
+ * propósito: desacopla el lip-sync de los tipos profundos de la lib.
+ */
+interface MouthControllable {
+  internalModel: {
+    coreModel: {
+      setParameterValueById: (id: string, value: number) => void;
+    };
+  };
+}
+
+/** Parámetro estándar de apertura de boca en modelos Cubism. */
+const PARAM_MOUTH_OPEN_Y = 'ParamMouthOpenY';
+
 export interface Live2DCanvasProps {
   /** Tamaño cuadrado del canvas en px. */
   size: number;
   /** Config runtime (modelPath, maxFps, idleAnimation). */
   config: AvatarRuntimeConfig;
+  /**
+   * El `<audio>` del TTS para el lip-sync (ADR 0021 §5). `null` si no
+   * suena nada o el cliente está muteado → la boca queda cerrada.
+   */
+  audioElement?: HTMLAudioElement | null;
   /**
    * Notificado si la carga del modelo dentro de PIXI falla (típico:
    * texturas 404, formato del .moc3 incompatible). El caller debe
@@ -48,10 +69,30 @@ export interface Live2DCanvasProps {
   onLoadError?: (err: unknown) => void;
 }
 
-export function Live2DCanvas({ size, config, onLoadError }: Live2DCanvasProps): JSX.Element {
+export function Live2DCanvas({
+  size,
+  config,
+  audioElement = null,
+  onLoadError,
+}: Live2DCanvasProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   // Guardamos refs a la app y al modelo para limpiar en el unmount.
   const appRef = useRef<Application | null>(null);
+  // Ref al modelo cargado para que el lip-sync escriba sin recrear el
+  // canvas. `null` mientras el modelo no esté listo.
+  const modelRef = useRef<MouthControllable | null>(null);
+
+  // Escribe la apertura de boca en el modelo (no-op si aún no cargó).
+  // Estable (useCallback []) — es dependencia de useLipSync.
+  const setMouthOpen = useCallback((value: number): void => {
+    const model = modelRef.current;
+    if (model === null) return;
+    try {
+      model.internalModel.coreModel.setParameterValueById(PARAM_MOUTH_OPEN_Y, value);
+    } catch {
+      // Modelo sin ese parámetro (otro modelo): ignoramos en silencio.
+    }
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -83,7 +124,16 @@ export function Live2DCanvas({ size, config, onLoadError }: Live2DCanvasProps): 
           // tracking y click interactions están deferred en ADR 0021.
           autoHitTest: false,
           autoFocus: false,
-          autoUpdate: config.idleAnimation,
+          // `autoUpdate` SIEMPRE true: el modelo debe seguir
+          // actualizándose cada frame para que el lip-sync se aplique al
+          // mesh (el `coreModel.update` que hornea ParamMouthOpenY vive en
+          // ese loop). Las animaciones idle se controlan por separado.
+          autoUpdate: true,
+          // Control de la animación idle: cuando está apagada apuntamos el
+          // grupo idle a uno inexistente, así el modelo respira y parpadea
+          // (managers aparte) pero NO reproduce las motions de cuerpo, que
+          // tocan el parámetro de boca y enturbian la lectura del lip-sync.
+          idleMotionGroup: config.idleAnimation ? undefined : '__shiro_no_idle__',
         });
         if (disposed) {
           model.destroy();
@@ -110,6 +160,10 @@ export function Live2DCanvas({ size, config, onLoadError }: Live2DCanvasProps): 
         model.x = size / 2;
         model.y = size / 2;
         app.stage.addChild(model);
+        // Expone el modelo al lip-sync. Cast estructural: la lib tipa
+        // `internalModel.coreModel.setParameterValueById`, pero lo
+        // aislamos vía `MouthControllable` para no acoplarnos a su d.ts.
+        modelRef.current = model as unknown as MouthControllable;
       } catch (err) {
         if (disposed) return;
         if (onLoadError !== undefined) onLoadError(err);
@@ -127,10 +181,15 @@ export function Live2DCanvas({ size, config, onLoadError }: Live2DCanvasProps): 
         // ignored
       }
       appRef.current = null;
+      modelRef.current = null;
     };
     // Re-mount completo si cambia el modelPath o el tamaño — caso raro,
     // pero el efecto secundario (canvas recreado) es lo correcto.
   }, [size, config.modelPath, config.maxFps, config.idleAnimation, onLoadError]);
+
+  // Lip-sync: mapea la amplitud del audio del TTS a la boca del modelo.
+  // `audioElement` null (sin audio / muteado) → boca cerrada.
+  useLipSync({ audioElement, setMouthOpen });
 
   return (
     <div

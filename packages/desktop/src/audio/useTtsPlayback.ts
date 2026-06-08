@@ -45,6 +45,15 @@ export interface UseTtsPlaybackResult {
    * "interrumpir a Shiro" al iniciar un nuevo turno de voz/texto.
    */
   cancel: () => void;
+  /**
+   * El `HTMLAudioElement` que está reproduciendo el turno actual, o
+   * `null` si no hay audio sonando (o el cliente está muteado). El
+   * avatar lo usa para el lip-sync: lo conecta a un `AnalyserNode` y
+   * mapea la amplitud a `ParamMouthOpenY` (ADR 0021 §5). Es `null`
+   * cuando `muted` porque entonces no se crea elemento — la boca queda
+   * cerrada, que es el comportamiento esperado.
+   */
+  audioElement: HTMLAudioElement | null;
 }
 
 function readStoredMute(): boolean {
@@ -68,6 +77,10 @@ function writeStoredMute(value: boolean): void {
 export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackResult {
   const { bus, audioFactory } = options;
   const [muted, setMutedState] = useState<boolean>(() => options.muted ?? readStoredMute());
+  // Elemento que suena ahora — expuesto para el lip-sync del avatar.
+  // State (no ref) a propósito: el avatar es un consumidor React que
+  // necesita re-renderizar cuando aparece/desaparece el audio.
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   // Override externo prevalece sobre localStorage si se pasa.
   useEffect(() => {
@@ -85,6 +98,12 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
   const currentUserIdRef = useRef<string | null>(null);
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
+  // `audioFactory` en ref: la suscripción del effect NO debe recrearse
+  // cuando el caller pasa un factory inline (identidad nueva cada render).
+  // Sin esto, exponer `audioElement` —que provoca re-render— tumbaría y
+  // re-suscribiría el audio en curso (su cleanup haría `audio.src=''`).
+  const audioFactoryRef = useRef(audioFactory);
+  audioFactoryRef.current = audioFactory;
 
   const stopCurrent = useCallback(() => {
     const audio = audioRef.current;
@@ -98,6 +117,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
     }
     audioRef.current = null;
     currentAudioIdRef.current = null;
+    setAudioElement(null);
   }, []);
 
   useEffect(() => {
@@ -118,14 +138,24 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
         return;
       }
 
-      const audio = audioFactory ? audioFactory() : new Audio();
+      const factory = audioFactoryRef.current;
+      const audio = factory ? factory() : new Audio();
       audioRef.current = audio;
+      // CORS: el audio se sirve desde el core-host (otro origen/puerto)
+      // con `Access-Control-Allow-Origin: *` (ADR 0020). Sin
+      // `crossOrigin='anonymous'` el `MediaElementAudioSourceNode` del
+      // lip-sync queda "tainted" y el AnalyserNode devuelve solo ceros
+      // → la boca no se movería. Debe fijarse ANTES de asignar `src`.
+      audio.crossOrigin = 'anonymous';
       audio.src = payload.url;
+      // Expone el elemento para que el avatar arranque el lip-sync.
+      setAudioElement(audio);
 
       const finish = (): void => {
         if (audioRef.current === audio) {
           audioRef.current = null;
           currentAudioIdRef.current = null;
+          setAudioElement(null);
         }
         void bus.emit('tts:audio-ended', {
           userId: payload.userId,
@@ -163,7 +193,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
       unsubCancel();
       stopCurrent();
     };
-  }, [bus, audioFactory, stopCurrent]);
+  }, [bus, stopCurrent]);
 
   const cancel = useCallback(() => {
     const audioId = currentAudioIdRef.current;
@@ -172,5 +202,5 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
     void bus.emit('tts:cancel', { audioId, userId });
   }, [bus]);
 
-  return { muted, setMuted, cancel };
+  return { muted, setMuted, cancel, audioElement };
 }

@@ -72,11 +72,14 @@ export const Live2DAvatarConfigSchema = z.object({
    */
   max_fps: z.number().int().positive().default(30),
   /**
-   * Si `true`, el cliente reproduce la animación idle automática del
-   * modelo (definida en el `.model3.json`). Default true. Apagarlo
-   * sirve para tests visuales y para perfiles de muy bajo consumo.
+   * Si `true`, el cliente reproduce las motions idle (animación de
+   * cuerpo) del modelo. Default **false**: las motions idle de Hiyori
+   * tocan `ParamMouthOpenY` y compiten con el lip-sync, haciendo que la
+   * boca parezca desincronizada. El modelo igual respira y parpadea
+   * (managers aparte). Súbelo a `true` para recuperar las motions de
+   * cuerpo. Ver ADR 0021 §5.
    */
-  idle_animation: z.boolean().default(true),
+  idle_animation: z.boolean().default(false),
   /**
    * Nombre de la expresión "idle" — la que el avatar muestra al arrancar
    * y a la que vuelve tras `stop()`. Default `idle` para alinearse con

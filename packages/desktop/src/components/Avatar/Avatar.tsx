@@ -45,6 +45,7 @@ type Live2DStatus = 'pending' | 'available' | 'unavailable';
 interface Live2DCanvasComponentProps {
   size: number;
   config: AvatarRuntimeConfig;
+  audioElement?: HTMLAudioElement | null;
   onLoadError?: (err: unknown) => void;
 }
 
@@ -67,6 +68,7 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
     thinking = false,
     size = 280,
     config = AVATAR_CONFIG,
+    audioElement = null,
   } = props;
 
   const [status, setStatus] = useState<Live2DStatus>('pending');
@@ -122,7 +124,12 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
   if (status === 'available' && Live2DCanvas !== null) {
     return (
       <div className={styles.avatarWrap} data-emotion={emotion} data-render="live2d">
-        <Live2DCanvas size={size} config={config} onLoadError={handleCanvasLoadError} />
+        <Live2DCanvas
+          size={size}
+          config={config}
+          audioElement={audioElement}
+          onLoadError={handleCanvasLoadError}
+        />
       </div>
     );
   }
