@@ -33,6 +33,7 @@
  */
 
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
+import type { Emotion } from '@proyecto-shiro/core';
 import { Orb } from '../Orb';
 import { ensureCubismCore } from './cubism-core';
 import { isModelReachable } from './model-loader';
@@ -46,6 +47,7 @@ interface Live2DCanvasComponentProps {
   size: number;
   config: AvatarRuntimeConfig;
   audioElement?: HTMLAudioElement | null;
+  emotion?: Emotion;
   onLoadError?: (err: unknown) => void;
 }
 
@@ -128,6 +130,7 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
           size={size}
           config={config}
           audioElement={audioElement}
+          emotion={emotion}
           onLoadError={handleCanvasLoadError}
         />
       </div>

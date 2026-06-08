@@ -27,6 +27,8 @@ import { Application, Ticker } from 'pixi.js';
 // Cubism 4.
 import { Live2DModel } from 'pixi-live2d-display-lipsyncpatch/cubism4';
 import { useLipSync } from './useLipSync';
+import { useAvatarExpression } from './useAvatarExpression';
+import type { Emotion } from '@proyecto-shiro/core';
 import type { AvatarRuntimeConfig } from './config';
 import styles from './Avatar.module.css';
 
@@ -61,6 +63,8 @@ export interface Live2DCanvasProps {
    * suena nada o el cliente está muteado → la boca queda cerrada.
    */
   audioElement?: HTMLAudioElement | null;
+  /** Emoción actual de Shiro, para la expresión facial (ADR 0021 §6). */
+  emotion?: Emotion;
   /**
    * Notificado si la carga del modelo dentro de PIXI falla (típico:
    * texturas 404, formato del .moc3 incompatible). El caller debe
@@ -73,6 +77,7 @@ export function Live2DCanvas({
   size,
   config,
   audioElement = null,
+  emotion = 'neutral',
   onLoadError,
 }: Live2DCanvasProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -82,17 +87,25 @@ export function Live2DCanvas({
   // canvas. `null` mientras el modelo no esté listo.
   const modelRef = useRef<MouthControllable | null>(null);
 
-  // Escribe la apertura de boca en el modelo (no-op si aún no cargó).
-  // Estable (useCallback []) — es dependencia de useLipSync.
-  const setMouthOpen = useCallback((value: number): void => {
+  // Escribe un parámetro arbitrario del modelo (no-op si aún no cargó).
+  // Estable (useCallback []) — base del lip-sync y de las expresiones.
+  const setParam = useCallback((id: string, value: number): void => {
     const model = modelRef.current;
     if (model === null) return;
     try {
-      model.internalModel.coreModel.setParameterValueById(PARAM_MOUTH_OPEN_Y, value);
+      model.internalModel.coreModel.setParameterValueById(id, value);
     } catch {
       // Modelo sin ese parámetro (otro modelo): ignoramos en silencio.
     }
   }, []);
+
+  // Apertura de boca para el lip-sync (estable para useLipSync).
+  const setMouthOpen = useCallback(
+    (value: number): void => {
+      setParam(PARAM_MOUTH_OPEN_Y, value);
+    },
+    [setParam],
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -190,6 +203,11 @@ export function Live2DCanvas({
   // Lip-sync: mapea la amplitud del audio del TTS a la boca del modelo.
   // `audioElement` null (sin audio / muteado) → boca cerrada.
   useLipSync({ audioElement, setMouthOpen });
+
+  // Expresión facial: interpola los parámetros del modelo hacia la
+  // emoción actual de Shiro. Seam para `model.expression()` cuando llegue
+  // un modelo con `.exp3.json` (ver `expression-map.ts`).
+  useAvatarExpression({ emotion, setParam });
 
   return (
     <div
