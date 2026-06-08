@@ -254,7 +254,13 @@ El Cubism Core es propietario y cada dev lo descarga manualmente. El Core que tr
 
 ### 3. Lip-sync (§5): implementado, e idle OFF por default
 
-El lip-sync se implementó como describe la §5: hook `useLipSync` que conecta el `HTMLAudioElement` del TTS (`useTtsPlayback` lo expone con `crossOrigin="anonymous"` para que el análisis cross-origin no quede tainted) a un `AnalyserNode`, y mapea la amplitud RMS del espectro a `ParamMouthOpenY` cada frame. Hallazgo: **las motions idle de Hiyori tocan `ParamMouthOpenY`** y compiten con el lip-sync (la boca parece desincronizada). Por eso `idle_animation` pasa a **`false` por default** (el modelo igual respira y parpadea, managers aparte) y `autoUpdate` es siempre `true` (necesario para que el parámetro se aplique al mesh; la idle se apaga vía `idleMotionGroup`). Eye tracking, touch y expresiones por emoción (PR #4) siguen pendientes.
+El lip-sync se implementó como describe la §5: hook `useLipSync` que conecta el `HTMLAudioElement` del TTS (`useTtsPlayback` lo expone con `crossOrigin="anonymous"` para que el análisis cross-origin no quede tainted) a un `AnalyserNode`, y mapea la amplitud RMS del espectro a `ParamMouthOpenY` cada frame. Hallazgo: **las motions idle de Hiyori tocan `ParamMouthOpenY`** y compiten con el lip-sync (la boca parece desincronizada). Por eso `idle_animation` pasa a **`false` por default** (el modelo igual respira y parpadea, managers aparte) y `autoUpdate` es siempre `true` (necesario para que el parámetro se aplique al mesh; la idle se apaga vía `idleMotionGroup`).
+
+### 4. Expresiones por emoción: por parámetros, no `.exp3.json`
+
+El Hiyori del SDK **no trae archivos de expresión** (`.exp3.json`), así que la §6 se implementó seteando **parámetros faciales Cubism** (`ParamMouthForm`, `ParamEyeLSmile/RSmile`, cejas, `ParamCheek`) interpolados cada frame hacia la emoción de `llm:responded` (`useAvatarExpression` + `expression-map.ts`, mismo patrón desacoplado que el lip-sync). Se deja `EMOTION_EXPRESSION_NAME` y un seam documentado para cambiar a `model.expression(nombre)` cuando llegue un modelo con `.exp3.json`. La **precisión** de la emoción depende del LLM (Qwen 3b local clasifica mal; Claude o un modelo mayor mucho mejor) — el avatar refleja fielmente la que recibe.
+
+Con esto el hito **Avatar Live2D queda completo** (render + fallback + lip-sync + expresiones). Eye tracking, touch/click y overlay always-on-top siguen diferidos (deferreds del §9), igual que el modelo definitivo de Shiro.
 
 ## Referencias
 

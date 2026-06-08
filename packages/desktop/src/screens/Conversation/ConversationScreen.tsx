@@ -147,6 +147,9 @@ export function ConversationScreen(): JSX.Element {
             </span>
           )}
           {state.speaking && <span className={styles.status}>Hablando…</span>}
+          <span className={styles.status} title="Emoción de la última respuesta de Shiro">
+            🎭 {state.emotion}
+          </span>
           <button
             type="button"
             className={styles.muteToggle}

@@ -3,14 +3,15 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-06-08 — hitos **Setup**, **Core**,
-> **Cliente desktop**, **LLM**, **Memoria**, **STT** y **TTS**
-> completos. Hito en curso: **Avatar Live2D** 🟡 — render de Hiyori
-> (`pixi-live2d-display-lipsyncpatch`, PixiJS v7, Cubism Core **4.2.2**;
-> el Core del SDK 5 crashea el renderer) dentro de `<Avatar>`, con
-> fallback automático al orbe, y **lip-sync** de la boca con la voz del
-> TTS (Web Audio → `ParamMouthOpenY`). Idle off por default (sus motions
-> compiten con el lip-sync). Faltan expresiones por emoción (PR #4). Ver
+> **Última actualización**: 2026-06-08 — hito **Avatar Live2D** ✅
+> completo (sobre Setup, Core, Cliente desktop, LLM, Memoria, STT, TTS).
+> Render de Hiyori (`pixi-live2d-display-lipsyncpatch`, PixiJS v7, Cubism
+> Core **4.2.2**; el Core del SDK 5 crashea el renderer) dentro de
+> `<Avatar>`, con fallback automático al orbe, **lip-sync** de la boca con
+> la voz del TTS (Web Audio → `ParamMouthOpenY`) y **expresiones faciales
+> por emoción** (parámetros Cubism; seam listo para `model.expression()`).
+> Idle off por default (sus motions competían con el lip-sync). Próximo:
+> **Packaging Tauri**. Ver
 > [ADR 0021](adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
 
 ## Visión a vista de pájaro
@@ -378,7 +379,7 @@ graph LR
 - **Fallback automático al orbe**: `<Avatar>` verifica que el modelo es alcanzable (HEAD) y que el Cubism Core cargó; si algo falla, importa nada de PixiJS y renderiza el `<Orb>`. El import de `Live2DCanvas` es **diferido** (dynamic import) para que el bundle de pixi-live2d-display —que lanza a top-level si el Core no está— no tumbe a quien no tenga los assets.
 - **Lip-sync** (ADR 0021 §5): `useTtsPlayback` expone el `HTMLAudioElement` (con `crossOrigin="anonymous"`); `useLipSync` lo conecta a un `AnalyserNode` y mapea la amplitud RMS a `ParamMouthOpenY` cada frame vía un callback `setMouthOpen` que `Live2DCanvas` implementa sobre el modelo. Cero coste de red, sincronización exacta. En mute no hay análisis (boca cerrada).
 - **Idle off por default**: las motions idle de Hiyori tocan `ParamMouthOpenY` y compiten con el lip-sync. `autoUpdate` es siempre `true` (para aplicar el parámetro al mesh) y la idle se desactiva apuntando `idleMotionGroup` a un grupo inexistente. El modelo igual respira y parpadea.
-- **Pendiente (PR #4)**: expresiones por emoción (`llm:responded` → `model.expression()`).
+- **Expresiones por emoción** ✅: la cara interpola parámetros faciales Cubism (`ParamMouthForm`, cejas, mejillas, ojos sonrientes) hacia la emoción de `llm:responded` (`useAvatarExpression` + `expression-map.ts`). Hiyori no trae `.exp3.json`, así que se usan parámetros directos; el seam para `model.expression()` con un modelo que sí los traiga queda listo. La _precisión_ de la emoción la pone el LLM (Qwen 3b clasifica mal; Claude/un modelo mayor mejor) — el avatar refleja fielmente la que recibe.
 
 ## STT: microservicio Whisper + push-to-talk
 
