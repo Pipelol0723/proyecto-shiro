@@ -3,15 +3,23 @@
  *
  * Lógica de decisión (ADR 0021 §3):
  *
- *   ¿Cubism Core JS cargado en `window`?
  *   ¿`<modelPath>` responde a HEAD con 200?
- *      sí → <Live2DCanvas>
+ *   ¿Cubism Core JS cargado en `window`?
+ *      sí → import('./Live2DCanvas') dinámico, monta
  *      no/error → <Orb>
  *
  * El fallback es **automático** y silencioso: si la detección falla, el
  * Orbe (ADR 0009) se renderiza como antes, con las mismas props. El
  * companion sigue 100% funcional aunque el dev no haya descargado el SDK
  * + modelo todavía.
+ *
+ * **Por qué dynamic import del Live2DCanvas**: `pixi-live2d-display`
+ * tira un error a top-level del módulo cuando `window.Live2DCubismCore`
+ * no está definido al *importar* (no al instanciar). Si el import fuese
+ * estático, el bundle del Avatar entero rompe en clientes sin el SDK,
+ * tumbando el fallback al Orbe. Importando el canvas DESPUÉS de
+ * verificar Cubism Core, garantizamos que pixi-live2d-display solo
+ * se evalúa cuando es seguro.
  *
  * **Estado inicial = Orbe**. Mientras la detección está en curso
  * (`pending`), mostramos el Orbe — así no hay flash visual. Si la
@@ -24,9 +32,8 @@
  * fallback inicial.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { Orb } from '../Orb';
-import { Live2DCanvas } from './Live2DCanvas';
 import { ensureCubismCore } from './cubism-core';
 import { isModelReachable } from './model-loader';
 import { AVATAR_CONFIG, type AvatarRuntimeConfig } from './config';
@@ -34,6 +41,14 @@ import type { AvatarProps } from './types';
 import styles from './Avatar.module.css';
 
 type Live2DStatus = 'pending' | 'available' | 'unavailable';
+
+interface Live2DCanvasComponentProps {
+  size: number;
+  config: AvatarRuntimeConfig;
+  onLoadError?: (err: unknown) => void;
+}
+
+type Live2DCanvasComponent = ComponentType<Live2DCanvasComponentProps>;
 
 export interface AvatarComponentProps extends AvatarProps {
   /**
@@ -55,6 +70,7 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
   } = props;
 
   const [status, setStatus] = useState<Live2DStatus>('pending');
+  const [Live2DCanvas, setLive2DCanvas] = useState<Live2DCanvasComponent | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +88,25 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
       //    sola vez (cache interno).
       const coreLoaded = await ensureCubismCore(config.cubismCoreUrl);
       if (cancelled) return;
-      setStatus(coreLoaded ? 'available' : 'unavailable');
+      if (!coreLoaded) {
+        setStatus('unavailable');
+        return;
+      }
+      // 3. Solo AHORA importamos el canvas (que a su vez evalúa
+      //    pixi-live2d-display). Si el import falla por cualquier
+      //    motivo (bug de la lib, conflicto de versiones), capturamos
+      //    y caemos al Orbe.
+      try {
+        const mod = (await import('./Live2DCanvas')) as {
+          Live2DCanvas: Live2DCanvasComponent;
+        };
+        if (cancelled) return;
+        setLive2DCanvas(() => mod.Live2DCanvas);
+        setStatus('available');
+      } catch {
+        if (cancelled) return;
+        setStatus('unavailable');
+      }
     })();
     return () => {
       cancelled = true;
@@ -81,11 +115,11 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
 
   // Tras un load-error a posteriori del canvas, lo tratamos como
   // unavailable y caemos al Orbe.
-  function handleCanvasLoadError(): void {
+  const handleCanvasLoadError = useCallback((): void => {
     setStatus('unavailable');
-  }
+  }, []);
 
-  if (status === 'available') {
+  if (status === 'available' && Live2DCanvas !== null) {
     return (
       <div className={styles.avatarWrap} data-emotion={emotion} data-render="live2d">
         <Live2DCanvas size={size} config={config} onLoadError={handleCanvasLoadError} />
