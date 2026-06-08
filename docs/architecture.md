@@ -3,15 +3,15 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-06-03 — hitos **Setup**, **Core**,
+> **Última actualización**: 2026-06-08 — hitos **Setup**, **Core**,
 > **Cliente desktop**, **LLM**, **Memoria**, **STT** y **TTS**
-> completos. TTS añade cadena `ElevenLabsTTS → SystemTTS` in-process
-> en el `core-host`, audio servido por HTTP efímero (`GET /audio/<id>.<ext>`
-> con TTL 60s), reproducción en el cliente con `HTMLAudioElement`,
-> cancelable mid-speech vía `tts:cancel`, mapeo emoción → `stability`
-> desde el character YAML. Ver
-> [ADR 0020](adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
-> Próximo: **Avatar Live2D** (en planificación).
+> completos. Hito en curso: **Avatar Live2D** 🟡 — render de Hiyori
+> (`pixi-live2d-display-lipsyncpatch`, PixiJS v7, Cubism Core **4.2.2**;
+> el Core del SDK 5 crashea el renderer) dentro de `<Avatar>`, con
+> fallback automático al orbe, y **lip-sync** de la boca con la voz del
+> TTS (Web Audio → `ParamMouthOpenY`). Idle off por default (sus motions
+> compiten con el lip-sync). Faltan expresiones por emoción (PR #4). Ver
+> [ADR 0021](adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
 
 ## Visión a vista de pájaro
 
@@ -98,7 +98,7 @@ graph LR
             TTS["tts/<br>ElevenLabs (primary) ✅<br>SystemTTS (fallback) ✅"]
             LLM[llm/<br>Ollama / Anthropic ✅]
             Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL ✅]
-            Av[avatar/<br>Live2D / VRM ⏸️]
+            Av["avatar/<br>Live2DAvatar ✅ (server)<br>render + lip-sync en cliente ✅<br>VRM ⏸️"]
             Rou[router/<br>HybridRouter ✅]
         end
 
@@ -344,6 +344,41 @@ graph LR
 - **El bootstrap solo crea el AudioCache si `simulationSpeed !== 0`** — `simulationSpeed === 0` es la señal de "modo test" y mantiene el simulador legacy de `tts:audio-ended` para tests que no levantan red real.
 - **Sin auth en `GET /audio/`**: V1 local-only. CORS abierto (`Access-Control-Allow-Origin: *`). Cuando llegue multi-device público, habrá que firmar/limitar las URLs.
 - **WAV de SystemTTS son ~50-200 KB** para frases cortas — manejable en memoria sin streaming. Si el contenido crece, habrá que stream-pipe el archivo.
+
+## Avatar Live2D: render en cliente + lip-sync
+
+El avatar (ver [ADR 0021](adr/0021-avatar-live2d-pixi-display-fallback-orbe.md)) reparte responsabilidades igual que el resto: la **lógica vive server-side** (`Live2DAvatar` en el core resuelve emoción → expresión desde el character YAML) y el **render vive en el cliente** con PixiJS.
+
+```mermaid
+graph LR
+    subgraph "core-host (Node)"
+        AvMod[Live2DAvatar<br/>resuelve emoción→expresión]
+    end
+    subgraph "Cliente desktop"
+        AvComp[Avatar.tsx<br/>decide Live2D vs Orbe]
+        Canvas[Live2DCanvas<br/>PIXI.Application + modelo]
+        LipSync[useLipSync<br/>Web Audio → ParamMouthOpenY]
+        Tts[useTtsPlayback<br/>HTMLAudioElement]
+        Core[(live2dcubismcore.js<br/>Core 4.2.2 — manual, gitignored)]
+        Model[(Hiyori .moc3 — manual)]
+    end
+
+    AvComp -->|core + modelo OK| Canvas
+    AvComp -->|falla / sin assets| Orb[Orb SVG fallback]
+    Canvas --> Core
+    Canvas --> Model
+    Tts -->|audioElement| LipSync
+    LipSync -->|setMouthOpen| Canvas
+
+    style Canvas fill:#4a9eff,stroke:#333,color:#fff
+    style LipSync fill:#f4b400,stroke:#333,color:#fff
+```
+
+- **Librería**: `pixi-live2d-display-lipsyncpatch` (fork) sobre **PixiJS v7**. El Cubism Core debe ser **4.2.2** (SDK for Web 4) — el del SDK 5 (Core 6.0.1) crashea el renderer (`doDrawModel`). Core y modelo son propietarios, gitignored, descarga manual.
+- **Fallback automático al orbe**: `<Avatar>` verifica que el modelo es alcanzable (HEAD) y que el Cubism Core cargó; si algo falla, importa nada de PixiJS y renderiza el `<Orb>`. El import de `Live2DCanvas` es **diferido** (dynamic import) para que el bundle de pixi-live2d-display —que lanza a top-level si el Core no está— no tumbe a quien no tenga los assets.
+- **Lip-sync** (ADR 0021 §5): `useTtsPlayback` expone el `HTMLAudioElement` (con `crossOrigin="anonymous"`); `useLipSync` lo conecta a un `AnalyserNode` y mapea la amplitud RMS a `ParamMouthOpenY` cada frame vía un callback `setMouthOpen` que `Live2DCanvas` implementa sobre el modelo. Cero coste de red, sincronización exacta. En mute no hay análisis (boca cerrada).
+- **Idle off por default**: las motions idle de Hiyori tocan `ParamMouthOpenY` y compiten con el lip-sync. `autoUpdate` es siempre `true` (para aplicar el parámetro al mesh) y la idle se desactiva apuntando `idleMotionGroup` a un grupo inexistente. El modelo igual respira y parpadea.
+- **Pendiente (PR #4)**: expresiones por emoción (`llm:responded` → `model.expression()`).
 
 ## STT: microservicio Whisper + push-to-talk
 

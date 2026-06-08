@@ -15,9 +15,12 @@ empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 > el audio). Toggle mute por cliente persistido en `localStorage`
 > (preparación para multi-device, lógica de "cliente activo" diferida
 > a ADR futuro). (PRs #44-#48.) Hitos previos: **Setup**, **Core**,
-> **Cliente desktop**, **LLM**, **Memoria**, **STT**. Próximo hito en
-> planificación: **Avatar Live2D**.
-> Ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
+> **Cliente desktop**, **LLM**, **Memoria**, **STT**. Hito en curso:
+> **Avatar Live2D** 🟡 — render de Hiyori (`pixi-live2d-display-lipsyncpatch`
+> sobre PixiJS v7) con fallback automático al orbe, y **lip-sync** de la
+> boca con la voz del TTS, ya funcionando. Faltan las expresiones por
+> emoción (PR #4). Ver
+> [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
 
@@ -29,23 +32,23 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado          | Notas                                                                                                                                                       |
-| ------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Setup**           | ✅ completo     | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                            |
-| **Core**            | ✅ completo     | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                          |
-| **Cliente desktop** | ✅ completo     | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                              |
-| **LLM**             | ✅ completo     | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                |
-| **Memoria**         | ✅ completo     | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                     |
-| **STT**             | ✅ completo     | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.           |
-| **TTS**             | ✅ completo     | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020. |
-| **Avatar Live2D**   | 🟡 planificando | Reemplaza el orbe dentro del componente `<Avatar>`. Próximo hito.                                                                                           |
-| **Packaging Tauri** | ⏸️ pendiente    | Envuelve el build de Vite en binario nativo                                                                                                                 |
-| **Post-MVP**        |                 |                                                                                                                                                             |
-| Plugins             | ⏳ futuro       | Sistema de extensiones                                                                                                                                      |
-| Móvil               | ⏳ futuro       | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                  |
-| Avatar 3D (VRM)     | ⏳ futuro       | `@pixiv/three-vrm`                                                                                                                                          |
-| Arduino bridge      | ⏳ futuro       | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                               |
-| IoT bridge          | ⏳ futuro       | MQTT, Home Assistant                                                                                                                                        |
+| Hito                | Estado         | Notas                                                                                                                                                                                       |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Setup**           | ✅ completo    | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                                                            |
+| **Core**            | ✅ completo    | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                          |
+| **Cliente desktop** | ✅ completo    | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                              |
+| **LLM**             | ✅ completo    | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                                                |
+| **Memoria**         | ✅ completo    | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                                                     |
+| **STT**             | ✅ completo    | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.                                           |
+| **TTS**             | ✅ completo    | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                 |
+| **Avatar Live2D**   | 🟡 en progreso | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe + lip-sync con el audio del TTS ✅. Faltan expresiones por emoción. ADR 0021. |
+| **Packaging Tauri** | ⏸️ pendiente   | Envuelve el build de Vite en binario nativo                                                                                                                                                 |
+| **Post-MVP**        |                |                                                                                                                                                                                             |
+| Plugins             | ⏳ futuro      | Sistema de extensiones                                                                                                                                                                      |
+| Móvil               | ⏳ futuro      | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                  |
+| Avatar 3D (VRM)     | ⏳ futuro      | `@pixiv/three-vrm`                                                                                                                                                                          |
+| Arduino bridge      | ⏳ futuro      | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                                                               |
+| IoT bridge          | ⏳ futuro      | MQTT, Home Assistant                                                                                                                                                                        |
 
 ## Stack
 
@@ -58,7 +61,7 @@ histórico.
 - **faster-whisper** (microservicio Python) para STT
 - **ElevenLabs** (cloud, primary) + **SystemTTS** (voz del OS, fallback) para TTS (in-process en core-host, audio HTTP efímero)
 - **Letta** (Docker) para memoria larga, **LocalMemory** SQLite como fallback
-- **Live2D Cubism SDK Web** para avatar 2D
+- **Live2D Cubism SDK Web** (Core **4.2.2**) + **pixi-live2d-display-lipsyncpatch** (PixiJS v7) para avatar 2D con lip-sync
 - **Vitest** para tests
 
 ## Requisitos
@@ -261,38 +264,44 @@ El **`stability` por turno** lo lee el TTS del bloque `emotions:` del character 
 
 ### Requisitos para el hito Avatar Live2D
 
-El avatar visual usa **`pixi-live2d-display`** (wrapper de PixiJS sobre el Cubism SDK oficial) renderizando el modelo dentro del componente `<Avatar>`. Si el SDK o el modelo no están instalados, `<Avatar>` cae al `<Orb>` (ADR 0009) automáticamente — el companion sigue 100% funcional sin avatar visual. Ver [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
+El avatar visual usa **`pixi-live2d-display-lipsyncpatch`** (fork mantenido de `pixi-live2d-display`, sobre **PixiJS v7**) renderizando el modelo dentro del componente `<Avatar>`. Si el SDK o el modelo no están instalados, `<Avatar>` cae al `<Orb>` (ADR 0009) automáticamente — el companion sigue 100% funcional sin avatar visual. La boca del modelo hace **lip-sync** con la voz del TTS. Ver [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
+
+> ⚠️ **Versión del Cubism Core: usa el SDK 4 (Core 4.2.2), NO el 5.** El Cubism Core que trae el "Cubism SDK for Web **5**" reporta versión **6.0.1** y **crashea el renderer** (`Cannot read properties of undefined (reading '0')` en `doDrawModel`) con `pixi-live2d-display-lipsyncpatch`. Usa el **Cubism SDK for Web 4** (release 4-r.x), cuyo Core es **4.2.2** y sí funciona. El Core está gitignored y cada dev baja el suyo, así que es fácil de equivocar — si ves ese crash, casi seguro tienes un Core demasiado nuevo. Atajo: pídele el `live2dcubismcore.js` a un compañero que ya lo tenga funcionando.
 
 **Lo propietario (no entra al repo)**:
 
-1. **Cubism Core SDK Web**: archivo `live2dcubismcore.js`.
-   - Bajar el ZIP "Cubism SDK for Web" desde <https://www.live2d.com/sdk/download/web/>.
-   - Extraer y copiar `Core/live2dcubismcore.js` a:
+1. **Cubism Core SDK Web** (`live2dcubismcore.js`, **versión 4.2.2**):
+   - Baja el ZIP **"Cubism SDK for Web 4"** desde <https://www.live2d.com/sdk/download/web/> (sección de versiones anteriores / SDK 4).
+   - Copia `Core/live2dcubismcore.js` a:
 
      ```
      packages/desktop/public/live2d/Core/live2dcubismcore.js
      ```
 
-2. **Modelo Hiyori** (placeholder hasta tener uno definitivo): viene dentro del mismo ZIP del SDK, en `Samples/TypeScript/Demo/public/Resources/Hiyori/`.
+   - Confirma la versión en la consola del navegador al arrancar: debe decir `Live2D Cubism SDK Core Version 4.2.x`. Si dice `6.0.1`, es el Core del SDK 5 y crasheará.
+
+2. **Modelo Hiyori** (placeholder hasta tener uno definitivo): viene dentro del mismo ZIP del SDK, en una carpeta `Resources/Hiyori/` (la ruta exacta varía por versión del SDK).
    - Copia la carpeta entera a:
 
      ```
      packages/desktop/public/live2d/models/Hiyori/
      ```
 
-   - La estructura final dentro de `Hiyori/` debe contener al menos `Hiyori.model3.json`, `Hiyori.moc3`, `expressions/*.exp3.json`, `motions/*.motion3.json`, y las texturas.
+   - La estructura final dentro de `Hiyori/` debe contener al menos `Hiyori.model3.json`, `Hiyori.moc3`, `motions/*.motion3.json`, y las texturas (`Hiyori.2048/`).
 
-**Verificación**: arranca el cliente desktop (`npm run dev -w @proyecto-shiro/desktop`). Si ves a Hiyori en lugar del orbe, todo está cableado. Si sigues viendo el orbe, abre la consola del navegador — verás 404 en `/live2d/Core/live2dcubismcore.js` o `/live2d/models/Hiyori/Hiyori.model3.json` que te dice qué falta.
+**Verificación**: arranca el cliente desktop (`npm run dev -w @proyecto-shiro/desktop`). Si ves a Hiyori en lugar del orbe, todo está cableado; háblale y la boca se moverá con su voz. Si sigues viendo el orbe, abre la consola del navegador: un 404 en `/live2d/Core/...` o `/live2d/models/Hiyori/...` te dice qué falta; un crash de `doDrawModel` significa Core incompatible (ver el aviso de arriba).
 
 **Tuneables** (en `config/modules.config.yaml`, slot `avatar.config`):
 
-| Variable          | Default                                    | Para qué                                                                          |
-| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------- |
-| `model_path`      | `/live2d/models/Hiyori/Hiyori.model3.json` | URL del `.model3.json`. Cámbialo cuando bajes el modelo definitivo de Shiro.      |
-| `cubism_core_url` | `/live2d/Core/live2dcubismcore.js`         | URL del Cubism Core JS.                                                           |
-| `max_fps`         | `30`                                       | Cap del render. 30 para GTX 1650; sube a 60 con la 5080.                          |
-| `idle_animation`  | `true`                                     | Animación idle automática del modelo (definida en su `.model3.json`).             |
-| `idle_expression` | `idle`                                     | Expresión por defecto. Para Hiyori se traduce a `default` via alias en el código. |
+| Variable          | Default                                    | Para qué                                                                                                                           |
+| ----------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `model_path`      | `/live2d/models/Hiyori/Hiyori.model3.json` | URL del `.model3.json`. Cámbialo cuando bajes el modelo definitivo de Shiro.                                                       |
+| `cubism_core_url` | `/live2d/Core/live2dcubismcore.js`         | URL del Cubism Core JS (versión **4.2.2** — ver aviso arriba).                                                                     |
+| `max_fps`         | `30`                                       | Cap del render. 30 para GTX 1650; sube a 60 con la 5080.                                                                           |
+| `idle_animation`  | `false`                                    | Motions idle de cuerpo. **OFF por default**: tocan `ParamMouthOpenY` y compiten con el lip-sync. El modelo igual respira/parpadea. |
+| `idle_expression` | `idle`                                     | Expresión por defecto. Para Hiyori se traduce a `default` via alias en el código.                                                  |
+
+**Lip-sync** (ADR 0021 §5): la boca (`ParamMouthOpenY`) se mueve analizando con Web Audio API el mismo `HTMLAudioElement` que reproduce el TTS — cero coste de red y sincronización exacta. En mute no hay lip-sync (boca cerrada).
 
 **Disonancia visual del placeholder**: Hiyori es expresiva y cute; Shiro es kuudere y reservada. Esta disonancia es **deuda explícita** hasta que llegue el modelo definitivo. El mapeo provisional `emoción Shiro → expresión Hiyori` vive en `packages/core/src/modules/avatar/hiyori-expression-aliases.ts` y desaparece cuando el modelo definitivo tenga expresiones alineadas con el YAML del personaje (`idle`, `smirk`, `thinking`, `annoyed`, `soft`).
 
