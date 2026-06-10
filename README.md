@@ -104,12 +104,44 @@ Tauri arranca Vite por debajo y abre la ventana cuando todo está listo.
 La X de la ventana minimiza al tray; para salir realmente, click derecho
 en el tray icon → Salir.
 
-El `core-host` todavía debe levantarse aparte (`npm run dev -w @proyecto-shiro/core-host`)
-hasta el siguiente PR del hito (sidecar, task #32).
+### El `core-host` viaja como sidecar
 
-Para producir el `.msi` distribuible:
+Desde el PR del sidecar (ADR 0024 §2), el binario empaquetado **lanza el
+`core-host` por su cuenta** — no hace falta abrir una terminal aparte. El
+proceso Node se empaqueta como `.exe` y Tauri lo arranca al abrir y lo
+mata al salir.
+
+Para construir el sidecar (necesario antes de `tauri:build`, y para que
+`tauri:dev` lo lance en lugar de pedirte el core-host a mano):
 
 ```bash
+# 1. Compila core + core-host (el sidecar bundlea el JS ya compilado)
+npm run build -w @proyecto-shiro/core -w @proyecto-shiro/core-host
+
+# 2. Empaqueta el core-host como .exe + copia el binario nativo de SQLite
+#    y las configs YAML a src-tauri/binaries|resources/
+npm run build:sidecar -w @proyecto-shiro/desktop
+```
+
+La primera vez `pkg` descarga el runtime base de Node (~40 MB, cacheado).
+El resultado queda en `packages/desktop/src-tauri/binaries/` (gitignored;
+se reconstruye en cada release).
+
+**En `tauri:dev`**: si NO has corrido `build:sidecar`, Tauri detecta que
+faltan los recursos del sidecar y asume que corres el `core-host` a mano
+(`npm run dev -w @proyecto-shiro/core-host`) — el cliente se conecta por
+WS igual. Si SÍ lo corriste, Tauri lanza el sidecar empaquetado.
+
+> **API keys en modo empaquetado**: el sidecar hereda las env vars del
+> proceso Tauri. Hoy, sin un `.env` junto al binario, `ANTHROPIC_API_KEY`
+> y `ELEVENLABS_API_KEY` no llegan al sidecar (Shiro cae a Ollama local +
+> SystemTTS). La gestión de secrets en el binario se resuelve en el PR del
+> setup wizard (config en runtime). Ver ADR 0024 §6.
+
+Para producir el `.msi` distribuible (requiere el sidecar ya construido):
+
+```bash
+npm run build:sidecar -w @proyecto-shiro/desktop   # si no lo hiciste ya
 npm run tauri:build -w @proyecto-shiro/desktop
 ```
 

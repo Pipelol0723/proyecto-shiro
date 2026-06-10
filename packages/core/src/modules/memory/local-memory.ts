@@ -28,6 +28,19 @@ export interface LocalMemoryOptions {
    */
   dbPath: string;
   logger?: Logger;
+  /**
+   * Ruta absoluta al binario nativo `better_sqlite3.node`. Solo necesario
+   * cuando el proceso corre como ejecutable empaquetado (sidecar Tauri,
+   * ADR 0024): `pkg`/`ncc` empaquetan el JS pero NO el addon nativo, que
+   * debe cargarse desde un path real del disco junto al `.exe`. En
+   * desarrollo (Node normal) se deja `undefined` y `better-sqlite3`
+   * resuelve su binario por su cuenta.
+   *
+   * Si se omite, se intenta `process.env.SHIRO_SQLITE_NATIVE_BINDING`
+   * como fallback — así el bootstrap del sidecar solo necesita exportar
+   * esa env var (la setea el lanzador Tauri) sin tocar este código.
+   */
+  nativeBinding?: string;
 }
 
 /**
@@ -66,7 +79,15 @@ export class LocalMemory {
       mkdirSync(dirname(options.dbPath), { recursive: true });
     }
 
-    this.db = new Database(options.dbPath);
+    // `nativeBinding` apunta al addon nativo cuando corremos empaquetados
+    // (sidecar). Si no se pasa, cae a la env var; si tampoco, `undefined`
+    // y better-sqlite3 resuelve solo (caso dev). Pasar `undefined` a las
+    // opciones es equivalente a no pasarlo.
+    const nativeBinding = options.nativeBinding ?? process.env.SHIRO_SQLITE_NATIVE_BINDING;
+    this.db = new Database(
+      options.dbPath,
+      nativeBinding !== undefined && nativeBinding !== '' ? { nativeBinding } : undefined,
+    );
     this.logger = options.logger?.child({ module: 'LocalMemory' });
 
     // WAL mode de SQLite: mejor concurrencia entre reads y writes.

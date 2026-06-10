@@ -38,6 +38,12 @@
     "copyright": "Copyright (c) 2026 Pipelol",
     "shortDescription": "AI Companion modular con avatar tipo VTuber, voz y memoria persistente",
     "longDescription": "Proyecto Shiro es un AI Companion modular tipo VTuber con voz en tiempo real, memoria persistente y avatar Live2D. Pensado para escalar de app desktop a sistema con múltiples clientes.",
+    "externalBin": ["binaries/core-host"],
+    "resources": {
+      "binaries/better_sqlite3.node": "better_sqlite3.node",
+      "resources/modules.config.yaml": "modules.config.yaml",
+      "resources/default.yaml": "default.yaml"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -33,6 +33,10 @@ export default tseslint.config(
       // flat config NO hereda .gitignore, así que van también aquí.
       '**/src-tauri/target/**',
       '**/src-tauri/gen/**',
+      // Scripts de build en .mjs (p.ej. build-sidecar.mjs): herramientas
+      // Node que no participan del proyecto TS, así que el typed-linting
+      // no aplica. Llevan `// @ts-check` para chequeo a nivel de editor.
+      'packages/desktop/scripts/*.mjs',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
