@@ -21,6 +21,31 @@ import Database, { type Database as DatabaseInstance, type Statement } from 'bet
 import type { MemoryEntry } from '../../interfaces/IMemoryModule.js';
 import type { Logger } from '../../core/logger.js';
 
+/**
+ * Normaliza la ruta del binario nativo antes de pasarla a better-sqlite3,
+ * que internamente hace `require()` del `.node`.
+ *
+ * En el sidecar empaquetado (ADR 0024), el lanzador Tauri resuelve esta
+ * ruta con `resource_dir()`, que en Windows devuelve un path con el
+ * **prefijo verbatim `\\?\`** (long-path). Nuestro código de configs lo
+ * tolera (usa `fs` normal), pero el resolver de módulos de `pkg` NO: al
+ * hacer `require('\\?\D:\…\better_sqlite3.node')` mis-parsea el prefijo,
+ * camina hacia la raíz del disco y revienta con `EISDIR lstat 'D:'`.
+ * Quitamos el prefijo aquí, en el único punto donde la ruta llega a un
+ * `require()` nativo.
+ *
+ * Devuelve `undefined` si el input es vacío/undefined — equivalente a no
+ * pasar `nativeBinding` (better-sqlite3 resuelve solo, caso dev).
+ */
+export function normalizeNativeBinding(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw === '') return undefined;
+  // `\\?\UNC\servidor\share` → `\\servidor\share`
+  if (raw.startsWith('\\\\?\\UNC\\')) return `\\${raw.slice(7)}`;
+  // `\\?\D:\…` → `D:\…`
+  if (raw.startsWith('\\\\?\\')) return raw.slice(4);
+  return raw;
+}
+
 export interface LocalMemoryOptions {
   /**
    * Ruta al archivo SQLite. Usar `':memory:'` para tests — DB efímera
@@ -83,10 +108,11 @@ export class LocalMemory {
     // (sidecar). Si no se pasa, cae a la env var; si tampoco, `undefined`
     // y better-sqlite3 resuelve solo (caso dev). Pasar `undefined` a las
     // opciones es equivalente a no pasarlo.
-    const nativeBinding = options.nativeBinding ?? process.env.SHIRO_SQLITE_NATIVE_BINDING;
+    const rawBinding = options.nativeBinding ?? process.env.SHIRO_SQLITE_NATIVE_BINDING;
+    const nativeBinding = normalizeNativeBinding(rawBinding);
     this.db = new Database(
       options.dbPath,
-      nativeBinding !== undefined && nativeBinding !== '' ? { nativeBinding } : undefined,
+      nativeBinding !== undefined ? { nativeBinding } : undefined,
     );
     this.logger = options.logger?.child({ module: 'LocalMemory' });
 

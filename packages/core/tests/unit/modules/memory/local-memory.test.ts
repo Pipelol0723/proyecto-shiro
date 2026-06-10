@@ -8,7 +8,10 @@ import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
-import { LocalMemory } from '../../../../src/modules/memory/local-memory.js';
+import {
+  LocalMemory,
+  normalizeNativeBinding,
+} from '../../../../src/modules/memory/local-memory.js';
 import type { MemoryEntry } from '../../../../src/interfaces/IMemoryModule.js';
 
 const USER = 'pipe';
@@ -23,6 +26,34 @@ function makeEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
     ...(overrides.metadata !== undefined ? { metadata: overrides.metadata } : {}),
   };
 }
+
+describe('normalizeNativeBinding', () => {
+  it('quita el prefijo verbatim de un path con unidad (\\\\?\\D:\\…)', () => {
+    expect(normalizeNativeBinding('\\\\?\\D:\\app\\better_sqlite3.node')).toBe(
+      'D:\\app\\better_sqlite3.node',
+    );
+  });
+
+  it('convierte el prefijo verbatim UNC a su forma normal (\\\\?\\UNC\\…)', () => {
+    expect(normalizeNativeBinding('\\\\?\\UNC\\servidor\\share\\lib.node')).toBe(
+      '\\\\servidor\\share\\lib.node',
+    );
+  });
+
+  it('deja intactos los paths normales (sin prefijo)', () => {
+    expect(normalizeNativeBinding('D:\\app\\better_sqlite3.node')).toBe(
+      'D:\\app\\better_sqlite3.node',
+    );
+    expect(normalizeNativeBinding('/usr/lib/better_sqlite3.node')).toBe(
+      '/usr/lib/better_sqlite3.node',
+    );
+  });
+
+  it('devuelve undefined para vacío/undefined (equivale a no pasar binding)', () => {
+    expect(normalizeNativeBinding(undefined)).toBeUndefined();
+    expect(normalizeNativeBinding('')).toBeUndefined();
+  });
+});
 
 describe('LocalMemory', () => {
   let memory: LocalMemory;
