@@ -97,11 +97,10 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     let quit_item = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
 
-    TrayIconBuilder::with_id("main-tray")
+    let mut tray = TrayIconBuilder::with_id("main-tray")
         .tooltip("Proyecto Shiro")
-        .icon(app.default_window_icon().cloned().unwrap_or_default())
         .menu(&menu)
-        .menu_on_left_click(false)
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => show_main_window(app),
             "quit" => {
@@ -119,8 +118,14 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
             {
                 show_main_window(tray.app_handle());
             }
-        })
-        .build(app)?;
+        });
+    // `Image` no implementa `Default`, así que el icono se añade solo si
+    // la ventana tiene uno (puede faltar en dev si `icons/` aún no se
+    // generó con `tauri icon`); el tray funciona igualmente sin icono.
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
 
     Ok(())
 }
