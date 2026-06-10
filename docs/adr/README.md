@@ -73,6 +73,8 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0019](0019-stt-faster-whisper-microservicio-python.md)                  | STT — microservicio Python con faster-whisper                  | Accepted |
 | [0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) | TTS — ElevenLabs + SystemTTS fallback, in-process en core-host | Accepted |
 | [0021](0021-avatar-live2d-pixi-display-fallback-orbe.md)                 | Avatar Live2D — pixi-live2d-display, 30 fps, fallback al Orbe  | Accepted |
+| [0022](0022-shiro-agentic-tools-fs-shell.md)                             | Shiro agentic — slot `tools:`, FS + shell, permisos mixtos     | Proposed |
+| [0023](0023-shiro-self-improvement-propose-only.md)                      | Shiro self-improvement — propose only, worktree aislado        | Proposed |
 
 ## Referencias externas
 
