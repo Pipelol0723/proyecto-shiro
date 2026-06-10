@@ -26,8 +26,21 @@ Thumbs.db
 # Claude Code (configuración personal de cada dev)
 .claude/settings.local.json
 
-# Tauri
-src-tauri/target/
+# Tauri build artifacts (Rust compilation, gen schemas, bundles).
+**/src-tauri/target/
+**/src-tauri/gen/
+
+# Iconos del binario Tauri — placeholders generados por cada dev / CI
+# con `npx @tauri-apps/cli icon`. Ver `packages/desktop/src-tauri/icons/README.md`.
+# El README en la carpeta sí entra al repo (no es binario).
+**/src-tauri/icons/*.png
+**/src-tauri/icons/*.ico
+**/src-tauri/icons/*.icns
+
+# Tauri signing key local (cuando se genere para el auto-updater, task #35).
+# La pública entra en `tauri.conf.json`; la privada NUNCA al repo.
+**/.tauri/
+*.tauri-signing-key
 
 # Live2D SDK + modelos (propietarios, descarga manual cada dev)
 **/Live2DCubismCore.*

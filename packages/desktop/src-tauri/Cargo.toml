@@ -1,0 +1,60 @@
+[package]
+name = "proyecto-shiro-desktop"
+version = "0.1.0"
+description = "Proyecto Shiro — AI Companion desktop binary"
+authors = ["Pipelol <pipelol0723@gmail.com>"]
+edition = "2021"
+rust-version = "1.77"
+
+# Lib config: el binario `proyecto-shiro-desktop` arranca a través de
+# `src/main.rs` que delega en `lib.rs`. Mantenerlo como lib facilita
+# tests futuros y reuso si llega un segundo entry point (CLI helper, etc).
+[lib]
+name = "proyecto_shiro_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Core Tauri 2.0 — runtime, ventana, IPC.
+tauri = { version = "2", features = ["tray-icon"] }
+# Manejo de un solo instance (al re-abrir desde el tray, no spawnea otra
+# copia del binario; trae el foco a la ventana ya abierta).
+tauri-plugin-single-instance = "2"
+# Plugin de Vista del estado de la ventana (recordar tamaño/posición
+# entre reinicios). Pequeño y útil desde V1.
+tauri-plugin-window-state = "2"
+# Logs estructurados a archivo en `~/AppData/Roaming/proyecto-shiro/`.
+# Útil para diagnosticar crashes del sidecar (que entra en task #32).
+tauri-plugin-log = "2"
+# Notificaciones del sistema (toasts del Updater entran aquí).
+tauri-plugin-notification = "2"
+
+# ─── Plugins DECLARADOS para hitos futuros (ADR 0024 §5) ──────────────
+#
+# Estos plugins se declaran como dependencia en V1 aunque el código
+# todavía no exponga comandos que los usen. La razón: cuando el hito
+# agentic (ADR 0022) los necesite, la firma del binario YA los cubre y
+# el auto-updater no rompe la cadena de updates al añadir permisos.
+#
+# Los `capabilities/default.json` SÍ los listan con scope amplio. Lo
+# que mantiene "runtime-denied" es que ningún comando IPC custom los
+# invoca todavía — sin código que llame a `tauri::api::fs::*`, no hay
+# superficie de explotación.
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+
+[profile.release]
+# Optimizaciones agresivas para el binario distribuido. Vale los ~30s
+# extra de build CI por un .msi ~20-30% más pequeño y rápido.
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

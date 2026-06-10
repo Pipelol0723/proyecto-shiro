@@ -62,6 +62,8 @@ histórico.
 
 - Node.js >= 20 (probado con 22)
 - npm >= 10
+- **Rust 1.77+** (solo para `tauri:dev` y `tauri:build` — el modo dev de Vite no lo requiere). Instala desde [rustup.rs](https://rustup.rs/).
+- En Windows: **Microsoft C++ Build Tools** + **WebView2 Runtime** (preinstalado en Windows 11). Tauri lo verifica al primer `tauri:dev`.
 - (Más adelante) Docker, Python 3.11+, Ollama
 
 ## Setup local
@@ -84,7 +86,36 @@ npm run typecheck
 npm test
 ```
 
-## Arrancar la app (modo dev)
+## Arrancar la app como binario nativo (Tauri)
+
+Tras el hito Packaging (ADR 0024), el cliente desktop se ejecuta dentro
+de un binario Tauri 2.0 con tray icon y close-to-tray. Para arrancarlo
+en modo dev:
+
+```bash
+# Generar iconos placeholder una sola vez (ver packages/desktop/src-tauri/icons/README.md)
+npx @tauri-apps/cli icon path/to/cualquier-square.png
+
+# Arrancar Tauri (esto compila Rust la primera vez — ~3-5 min)
+npm run tauri:dev -w @proyecto-shiro/desktop
+```
+
+Tauri arranca Vite por debajo y abre la ventana cuando todo está listo.
+La X de la ventana minimiza al tray; para salir realmente, click derecho
+en el tray icon → Salir.
+
+El `core-host` todavía debe levantarse aparte (`npm run dev -w @proyecto-shiro/core-host`)
+hasta el siguiente PR del hito (sidecar, task #32).
+
+Para producir el `.msi` distribuible:
+
+```bash
+npm run tauri:build -w @proyecto-shiro/desktop
+```
+
+El binario sale en `packages/desktop/src-tauri/target/release/bundle/msi/`.
+
+## Arrancar la app (modo dev sin binario — solo navegador)
 
 Desde ADR 0012, el companion se reparte en **dos procesos**: el servidor
 Node (`@proyecto-shiro/core-host`) que tiene los módulos LLM/Router/etc.
