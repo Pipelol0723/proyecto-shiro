@@ -1,6 +1,6 @@
-# Instrucciones para Claude — Proyecto Shiro
+# Instrucciones para Codex — Proyecto Shiro
 
-Este archivo lo lee Claude Code automáticamente al iniciar una sesión
+Este archivo lo lee Codex automáticamente al iniciar una sesión
 en este repo. Léelo entero antes de hacer cualquier cosa estructural.
 
 ## Qué es este proyecto
@@ -67,15 +67,15 @@ Fase 0–7. A partir de [ADR 0008](docs/adr/0008-cliente-desktop-vite-react.md)
 pasamos a **nombres** porque el cliente desktop se intercaló entre Core
 y LLM:
 
-1. **Setup** ✅ — monorepo, CI, ADRs, CLAUDE.md.
+1. **Setup** ✅ — monorepo, CI, ADRs, AGENTS.md.
 2. **Core** ✅ — EventBus, Orchestrator, ModuleLoader, 9 interfaces.
 3. **Cliente desktop** ✅ — Vite + React + orbe + 3 temas + 5 pantallas + EventBus wiring (ahora via WebSocket).
-4. **LLM** ✅ — split cliente/server (`core-host` proceso Node con WebSocketTransport), `OllamaLLM` (Qwen 2.5), `AnthropicLLM` (Claude Sonnet 4.6) con structured outputs, `HybridRouter` con clasificador LLM + fallback heurístico, pipeline conversacional cableado. Ver ADRs 0012-0016.
+4. **LLM** ✅ — split cliente/server (`core-host` proceso Node con WebSocketTransport), `OllamaLLM` (Qwen 2.5), `AnthropicLLM` (Codex Sonnet 4.6) con structured outputs, `HybridRouter` con clasificador LLM + fallback heurístico, pipeline conversacional cableado. Ver ADRs 0012-0016.
 5. **Memoria** ✅ — Letta como almacén canónico (vía SDK oficial `@letta-ai/letta-client`) con embeddings locales en Ollama (`mxbai-embed-large`), `LocalMemory` SQLite como WAL + drainer, auto-provisión del agente y `memory:snapshot` para rehidratar el chat del desktop al reconectar. Ver [ADR 0017](docs/adr/0017-memoria-persistente-local-y-letta.md) y [ADR 0018](docs/adr/0018-letta-sdk-oficial-embeddings-ollama.md).
 6. **STT** ✅ — microservicio Python con **faster-whisper** sobre CUDA (Docker + NVIDIA Container Toolkit, fallback CPU), captura PCM 16 kHz en el desktop vía AudioWorklet, push-to-talk con `Space` o click-and-hold, WebSocket directo cliente↔microservicio (el `core-host` no participa del audio — solo healthcheck `ping()` no bloqueante al arrancar), partials cada 2.5 s, `hotwords` para nombres propios, wiring `stt:transcribed → user:message` para unificar entrada texto/voz. Ver [ADR 0019](docs/adr/0019-stt-faster-whisper-microservicio-python.md).
-7. **TTS** ✅ — cadena **ElevenLabs primary + SystemTTS fallback** in-process en `core-host` (sin microservicio aparte — ADR 0020). `TtsWithFallback` envuelve los dos como un solo `ITTSModule`. Audio generado server-side y servido por HTTP efímero (`GET /audio/<id>.<ext>`, TTL 60s) con CORS abierto; el cliente reproduce con `HTMLAudioElement` (`useTtsPlayback` hook) y emite `tts:audio-ended`. Mapeo emoción → `stability` desde el bloque `emotions:` del character YAML; el resto de `voice_settings` (similarity_boost, style, use_speaker_boost) son constantes en `modules.config.yaml`. Cancelable mid-speech (`tts:cancel` invalida el cache y para el audio). Toggle mute por cliente persistido en `localStorage` — multi-device "cliente activo" diferido a ADR futuro. Voz sintética/UTAU también diferida a hito post-5080 (será microservicio aparte, mismo patrón que Whisper). Ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
-8. **Avatar Live2D** ✅ — render de Hiyori vía `pixi-live2d-display-lipsyncpatch` (PixiJS v7, Cubism Core **4.2.2** — el SDK 5/Core 6 crashea el renderer) dentro de `<Avatar>`, con fallback automático al orbe. **Lip-sync** de la boca con la voz del TTS (Web Audio → `ParamMouthOpenY`) y **expresiones faciales por emoción** (`llm:responded` → parámetros Cubism; seam listo para `model.expression()`). Idle off por default (sus motions competían con el lip-sync). La precisión de la emoción depende del LLM, no del avatar. Ver [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
-9. **Packaging Tauri** 🟡 en progreso — bootstrap Tauri 2.0 en `packages/desktop/src-tauri/` con tray icon, close-to-tray, single-instance, plugins fs/shell/dialog declarados pero sin comandos IPC custom (runtime-denied via ausencia de comandos). Ver [ADR 0024](docs/adr/0024-packaging-tauri-windows-sidecar.md). Pendiente: sidecar core-host, healthcheck wizard, modo overlay opcional, auto-updater, workflow CI release.
+7. **TTS** 🟡 _planificando_ — ElevenLabs primary + SystemTTS fallback (sin Kokoro). Audio generado server-side y reproducido en el cliente. Voz sintética/UTAU diferida a hito post-5080. Ver [ADR 0020](docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md).
+8. **Avatar Live2D** ⏸️ pendiente — reemplaza el orbe dentro de `<Avatar>`.
+9. **Packaging Tauri** ⏸️ pendiente — envuelve el build de Vite en binario nativo.
 
 Post-MVP: Plugins, Mobile, Avatar 3D (VRM), Arduino bridge, IoT bridge.
 

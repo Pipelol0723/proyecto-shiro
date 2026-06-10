@@ -1,0 +1,25 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities por defecto del binario Shiro. V1 concede solo lo que el webview usa hoy (ventana, tray, log, notificaciones, window-state). Los plugins `fs`, `shell` y `dialog` siguen REGISTRADOS en lib.rs/Cargo.toml (el binario y su firma ya los incluyen — ADR 0024 §5), pero sus permisos NO se conceden aquí: en Tauri 2 cada plugin expone sus propios comandos IPC al webview, así que conceder `fs:allow-write-file` o `shell:allow-execute` los haría invocables sin necesidad de comandos Rust custom. Sin permisos en esta capability, la ACL los rechaza — eso es lo que hace real el 'runtime-denied' del ADR 0024 (enmienda). Cuando llegue el hito agentic (ADR 0022), los permisos se añaden aquí junto con sus scopes y el permission tier check; añadir capabilities en una versión nueva NO rompe la cadena del auto-updater.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:window:allow-set-title",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:app:allow-version",
+    "core:app:allow-name",
+    "core:event:default",
+    "core:tray:default",
+    "log:default",
+    "notification:default",
+    "window-state:default"
+  ]
+}

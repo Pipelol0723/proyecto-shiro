@@ -133,6 +133,13 @@ Build pipeline empaqueta exclusivamente `.msi` (instalador) y `.exe` (portable) 
 
 **Alternativa de "minimal + re-firmar al activar"**: descartada — auto-updater no soporta "expandir permisos" sin que el usuario re-confirme, lo que rompe la experiencia.
 
+> **Enmienda (2026-06-10)** — la implementación corrige dos imprecisiones de esta sección:
+>
+> 1. **El mecanismo descrito no existe en Tauri 2.** No hay un "ConfigState donde activar capabilities en runtime" ni feature flag que bloquee los IPC de los plugins: los permisos del archivo `capabilities/*.json` se aplican tal cual al arrancar, y **cada plugin expone sus propios comandos IPC al webview** (no hacen falta comandos Rust custom). Con los permisos `fs:*`/`shell:*`/`dialog:*` concedidos, cualquier JS del webview podía invocarlos desde el día 1 (frenado solo por scopes vacíos y la CSP).
+> 2. **La premisa del updater era innecesaria.** Las capabilities son **config versionada dentro de cada release**, no parte del contrato de firma: añadir permisos en una versión futura no rompe la cadena de updates firmados ni pide re-confirmación al usuario. Tauri no tiene un prompt de "nuevos permisos".
+>
+> **Decisión enmendada**: las capabilities de V1 conceden **solo lo que el webview usa hoy** (ventana, tray, log, notificaciones, window-state). Los plugins `fs`/`shell`/`dialog` siguen **registrados** en `lib.rs`/`Cargo.toml` (el binario los incluye, ese sí era el punto válido), pero sus permisos se añadirán a `capabilities/default.json` **junto con sus scopes y el permission tier check** cuando el hito agentic (ADR 0022) los necesite. Eso convierte el "runtime-denied" en una garantía real (ACL) en vez de una convención.
+
 ### 6. Servicios externos: setup wizard + healthcheck visual
 
 **Al primer arranque** (detectado por flag en config local), la app:

@@ -151,61 +151,68 @@ describe('core-host bootstrap end-to-end', () => {
     expect(readyEvents).toHaveLength(1);
   });
 
-  it('un cliente conectado recibe la cadena completa al emitir user:message', async () => {
-    result = await bootstrap({
-      port: 0,
-      config: loadFixtureConfig(),
-      character: FIXTURE_CHARACTER,
-      logger: makeLogger(),
-      simulationSpeed: 0,
-    });
+  it(
+    'un cliente conectado recibe la cadena completa al emitir user:message',
+    { timeout: 20_000 },
+    async () => {
+      result = await bootstrap({
+        port: 0,
+        config: loadFixtureConfig(),
+        character: FIXTURE_CHARACTER,
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
 
-    const clientTransport = new WebSocketTransport({
-      url: `ws://localhost:${result.transport.port}/bus`,
-      logger: makeLogger(),
-      webSocketCtor: WebSocket as unknown as WebSocketCtor,
-    });
-    const clientBus = new EventBus<EventMap>({
-      logger: makeLogger(),
-      transports: [clientTransport],
-    });
+      const clientTransport = new WebSocketTransport({
+        url: `ws://localhost:${result.transport.port}/bus`,
+        logger: makeLogger(),
+        webSocketCtor: WebSocket as unknown as WebSocketCtor,
+      });
+      const clientBus = new EventBus<EventMap>({
+        logger: makeLogger(),
+        transports: [clientTransport],
+      });
 
-    await waitFor(() => clientTransport.getState() === 'open');
+      await waitFor(() => clientTransport.getState() === 'open');
 
-    const routed: EventMap['router:routed'][] = [];
-    const responded: EventMap['llm:responded'][] = [];
-    // Tras el LLM, el server o bien emite `tts:audio` (cadena TTS OK)
-    // o `tts:audio-ended` (cadena TTS entera falló). Cualquiera de las
-    // dos cierra el turno desde el punto de vista del server.
-    let turnFinished = false;
-    clientBus.on('router:routed', (p) => {
-      routed.push(p);
-    });
-    clientBus.on('llm:responded', (p) => {
-      responded.push(p);
-    });
-    clientBus.on('tts:audio', () => {
-      turnFinished = true;
-    });
-    clientBus.on('tts:audio-ended', () => {
-      turnFinished = true;
-    });
+      const routed: EventMap['router:routed'][] = [];
+      const responded: EventMap['llm:responded'][] = [];
+      // Tras el LLM, el server o bien emite `tts:audio` (cadena TTS OK)
+      // o `tts:audio-ended` (cadena TTS entera falló). Cualquiera de las
+      // dos cierra el turno desde el punto de vista del server.
+      let turnFinished = false;
+      clientBus.on('router:routed', (p) => {
+        routed.push(p);
+      });
+      clientBus.on('llm:responded', (p) => {
+        responded.push(p);
+      });
+      clientBus.on('tts:audio', () => {
+        turnFinished = true;
+      });
+      clientBus.on('tts:audio-ended', () => {
+        turnFinished = true;
+      });
 
-    await clientBus.emit('user:message', { text: 'hola Shiro', userId: 'me' });
+      await clientBus.emit('user:message', { text: 'hola Shiro', userId: 'me' });
 
-    await waitFor(() => turnFinished);
+      // Presupuesto generoso: el turno pasa por router (timeout 2s) + LLM
+      // real/fallback. Con la suite entera en paralelo, los 3s por defecto
+      // de waitFor se quedaban cortos y el test salía flaky.
+      await waitFor(() => turnFinished, { timeoutMs: 15_000 });
 
-    expect(routed).toHaveLength(1);
-    expect(routed[0]).toMatchObject({ userId: 'me' });
+      expect(routed).toHaveLength(1);
+      expect(routed[0]).toMatchObject({ userId: 'me' });
 
-    expect(responded).toHaveLength(1);
-    expect(responded[0]?.text).toBeTruthy();
-    expect(responded[0]?.emotion).toBeDefined();
+      expect(responded).toHaveLength(1);
+      expect(responded[0]?.text).toBeTruthy();
+      expect(responded[0]?.emotion).toBeDefined();
 
-    await clientTransport.close();
-  });
+      await clientTransport.close();
+    },
+  );
 
-  it('múltiples clientes reciben los mismos eventos del server', async () => {
+  it('múltiples clientes reciben los mismos eventos del server', { timeout: 20_000 }, async () => {
     result = await bootstrap({
       port: 0,
       config: loadFixtureConfig(),
@@ -246,7 +253,7 @@ describe('core-host bootstrap end-to-end', () => {
     });
 
     await bus1.emit('user:message', { text: 'ping', userId: 'u' });
-    await waitFor(() => r1.length === 1 && r2.length === 1);
+    await waitFor(() => r1.length === 1 && r2.length === 1, { timeoutMs: 15_000 });
 
     expect(r1[0]?.text).toBe(r2[0]?.text);
 
