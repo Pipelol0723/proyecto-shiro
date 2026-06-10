@@ -107,6 +107,27 @@ fn spawn_core_host(app: &tauri::AppHandle) {
         return;
     }
 
+    // Directorio de datos estable y escribible para el sidecar. El config
+    // del core-host usa `local.db_path: './data/memory.db'` RELATIVO al
+    // cwd; sin fijar el cwd, el sidecar lo resolvía contra el dir desde el
+    // que Tauri lo lanza (`src-tauri/` en dev, Program Files en un install
+    // real → read-only). Eso creaba un memory.db distinto en cada contexto,
+    // y como el agent_id de Letta se persiste en ese WAL, cada arranque
+    // provisionaba un agente nuevo → la memoria no continuaba. Fijando el
+    // cwd a `app_local_data_dir`, `./data/memory.db` cae siempre en el mismo
+    // sitio estable y escribible (`%LOCALAPPDATA%\com.pipelol.proyecto-shiro`).
+    let data_dir = match app.path().app_local_data_dir() {
+        Ok(dir) => dir,
+        Err(e) => {
+            log::warn!("no se pudo resolver app_local_data_dir: {e}; core-host no se lanzará");
+            return;
+        }
+    };
+    if let Err(e) = std::fs::create_dir_all(&data_dir) {
+        log::warn!("no se pudo crear {}: {e}; core-host no se lanzará", data_dir.display());
+        return;
+    }
+
     let sidecar = match app.shell().sidecar("core-host") {
         Ok(cmd) => cmd,
         Err(e) => {
@@ -116,6 +137,7 @@ fn spawn_core_host(app: &tauri::AppHandle) {
     };
 
     let sidecar = sidecar
+        .current_dir(data_dir)
         .env("SHIRO_HOST_PORT", CORE_HOST_PORT)
         .env("SHIRO_MODULES_CONFIG", modules_config.to_string_lossy().to_string())
         .env("SHIRO_CHARACTER", character.to_string_lossy().to_string())
