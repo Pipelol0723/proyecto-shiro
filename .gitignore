@@ -36,6 +36,13 @@ Thumbs.db
 **/src-tauri/icons/*.png
 **/src-tauri/icons/*.ico
 **/src-tauri/icons/*.icns
+# Subcarpetas android/ios que `tauri icon` también genera — V1 es
+# Windows-only (ADR 0024); se regeneran cuando toque mobile.
+**/src-tauri/icons/android/
+**/src-tauri/icons/ios/
+
+# Estado local de Claude Code (worktrees, settings de sesión).
+.claude/
 
 # Tauri signing key local (cuando se genere para el auto-updater, task #35).
 # La pública entra en `tauri.conf.json`; la privada NUNCA al repo.

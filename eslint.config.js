@@ -27,6 +27,12 @@ export default tseslint.config(
       // Ya en .gitignore; añadidos aquí para que ESLint los ignore
       // localmente. Ver ADR 0021 y README sección "Avatar Live2D".
       'packages/desktop/public/**',
+      // Artefactos de build de Rust/Tauri: cargo genera .js auxiliares
+      // dentro de target/ (p.ej. __global-api-script.js) que rompen el
+      // linter con type-info en cuanto alguien corre `tauri dev`. El
+      // flat config NO hereda .gitignore, así que van también aquí.
+      '**/src-tauri/target/**',
+      '**/src-tauri/gen/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
