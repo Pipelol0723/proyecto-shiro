@@ -9,14 +9,16 @@
 //!    veces, la segunda llamada trae al frente la ventana ya abierta
 //!    en lugar de spawnear otro proceso.
 //!
-//! Lo que **NO** hace este archivo en V1 (ADR 0024 §5):
+//! Lo que **NO** hace este archivo en V1 (ADR 0024 §5, enmendado):
 //!
-//! - No expone comandos `#[tauri::command]` para FS / shell. Los plugins
-//!   `tauri-plugin-fs` y `tauri-plugin-shell` están declarados en
-//!   `Cargo.toml` para que la firma del binario los cubra, pero ningún
-//!   código de Rust los invoca y el cliente JS no tiene IPC para
-//!   llamarlos. Esto es la realización del "amplios pero runtime-denied"
-//!   del ADR 0024.
+//! - No concede permisos de FS / shell / dialog al webview. Los plugins
+//!   `tauri-plugin-fs`, `tauri-plugin-shell` y `tauri-plugin-dialog`
+//!   quedan registrados aquí (y en `Cargo.toml`) para que el binario y
+//!   su firma ya los incluyan, pero **en Tauri 2 cada plugin expone sus
+//!   propios comandos IPC al webview** — no hacen falta comandos Rust
+//!   custom para invocarlos. El "runtime-denied" real se aplica en
+//!   `capabilities/default.json`: ahí NO se conceden los permisos
+//!   `fs:*` / `shell:*` / `dialog:*` y la ACL rechaza cualquier invoke.
 //!
 //! Cuando llegue el hito agentic (ADR 0022), este archivo gana:
 //! - Comandos `#[tauri::command]` que envuelven `tauri::api::fs::*` con
