@@ -31,9 +31,18 @@
       "csp": "default-src 'self'; connect-src 'self' ws://localhost:* http://localhost:*; img-src 'self' data: blob:; media-src 'self' blob: http://localhost:*; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'"
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Pipelol0723/proyecto-shiro/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdFQzIwMEUwNTVBMDg0ODMKUldTRGhLQlY0QURDZnNoVVVKWHgwc3dwZVNZSnlXUW9PTlVJYWJDNVZaMWlpeWlYbjM0Q2xFZmkK"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],
+    "createUpdaterArtifacts": true,
     "category": "Utility",
     "copyright": "Copyright (c) 2026 Pipelol",
     "shortDescription": "AI Companion modular con avatar tipo VTuber, voz y memoria persistente",

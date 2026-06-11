@@ -30,6 +30,11 @@ tauri-plugin-window-state = "2"
 tauri-plugin-log = "2"
 # Notificaciones del sistema (toasts del Updater entran aquí).
 tauri-plugin-notification = "2"
+# Auto-updater (ADR 0024 §4): consulta el feed firmado de GitHub Releases,
+# verifica la firma ed25519 y aplica el update. El cliente lo dispara via
+# `@tauri-apps/plugin-updater`. Requiere `plugin-process` para el relaunch.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # ─── Plugins DECLARADOS para hitos futuros (ADR 0024 §5) ──────────────
 #

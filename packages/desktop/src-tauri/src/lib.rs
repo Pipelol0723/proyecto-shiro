@@ -48,6 +48,10 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        // Auto-updater (ADR 0024 §4): el cliente dispara el check vía
+        // `@tauri-apps/plugin-updater`. `process` habilita el relaunch.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         // Plugins REGISTRADOS pero sin permisos concedidos al webview en V1
         // (ADR 0024 §5 enmendado). El binario los incluye para que la firma
         // ya los cubra; sus comandos IPC quedan rechazados por la ACL.

@@ -26,6 +26,7 @@ import {
   SetupScreen,
 } from './screens';
 import type { ThemeName } from './themes';
+import { UpdateBanner } from './updater/UpdateBanner';
 import styles from './App.module.css';
 
 export interface AppProps {
@@ -40,6 +41,9 @@ export function App({ bus }: AppProps = {}): JSX.Element {
   return (
     <BusProvider bus={bus}>
       <div className={styles.app}>
+        {/* Aviso de auto-update (ADR 0024 §4). Invisible fuera de Tauri
+            y cuando la app está al día. */}
+        <UpdateBanner />
         <Sidebar active={screen} onChange={setScreen} />
         <main className={styles.main}>
           <Header screen={screen} theme={theme} onThemeChange={setTheme} />
