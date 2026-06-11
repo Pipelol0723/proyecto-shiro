@@ -25,6 +25,38 @@ import type { MemoryEntry } from '../interfaces/IMemoryModule.js';
  * `keyof EventMap` produzca una union de strings, no un indexed type.
  */
 
+/** Estado de un servicio externo en el healthcheck del sistema. */
+export type ServiceStatus = 'ok' | 'down';
+
+/**
+ * Reporte de salud del sistema que el `core-host` produce chequeando los
+ * servicios externos (Ollama, Letta, Whisper) y la presencia de las API
+ * keys. Lo consume el setup wizard del cliente para mostrar qué falta y
+ * cómo arreglarlo. El chequeo es **server-side** (el sidecar tiene acceso
+ * de red directo y conoce `process.env`), evitando problemas de CORS si
+ * el webview intentara los fetches.
+ *
+ * **Nunca incluye el valor de las keys** — solo su presencia (boolean).
+ */
+export interface SystemHealthReport {
+  services: {
+    /** Ollama (`/api/tags`) — LLM local + clasificador del router. */
+    ollama: ServiceStatus;
+    /** Letta (`/v1/health/`) — memoria semántica. */
+    letta: ServiceStatus;
+    /** Microservicio Whisper (`/health`) — STT. */
+    whisper: ServiceStatus;
+  };
+  secrets: {
+    /** `ANTHROPIC_API_KEY` presente (LLM cloud / Claude). */
+    anthropic: boolean;
+    /** `ELEVENLABS_API_KEY` presente (TTS primary). */
+    elevenlabs: boolean;
+  };
+  /** ISO timestamp del momento del chequeo. */
+  checkedAt: string;
+}
+
 export interface EventMap {
   // ─── Bus / sistema ──────────────────────────────────────────────────
   /**
@@ -32,6 +64,20 @@ export interface EventMap {
    * de instanciarse y registrarse en el Orchestrator.
    */
   'bus:ready': { startedAt: string };
+
+  /**
+   * El cliente pide un (re)chequeo de salud del sistema. El `core-host`
+   * responde con `system:health`. Sin payload relevante — `requestedBy`
+   * es opcional para diagnóstico.
+   */
+  'system:health-check': { requestedBy?: string };
+
+  /**
+   * Reporte de salud del sistema. El `core-host` lo emite al arrancar,
+   * al conectar un cliente nuevo, y en respuesta a `system:health-check`.
+   * El setup wizard del cliente lo renderiza. Ver ADR 0024 §6.
+   */
+  'system:health': SystemHealthReport;
 
   // ─── Usuario (origen: cliente desktop, mobile, etc.) ────────────────
   /**
