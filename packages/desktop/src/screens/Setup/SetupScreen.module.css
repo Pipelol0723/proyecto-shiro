@@ -40,6 +40,124 @@
   margin: 0 0 14px;
 }
 
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.sectionHead .sectionTitle {
+  margin: 0;
+}
+
+.refresh {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+
+.refresh:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardName {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cardPurpose {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin: 4px 0 0;
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badgeOk {
+  background: color-mix(in srgb, #3ecf8e 18%, transparent);
+  color: #2faf76;
+}
+
+.badgeDown {
+  background: color-mix(in srgb, #f5774a 18%, transparent);
+  color: #d65a30;
+}
+
+.badgeChecking {
+  background: var(--surface-solid);
+  color: var(--ink-faint);
+}
+
+.command {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface-solid);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 12px 0 0;
+  color: var(--accent);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.degraded {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
 .shortcuts {
   list-style: none;
   padding: 0;

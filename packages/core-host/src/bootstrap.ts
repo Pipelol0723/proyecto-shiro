@@ -47,6 +47,7 @@ import { wireConversationFlow } from './pipeline/conversation-flow.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { TtsWithFallback } from './tts/tts-with-fallback.js';
+import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -192,6 +193,29 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     })();
   });
 
+  // 4d. Healthcheck del sistema para el setup wizard (ADR 0024 §6). El
+  //     chequeo es server-side (acceso de red directo + conoce process.env),
+  //     evitando CORS. Se emite al arrancar, al conectar un cliente nuevo,
+  //     y en respuesta a `system:health-check`. Nunca expone el valor de
+  //     las keys, solo su presencia.
+  const healthTargets = resolveHealthTargets(options.config);
+  const checkAndEmitHealth = (): void => {
+    void (async (): Promise<void> => {
+      try {
+        const report = await checkSystemHealth({ ...healthTargets, logger });
+        await bus.emit('system:health', report);
+      } catch (err) {
+        child.warn('system:health falló', { err });
+      }
+    })();
+  };
+  const unsubscribeHealth = bus.on('system:health-check', () => {
+    checkAndEmitHealth();
+  });
+  transport.onConnection(() => {
+    checkAndEmitHealth();
+  });
+
   // 5. TTS con cadena de fallback (ADR 0020). El YAML define el primary
   //    (ElevenLabsTTS) en `tts.active`; aquí instanciamos SystemTTS
   //    aparte y los envolvemos en un wrapper que el pipeline ve como un
@@ -257,6 +281,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     systemPrompt,
     shutdown: async () => {
       disposeFlow();
+      unsubscribeHealth();
       audioCache?.stop();
       await memoryManager.stop();
       await orchestrator.shutdown();
