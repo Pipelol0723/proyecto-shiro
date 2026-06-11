@@ -30,6 +30,14 @@ Thumbs.db
 **/src-tauri/target/
 **/src-tauri/gen/
 
+# Sidecar del core-host: el .exe empaquetado, el binario nativo de SQLite
+# y las configs copiadas como recursos los genera `npm run build:sidecar`
+# (ver packages/desktop/scripts/build-sidecar.mjs). No se commitean — se
+# reconstruyen en cada release. Ver ADR 0024 §2.
+**/src-tauri/binaries/
+**/src-tauri/resources/
+**/.sidecar-build/
+
 # Iconos del binario Tauri — placeholders generados por cada dev / CI
 # con `npx @tauri-apps/cli icon`. Ver `packages/desktop/src-tauri/icons/README.md`.
 # El README en la carpeta sí entra al repo (no es binario).
