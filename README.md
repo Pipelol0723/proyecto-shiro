@@ -385,6 +385,79 @@ npm run typecheck -w @proyecto-shiro/core
 npm test -w @proyecto-shiro/core
 ```
 
+## Cómo correr los tests y checks
+
+Hay dos niveles de prueba: los **checks automáticos** (lo que valida el
+CI) y la **verificación manual** de cambios con UI o I/O real.
+
+### 1. Checks automáticos — antes de cada push
+
+Estos cinco son los que corre el CI. Si alguno falla, **no pushees**:
+arregla primero. Córrelos en orden desde la raíz del repo:
+
+```bash
+npm run format:check   # formato (Prettier)
+npm run lint           # ESLint en todo el monorepo
+npm run typecheck      # TypeScript en core, core-host y desktop
+npm test               # Vitest — toda la suite
+npm run build          # compila los tres paquetes
+```
+
+Atajo para arreglar formato y lint automáticamente antes de revisar:
+
+```bash
+npm run format         # reescribe con Prettier
+npm run lint:fix       # arregla lo que ESLint pueda solo
+```
+
+### 2. Correr un solo test (iterar rápido)
+
+`npm test` corre todo (~45 s). Para enfocarte en un archivo, filtra por
+nombre (substring del path del test):
+
+```bash
+npm test -- system-health     # solo el healthcheck del sistema
+npm test -- useTtsPlayback     # solo el hook de reproducción TTS
+npm test -- local-memory       # solo el WAL de memoria
+```
+
+Modo watch (re-corre al guardar — ideal mientras desarrollas):
+
+```bash
+npm run test:watch
+```
+
+Cobertura (qué líneas tocan los tests):
+
+```bash
+npm run test:coverage
+```
+
+### 3. Verificación manual (UI + servicios reales)
+
+Los tests automáticos cubren la lógica, pero lo que renderiza el
+navegador o depende de servicios externos (LLM, voz, avatar) se prueba
+levantando la app. WebGL y el audio real no corren en jsdom, así que el
+render del avatar, el lip-sync y el wizard de salud se verifican a mano:
+
+```bash
+# Las dos partes a la vez (server + cliente)
+npm run dev
+```
+
+Luego en el navegador (`http://localhost:5173`):
+
+- **Pantalla Setup** → el wizard muestra en verde/rojo qué servicios
+  (Ollama, Letta, Whisper) están arriba y si las API keys están
+  presentes, con el comando para levantar lo que falte. El botón
+  "rechequear" re-dispara el chequeo.
+- **Conversación** → escribe o habla (push-to-talk con `Space`) y
+  confirma que Shiro responde, el avatar mueve la boca y cambia de
+  expresión.
+
+Para probarlo ya como **binario nativo** (Tauri lanza el sidecar solo),
+ver la sección [Arrancar la app como binario nativo](#arrancar-la-app-como-binario-nativo-tauri).
+
 ## Estructura del monorepo
 
 ```
