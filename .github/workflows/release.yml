@@ -1,0 +1,86 @@
+name: Release
+
+# Dispara al pushear un tag de versión (`git tag v0.1.0 && git push --tags`).
+# Construye el binario Windows firmado y crea un Release en GitHub con los
+# instaladores + los artefactos del auto-updater (`latest.json` + `.sig`).
+# El release sale como DRAFT: revisa los assets y publícalo a mano para que
+# el auto-updater (que lee `releases/latest`) lo vea. Ver ADR 0024 §4 y §8.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# El job necesita escribir el Release (crear el draft + subir assets).
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-windows:
+    name: Build, sign & release (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      # El sidecar bundlea el JS COMPILADO de core + core-host, así que hay
+      # que construirlos antes. Ver ADR 0024 §2.
+      - name: Build workspaces (core + core-host)
+        run: npm run build -w @proyecto-shiro/core -w @proyecto-shiro/core-host
+
+      # Empaqueta el core-host como .exe + copia better_sqlite3.node y las
+      # configs YAML a src-tauri/binaries|resources/. Debe correr ANTES de
+      # `tauri build` (que consume el sidecar vía externalBin).
+      - name: Build core-host sidecar
+        run: npm run build:sidecar -w @proyecto-shiro/desktop
+
+      # tauri-action corre `tauri build` (que a su vez hace el `vite build`
+      # del frontend vía beforeBuildCommand), firma con la clave ed25519 y
+      # crea el Release subiendo los instaladores + latest.json + .sig.
+      - name: Build, sign and publish the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # La clave del updater se generó SIN contraseña. GitHub no permite
+          # guardar un secret vacío, así que el password va como string vacío
+          # literal aquí (no como secret). Ver CONTRIBUTING.md.
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        with:
+          projectPath: packages/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Shiro ${{ github.ref_name }}'
+          releaseBody: |
+            Instalador de Proyecto Shiro para Windows x64.
+
+            Descarga el `.msi` o el `.exe` (NSIS) de los assets. La primera
+            vez Windows SmartScreen avisará (cert auto-firmado) — es esperable
+            (ADR 0024). El auto-updater consume `latest.json`.
+
+            Requisitos en runtime (ver el wizard de Setup en la app): Ollama,
+            Letta y Whisper corriendo; API keys de Anthropic/ElevenLabs
+            opcionales.
+          releaseDraft: true
+          prerelease: false

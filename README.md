@@ -147,6 +147,24 @@ npm run tauri:build -w @proyecto-shiro/desktop
 
 El binario sale en `packages/desktop/src-tauri/target/release/bundle/msi/`.
 
+### Cortar un release (CI firmado)
+
+El workflow `.github/workflows/release.yml` construye el binario Windows
+**firmado** y lo publica como Release en GitHub (con los artefactos del
+auto-updater). Se dispara al pushear un tag de versión:
+
+```bash
+# Sube la versión en packages/desktop/src-tauri/tauri.conf.json y Cargo.toml,
+# luego:
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+El CI deja el Release como **borrador**: revisa los assets (`.msi`, `.exe`,
+`latest.json`) y **publícalo a mano** para que el auto-updater lo vea
+(lee `releases/latest`). Requiere el secret `TAURI_SIGNING_PRIVATE_KEY`
+configurado — ver [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## Arrancar la app (modo dev sin binario — solo navegador)
 
 Desde ADR 0012, el companion se reparte en **dos procesos**: el servidor
