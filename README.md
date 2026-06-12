@@ -132,11 +132,12 @@ faltan los recursos del sidecar y asume que corres el `core-host` a mano
 (`npm run dev -w @proyecto-shiro/core-host`) — el cliente se conecta por
 WS igual. Si SÍ lo corriste, Tauri lanza el sidecar empaquetado.
 
-> **API keys en modo empaquetado**: el sidecar hereda las env vars del
-> proceso Tauri. Hoy, sin un `.env` junto al binario, `ANTHROPIC_API_KEY`
-> y `ELEVENLABS_API_KEY` no llegan al sidecar (Shiro cae a Ollama local +
-> SystemTTS). La gestión de secrets en el binario se resuelve en el PR del
-> setup wizard (config en runtime). Ver ADR 0024 §6.
+> **API keys en modo empaquetado**: el binario no tiene un `.env` al lado,
+> así que las keys se introducen **desde la app** — pantalla **Setup** →
+> sección _API keys_ → pega tu `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` y
+> Guardar. El core-host las persiste en un `secrets.env` en el dir de datos
+> del usuario; **reinicia Shiro** (tray → Salir y reabrir) para aplicarlas.
+> En `npm run dev` el `.env` de la raíz tiene prioridad. Ver ADR 0024 §6.
 
 Para producir el `.msi` distribuible (requiere el sidecar ya construido):
 

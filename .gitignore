@@ -10,6 +10,10 @@ build/
 # Runtime
 .env
 .env.local
+# API keys que el wizard de Setup persiste para el binario (ADR 0024 §6).
+# Plaintext en el dir de datos del usuario; nunca al repo.
+secrets.env
+**/secrets.env
 *.log
 .DS_Store
 Thumbs.db

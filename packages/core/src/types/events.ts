@@ -79,6 +79,26 @@ export interface EventMap {
    */
   'system:health': SystemHealthReport;
 
+  /**
+   * El cliente envía API keys para persistirlas en el binario empaquetado
+   * (sin tener que tocar `.env` a mano). El `core-host` las escribe a un
+   * `secrets.env` en su directorio de datos; tomarán efecto al reiniciar
+   * la app (los módulos LLM/TTS leen las keys al construirse). Ver ADR
+   * 0024 §6.
+   *
+   * Cada campo es opcional: solo se actualiza el que llega. Un string
+   * vacío **borra** esa key. El valor viaja por el WS local (mismo origen
+   * que el resto del bus) y nunca se loguea.
+   */
+  'secrets:save': { anthropic?: string; elevenlabs?: string };
+
+  /**
+   * Ack del `core-host` tras intentar persistir las keys. `restartRequired`
+   * es `true` cuando se guardó algo nuevo: el cliente avisa al usuario que
+   * reinicie para aplicarlas.
+   */
+  'secrets:saved': { ok: boolean; restartRequired: boolean; error?: string };
+
   // ─── Usuario (origen: cliente desktop, mobile, etc.) ────────────────
   /**
    * El usuario envió un mensaje de texto (escribió + Enter, o el STT

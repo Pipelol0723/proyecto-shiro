@@ -16,6 +16,7 @@
 import { Logger } from '@proyecto-shiro/core';
 import { CharacterLoader, ConfigLoader } from '@proyecto-shiro/core/node';
 import { bootstrap } from './bootstrap.js';
+import { loadSecretsEnv } from './secrets/secrets-file.js';
 
 const DEFAULT_PORT = 9876;
 /**
@@ -39,8 +40,18 @@ function parsePort(raw: string | undefined): number {
 }
 
 async function main(): Promise<void> {
+  // Carga las API keys persistidas por el wizard de Setup (binario
+  // empaquetado) ANTES de construir los módulos — el `.env` de dev y las
+  // env vars reales tienen prioridad. Ver ADR 0024 §6.
+  const loadedSecrets = loadSecretsEnv(process.cwd());
+
   const port = parsePort(process.env.SHIRO_HOST_PORT);
   const logger = new Logger();
+  if (loadedSecrets.length > 0) {
+    logger
+      .child({ module: 'secrets' })
+      .info(`keys cargadas de secrets.env: ${loadedSecrets.join(', ')}`);
+  }
   const configPath = process.env.SHIRO_MODULES_CONFIG ?? DEFAULT_CONFIG_PATH;
   const characterPath = process.env.SHIRO_CHARACTER ?? DEFAULT_CHARACTER_PATH;
   const config = new ConfigLoader({ logger }).loadModulesConfig(configPath);

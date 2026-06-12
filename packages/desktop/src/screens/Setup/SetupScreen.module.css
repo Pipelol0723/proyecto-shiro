@@ -158,6 +158,74 @@
   margin: 8px 0 0;
 }
 
+.secretRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.secretInput {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-solid);
+  border: 1px solid var(--surface-border);
+  color: var(--ink);
+}
+
+.secretInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.secretSave {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 14px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.secretSave:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.secretNote {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: #2faf76;
+  margin: 12px 0 0;
+}
+
+.secretError {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: #d65a30;
+  margin: 12px 0 0;
+}
+
+.secretHint {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.secretHint code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+
 .shortcuts {
   list-style: none;
   padding: 0;

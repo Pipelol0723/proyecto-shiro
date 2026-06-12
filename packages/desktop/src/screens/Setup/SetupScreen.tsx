@@ -8,14 +8,23 @@
  * renderiza vía `useSystemHealth`.
  *
  * Shiro funciona en **modo degradado** si falta algo: cada fila explica
- * qué se pierde. La entrada de las API keys desde la propia app (sin
- * tocar `.env`) llega en un PR aparte (task #38).
+ * qué se pierde. Las API keys se pueden **introducir desde la propia app**
+ * (sin tocar `.env`): el core-host las persiste en un `secrets.env` y
+ * aplican al reiniciar (ADR 0024 §6).
  */
 
+import { useState } from 'react';
 import type { ServiceStatus, SystemHealthReport } from '@proyecto-shiro/core';
 import { useBus } from '../../use-bus';
 import { useSystemHealth } from '../../health/useSystemHealth';
+import { useSecretsSave } from '../../health/useSecretsSave';
 import styles from './SetupScreen.module.css';
+
+/** Campos del payload `secrets:save`. Mapea cada secret a su campo. */
+const SECRET_FIELD: Record<keyof SystemHealthReport['secrets'], 'anthropic' | 'elevenlabs'> = {
+  anthropic: 'anthropic',
+  elevenlabs: 'elevenlabs',
+};
 
 interface ServiceRow {
   key: keyof SystemHealthReport['services'];
@@ -93,8 +102,18 @@ function StatusBadge({ ok, checking }: { ok: boolean; checking: boolean }): JSX.
 export function SetupScreen(): JSX.Element {
   const bus = useBus();
   const { report, checking, refresh } = useSystemHealth({ bus });
+  const secrets = useSecretsSave(bus);
+  // Borradores de las keys que el usuario escribe (no se rellenan nunca
+  // con el valor real — solo se conoce la presencia). Key por field.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const serviceStatus = (s: ServiceStatus | undefined): boolean => s === 'ok';
+
+  const saveSecret = (field: 'anthropic' | 'elevenlabs'): void => {
+    const value = drafts[field] ?? '';
+    secrets.save({ [field]: value });
+    setDrafts((d) => ({ ...d, [field]: '' }));
+  };
 
   return (
     <div className={styles.screen}>
@@ -147,6 +166,7 @@ export function SetupScreen(): JSX.Element {
         <ul className={styles.cards}>
           {SECRETS.map((sec) => {
             const ok = report?.secrets[sec.key] ?? false;
+            const field = SECRET_FIELD[sec.key];
             return (
               <li key={sec.key} className={styles.card}>
                 <div className={styles.cardHead}>
@@ -154,18 +174,50 @@ export function SetupScreen(): JSX.Element {
                   <StatusBadge ok={ok} checking={report === null && checking} />
                 </div>
                 <p className={styles.cardPurpose}>{sec.purpose}</p>
-                {!ok && report !== null && (
-                  <>
-                    <code className={styles.command}>
-                      {sec.envVar} en el .env de la raíz (o entrada en la app, próximamente)
-                    </code>
-                    <p className={styles.degraded}>{sec.degraded}</p>
-                  </>
-                )}
+                {!ok && report !== null && <p className={styles.degraded}>{sec.degraded}</p>}
+                <div className={styles.secretRow}>
+                  <input
+                    type="password"
+                    className={styles.secretInput}
+                    placeholder={ok ? 'reemplazar key…' : `pega tu ${sec.envVar}`}
+                    value={drafts[field] ?? ''}
+                    onChange={(e) => {
+                      const v = e.currentTarget.value;
+                      setDrafts((d) => ({ ...d, [field]: v }));
+                    }}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className={styles.secretSave}
+                    disabled={secrets.status === 'saving' || (drafts[field] ?? '').trim() === ''}
+                    onClick={() => {
+                      saveSecret(field);
+                    }}
+                  >
+                    Guardar
+                  </button>
+                </div>
               </li>
             );
           })}
         </ul>
+        {secrets.status === 'saved' && secrets.restartRequired && (
+          <p className={styles.secretNote}>
+            ✓ Guardada. Reinicia Shiro (tray → Salir y reabrir) para aplicarla.
+          </p>
+        )}
+        {secrets.status === 'saved' && !secrets.restartRequired && (
+          <p className={styles.secretNote}>Sin cambios (la key era la misma o estaba vacía).</p>
+        )}
+        {secrets.status === 'error' && (
+          <p className={styles.secretError}>No se pudo guardar: {secrets.error}</p>
+        )}
+        <p className={styles.secretHint}>
+          Las keys se guardan localmente (cifrado del disco del SO) y nunca salen de tu máquina. En
+          desarrollo, el <code>.env</code> de la raíz tiene prioridad.
+        </p>
       </div>
 
       <div className={styles.section}>
