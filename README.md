@@ -4,17 +4,16 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **Avatar Live2D** ✅ completo. Render del modelo Hiyori
-> (`pixi-live2d-display-lipsyncpatch` sobre PixiJS v7, Cubism Core **4.2.2**;
-> el Core del SDK 5 crashea) dentro de `<Avatar>`, con **fallback automático
-> al orbe** si faltan los assets. **Lip-sync** de la boca con la voz del TTS
-> (Web Audio → `ParamMouthOpenY`) y **expresiones faciales por emoción**
-> (`llm:responded` → parámetros Cubism; seam listo para `model.expression()`
-> con un modelo que traiga `.exp3.json`). Idle off por default (sus motions
-> competían con el lip-sync). (PRs #51-#54 + expresiones.) Hitos previos:
-> **Setup**, **Core**, **Cliente desktop**, **LLM**, **Memoria**, **STT**,
-> **TTS**. Próximo hito: **Packaging Tauri**. Ver
-> [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
+> **Estado**: hito **Packaging Tauri** ✅ completo — Shiro se instala y se
+> abre con doble click como app de escritorio Windows. Binario **Tauri 2.0**
+> con tray icon + close-to-tray + single-instance; el `core-host` viaja como
+> **sidecar** (empaquetado con ncc+pkg, `better-sqlite3` nativo) que Tauri
+> lanza y mata. **Auto-updater** firmado (ed25519, GitHub Releases) + workflow
+> CI de release por tag. **Setup wizard** que chequea los servicios externos
+> y deja meter las **API keys en runtime** (`secrets.env`, sin tocar `.env`).
+> Modo overlay diferido a post-MVP. Hitos previos: **Setup**, **Core**,
+> **Cliente desktop**, **LLM**, **Memoria**, **STT**, **TTS**, **Avatar
+> Live2D**. Ver [ADR 0024](docs/adr/0024-packaging-tauri-windows-sidecar.md).
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
 
@@ -26,30 +25,31 @@ porque el cliente desktop se intercaló entre Core y LLM, y los números se
 hicieron confusos. La numeración del plan original se conserva en el
 histórico.
 
-| Hito                | Estado       | Notas                                                                                                                                                                                      |
-| ------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Setup**           | ✅ completo  | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                                                           |
-| **Core**            | ✅ completo  | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                         |
-| **Cliente desktop** | ✅ completo  | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                             |
-| **LLM**             | ✅ completo  | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                                               |
-| **Memoria**         | ✅ completo  | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                                                    |
-| **STT**             | ✅ completo  | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.                                          |
-| **TTS**             | ✅ completo  | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                |
-| **Avatar Live2D**   | ✅ completo  | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe, lip-sync con el audio del TTS y expresiones faciales por emoción. ADR 0021. |
-| **Packaging Tauri** | ⏸️ pendiente | Envuelve el build de Vite en binario nativo                                                                                                                                                |
-| **Post-MVP**        |              |                                                                                                                                                                                            |
-| Plugins             | ⏳ futuro    | Sistema de extensiones                                                                                                                                                                     |
-| Móvil               | ⏳ futuro    | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                 |
-| Avatar 3D (VRM)     | ⏳ futuro    | `@pixiv/three-vrm`                                                                                                                                                                         |
-| Arduino bridge      | ⏳ futuro    | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                                                              |
-| IoT bridge          | ⏳ futuro    | MQTT, Home Assistant                                                                                                                                                                       |
+| Hito                | Estado      | Notas                                                                                                                                                                                                                                                                                |
+| ------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Setup**           | ✅ completo | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                                                                                                                                                     |
+| **Core**            | ✅ completo | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                                                                                                                   |
+| **Cliente desktop** | ✅ completo | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                                                                                                                       |
+| **LLM**             | ✅ completo | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                                                                                                                                         |
+| **Memoria**         | ✅ completo | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                                                                                                                                              |
+| **STT**             | ✅ completo | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.                                                                                                                                    |
+| **TTS**             | ✅ completo | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                                                                                                          |
+| **Avatar Live2D**   | ✅ completo | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe, lip-sync con el audio del TTS y expresiones faciales por emoción. ADR 0021.                                                                                           |
+| **Packaging Tauri** | ✅ completo | Binario Tauri 2.0 (Windows): sidecar `core-host` (ncc+pkg), tray + close-to-tray + single-instance, auto-updater firmado (ed25519 + GitHub Releases), CI release por tag, setup wizard con healthcheck + API keys en runtime (`secrets.env`). Overlay diferido a post-MVP. ADR 0024. |
+| **Post-MVP**        |             |                                                                                                                                                                                                                                                                                      |
+| Modo overlay        | ⏳ futuro   | Toggle a ventana flotante always-on-top transparente estilo VTuber (ADR 0024 §3)                                                                                                                                                                                                     |
+| Plugins             | ⏳ futuro   | Sistema de extensiones                                                                                                                                                                                                                                                               |
+| Móvil               | ⏳ futuro   | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                                                                                                           |
+| Avatar 3D (VRM)     | ⏳ futuro   | `@pixiv/three-vrm`                                                                                                                                                                                                                                                                   |
+| Arduino bridge      | ⏳ futuro   | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                                                                                                                                                        |
+| IoT bridge          | ⏳ futuro   | MQTT, Home Assistant                                                                                                                                                                                                                                                                 |
 
 ## Stack
 
 - **TypeScript** (ESM, strict) + **Node.js 20+**
 - **npm workspaces** para el monorepo
 - **Vite + React 18** para `@proyecto-shiro/desktop` (cliente)
-- **Tauri 2.0** envolverá el build del cliente en el hito de packaging
+- **Tauri 2.0** empaqueta el cliente como binario nativo Windows (sidecar `core-host`, tray, auto-updater firmado) — ver ADR 0024
 - **Ollama + Qwen 2.5** para LLM local
 - **Claude Sonnet** vía Anthropic SDK para LLM cloud
 - **faster-whisper** (microservicio Python) para STT
@@ -131,8 +131,8 @@ se reconstruye en cada release).
 `core-host` lo provee el sidecar, no un segundo proceso. Por eso:
 
 - Si corriste `build:sidecar`, Tauri lanza el sidecar empaquetado (que **no**
-  hereda el `.env` de la raíz: sus keys salen de su propio entorno, o del
-  `secrets.env` que escribe el setup wizard cuando esa pieza esté en su sitio).
+  hereda el `.env` de la raíz: sus keys salen de su propio entorno o del
+  `secrets.env` que escribe el setup wizard — ver el bloque de API keys abajo).
 - Si NO lo corriste, no hay `core-host`: arráncalo a mano en otra terminal
   con `npm run dev -w @proyecto-shiro/core-host` y el cliente se conecta por
   WS igual.
