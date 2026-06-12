@@ -3,23 +3,24 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-06-08 — hito **Avatar Live2D** ✅
-> completo (sobre Setup, Core, Cliente desktop, LLM, Memoria, STT, TTS).
-> Render de Hiyori (`pixi-live2d-display-lipsyncpatch`, PixiJS v7, Cubism
-> Core **4.2.2**; el Core del SDK 5 crashea el renderer) dentro de
-> `<Avatar>`, con fallback automático al orbe, **lip-sync** de la boca con
-> la voz del TTS (Web Audio → `ParamMouthOpenY`) y **expresiones faciales
-> por emoción** (parámetros Cubism; seam listo para `model.expression()`).
-> Idle off por default (sus motions competían con el lip-sync). Próximo:
-> **Packaging Tauri**. Ver
-> [ADR 0021](adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
+> **Última actualización**: 2026-06-12 — hito **Packaging Tauri** ✅
+> completo (sobre Setup, Core, Cliente desktop, LLM, Memoria, STT, TTS,
+> Avatar Live2D). Shiro se instala y abre con doble click: binario **Tauri
+> 2.0** (Windows) con tray + close-to-tray + single-instance; el `core-host`
+> viaja como **sidecar** (ncc+pkg, `better-sqlite3` nativo) que Tauri lanza y
+> mata, con cwd en `app_local_data_dir` para que la memoria sea estable.
+> **Auto-updater** firmado (ed25519, GitHub Releases) + CI de release por tag.
+> **Setup wizard** con healthcheck de servicios y **API keys en runtime**
+> (`secrets.env`). Modo overlay diferido a post-MVP. Ver
+> [ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md).
 
 ## Visión a vista de pájaro
 
 Proyecto Shiro es un AI companion modular que se ejecuta como:
 
 - **App desktop** — uso típico hoy. Cliente Vite+React empaquetado con
-  Tauri en el hito Packaging.
+  **Tauri 2.0** como binario Windows, con el `core-host` viajando de sidecar
+  (ver [Packaging Tauri](#packaging-tauri-binario-sidecar-y-updater) y ADR 0024).
 - **Servicio headless** con clientes remotos (móvil, Arduino, IoT) — meta
   a medio plazo. El cerebro (core) corre como proceso/servicio
   independiente; cualquier cliente se conecta vía Transport.
@@ -345,6 +346,51 @@ graph LR
 - **El bootstrap solo crea el AudioCache si `simulationSpeed !== 0`** — `simulationSpeed === 0` es la señal de "modo test" y mantiene el simulador legacy de `tts:audio-ended` para tests que no levantan red real.
 - **Sin auth en `GET /audio/`**: V1 local-only. CORS abierto (`Access-Control-Allow-Origin: *`). Cuando llegue multi-device público, habrá que firmar/limitar las URLs.
 - **WAV de SystemTTS son ~50-200 KB** para frases cortas — manejable en memoria sin streaming. Si el contenido crece, habrá que stream-pipe el archivo.
+
+## Packaging Tauri: binario, sidecar y updater
+
+El último hito del MVP (ver [ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md)) envuelve todo en un binario nativo que el usuario instala y abre con doble click. La pieza clave es que **el `core-host` no desaparece** al empaquetar: viaja como **sidecar** que el shell de Tauri lanza y mata.
+
+```mermaid
+graph TD
+    subgraph "Binario Tauri (proyecto-shiro-desktop.exe)"
+        Shell[Shell Rust<br/>tray · close-to-tray · single-instance]
+        WebView[WebView2<br/>cliente Vite+React build]
+    end
+
+    subgraph "Sidecar (core-host.exe — ncc+pkg)"
+        Host[core-host<br/>EventBus + módulos]
+        Sqlite[(better_sqlite3.node<br/>nativeBinding)]
+        Secrets[(secrets.env<br/>en app_local_data_dir)]
+    end
+
+    subgraph "Servicios externos (NO bundleados)"
+        Ollama[Ollama :11434]
+        Letta[Letta :8283]
+        Whisper[Whisper :8765]
+    end
+
+    Shell -->|spawn / kill| Host
+    WebView <-->|WebSocket :9876| Host
+    WebView -.->|plugin-updater| GH[(GitHub Releases<br/>latest.json firmado ed25519)]
+    Host --> Sqlite
+    Host --> Secrets
+    Host --> Ollama
+    Host --> Letta
+    Host --> Whisper
+
+    style Shell fill:#4a9eff,stroke:#333,color:#fff
+    style Host fill:#f4b400,stroke:#333,color:#fff
+```
+
+- **Solo Windows x64 en V1** (ADR 0024 §1): el equipo no tiene Mac (firma/notarización de Apple) y Linux queda sin testing. El código es OS-agnóstico; el _build oficial_ es Windows. Targets `.msi` + `.nsis`.
+- **Sidecar `core-host`** (§2): `@vercel/ncc` bundlea el JS a uno solo, `@yao-pkg/pkg` lo vuelve `.exe`, y el `better_sqlite3.node` se copia al lado (módulo nativo, cargado por `nativeBinding`). Tauri lo declara en `externalBin` y lo spawnea desde Rust en `setup` (no desde el webview, así no hace falta conceder `shell:allow-execute` en la ACL). Al salir de verdad (`RunEvent::Exit`) lo mata para no dejar el `:9876` huérfano.
+  - **cwd = `app_local_data_dir`**: el config usa `db_path: ./data/memory.db` _relativo_; fijando el cwd a `%LOCALAPPDATA%\com.pipelol.proyecto-shiro`, el WAL (y con él el `agent_id` de Letta) cae siempre en el mismo sitio escribible. Sin esto, cada arranque resolvía un `memory.db` distinto y provisionaba un agente nuevo → la memoria no continuaba.
+  - **Best-effort**: si faltan los recursos del sidecar (modo dev sin `build:sidecar`), Rust loguea y sigue — el dev corre el `core-host` a mano. Y si el `:9876` ya está ocupado, el sidecar que llega tarde se aparta con código 0 en vez de crashear.
+- **Setup wizard + healthcheck** (§6): el `core-host` chequea **server-side** Ollama/Letta/Whisper (evita CORS del webview) y la _presencia_ (nunca el valor) de las API keys, y emite `system:health`; el cliente lo renderiza. Las **keys se introducen desde la app** → el wizard emite `secrets:save` → el `core-host` escribe `secrets.env` (`mode 0600`) en su cwd; al arrancar, `loadSecretsEnv` las mete en `process.env` **sin pisar** un `.env` o env vars reales. Aplican en el siguiente arranque (los módulos LLM/TTS leen las keys al construirse).
+- **Auto-updater** (§4): `tauri-plugin-updater` consulta un `latest.json` firmado con **ed25519** servido por **GitHub Releases**; el cliente (`useAppUpdater`) chequea al montar y, si hay versión nueva, ofrece descargar+reiniciar (`tauri-plugin-process`). Un check fallido (404 sin release aún, sin red) resuelve en silencio — el banner de error queda solo para fallos de instalación. La clave privada vive únicamente como secret de CI (`TAURI_SIGNING_PRIVATE_KEY`); el workflow `release.yml` (disparado por tag `v*.*.*`) construye, firma y publica el release con sus artefactos.
+- **State del chat en el root**: el `CompanionProvider` monta el reducer del companion **una vez** por encima del switch de pantallas, así la conversación sobrevive a cambiar de pantalla y la suscripción a `memory:snapshot` está siempre viva para rehidratar al reconectar/recargar.
+- **Diferido a post-MVP**: el **modo overlay** (ventana flotante always-on-top transparente estilo VTuber, §3) y los iconos de branding definitivos.
 
 ## Avatar Live2D: render en cliente + lip-sync
 
