@@ -26,13 +26,13 @@ npx @tauri-apps/cli icon path/to/source.png
 Ese comando lee la PNG fuente y escribe todos los formatos necesarios en
 `packages/desktop/src-tauri/icons/`.
 
-## Por qué los binarios no están en git
+## Estos iconos SÍ están commiteados
 
-Los `.png`, `.ico` y `.icns` son ignorados por `.gitignore` para evitar:
+Los `.png`, `.ico` y `.icns` de esta carpeta **sí entran al repo**: el
+release CI (`.github/workflows/release.yml`) necesita iconos presentes
+para que `tauri build` no falle, y un paso de generación en CI sería
+frágil. Son **placeholders temporales** (ADR 0024 §7) — se reemplazan
+cuando llegue el branding definitivo de Shiro.
 
-- Bloat del repo con binarios cuando los placeholders cambian.
-- Mezclar el branding "definitivo" con los placeholders durante V1 (los
-  iconos definitivos llegan cuando se decida modelo y branding propio,
-  documentado en ADR 0024).
-
-Cada dev / CI runner genera los suyos al setup.
+Las subcarpetas `android/` y `ios/` que `tauri icon` también genera
+quedan gitignored: V1 es Windows-only, se regeneran cuando toque mobile.

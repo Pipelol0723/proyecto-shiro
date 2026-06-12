@@ -32,21 +32,28 @@ en `tauri.conf.json` → `plugins.updater.pubkey`.
 > poder auto-actualizarse** (la firma vieja ya no valida) — los usuarios
 > tendrán que reinstalar a mano una vez. Regenera solo si es necesario.
 
-### Secrets de GitHub Actions (para el release CI — task #36)
+### Secrets de GitHub Actions (para el release CI)
 
-El workflow de release firma los artefactos en CI. Configura en
-**Settings → Secrets and variables → Actions** del repo:
+El workflow `.github/workflows/release.yml` firma los artefactos en CI.
+Configura en **Settings → Secrets and variables → Actions** del repo
+**un solo secret**:
 
-| Secret                               | Valor                                                                   |
-| ------------------------------------ | ----------------------------------------------------------------------- |
-| `TAURI_SIGNING_PRIVATE_KEY`          | El **contenido** del archivo `~/.tauri/shiro-updater.key` (no la ruta). |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | La contraseña de la clave, o vacío si la generaste sin contraseña.      |
+| Secret                      | Valor                                                                   |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `TAURI_SIGNING_PRIVATE_KEY` | El **contenido** del archivo `~/.tauri/shiro-updater.key` (no la ruta). |
+
+La clave de este repo se generó **sin contraseña**, y GitHub no permite
+guardar un secret con valor vacío — por eso `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+**no se crea como secret**: el workflow lo pasa como string vacío directamente.
+Si en una regeneración futura le pones contraseña, añade ese secret y cambia
+la línea `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''` del workflow para que lea
+del secret.
 
 Para volcar la privada al portapapeles y pegarla en el secret:
 
-```bash
+```powershell
 # Windows PowerShell
-Get-Content "$HOME\.tauri\shiro-updater.key" | Set-Clipboard
+Get-Content "$HOME\.tauri\shiro-updater.key" -Raw | Set-Clipboard
 ```
 
 ### Build local firmado (probar el updater sin CI)

@@ -38,14 +38,11 @@ Thumbs.db
 **/src-tauri/resources/
 **/.sidecar-build/
 
-# Iconos del binario Tauri — placeholders generados por cada dev / CI
-# con `npx @tauri-apps/cli icon`. Ver `packages/desktop/src-tauri/icons/README.md`.
-# El README en la carpeta sí entra al repo (no es binario).
-**/src-tauri/icons/*.png
-**/src-tauri/icons/*.ico
-**/src-tauri/icons/*.icns
-# Subcarpetas android/ios que `tauri icon` también genera — V1 es
-# Windows-only (ADR 0024); se regeneran cuando toque mobile.
+# Iconos del binario Tauri — placeholders SÍ commiteados (desktop) para que
+# el release CI pueda buildear sin un paso de generación (ADR 0024 §7, §8).
+# Son placeholders temporales; se reemplazan cuando llegue el branding real.
+# Las subcarpetas android/ios que `tauri icon` también genera quedan fuera:
+# V1 es Windows-only (ADR 0024), se regeneran cuando toque mobile.
 **/src-tauri/icons/android/
 **/src-tauri/icons/ios/
 
