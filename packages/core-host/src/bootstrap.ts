@@ -48,6 +48,7 @@ import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { TtsWithFallback } from './tts/tts-with-fallback.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
+import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
 
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
@@ -216,6 +217,33 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     checkAndEmitHealth();
   });
 
+  // 4e. Persistencia de API keys desde el wizard (ADR 0024 §6). El cliente
+  //     manda `secrets:save` con las keys; las escribimos a `secrets.env`
+  //     en el cwd (= app_local_data_dir en el sidecar). Aplican al
+  //     reiniciar — los módulos LLM/TTS leen las keys al construirse, no
+  //     en caliente. Nunca logueamos el valor.
+  const unsubscribeSecrets = bus.on('secrets:save', (payload) => {
+    void (async (): Promise<void> => {
+      try {
+        const updates: Partial<Record<ManagedKey, string>> = {};
+        for (const [field, envKey] of Object.entries(SECRET_FIELD_TO_ENV)) {
+          const value = (payload as Record<string, unknown>)[field];
+          if (typeof value === 'string') updates[envKey] = value;
+        }
+        const changed = saveSecretsEnv(process.cwd(), updates);
+        child.info(`secrets:save — ${changed ? 'guardado (requiere reinicio)' : 'sin cambios'}`);
+        await bus.emit('secrets:saved', { ok: true, restartRequired: changed });
+      } catch (err) {
+        child.warn('secrets:save falló', { err });
+        await bus.emit('secrets:saved', {
+          ok: false,
+          restartRequired: false,
+          error: err instanceof Error ? err.message : 'error desconocido',
+        });
+      }
+    })();
+  });
+
   // 5. TTS con cadena de fallback (ADR 0020). El YAML define el primary
   //    (ElevenLabsTTS) en `tts.active`; aquí instanciamos SystemTTS
   //    aparte y los envolvemos en un wrapper que el pipeline ve como un
@@ -282,6 +310,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     shutdown: async () => {
       disposeFlow();
       unsubscribeHealth();
+      unsubscribeSecrets();
       audioCache?.stop();
       await memoryManager.stop();
       await orchestrator.shutdown();
