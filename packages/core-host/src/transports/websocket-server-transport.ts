@@ -72,7 +72,7 @@ export class WebSocketServerTransport implements ITransport {
   private readonly readyPromise: Promise<void>;
   private readonly httpHandlers: HttpRequestHandler[] = [];
   private receiver: TransportReceiveHandler | undefined;
-  private connectionHandler: (() => void | Promise<void>) | undefined;
+  private readonly connectionHandlers: (() => void | Promise<void>)[] = [];
   private closed = false;
 
   constructor(options: WebSocketServerTransportOptions) {
@@ -187,15 +187,18 @@ export class WebSocketServerTransport implements ITransport {
 
   /**
    * Registra un handler que se invoca cada vez que un cliente nuevo se
-   * conecta. Lo usa el bootstrap para empujar `memory:snapshot` y dejar
-   * que el cliente hidrate su historial al reconectar.
+   * conecta. Lo usan el bootstrap para empujar `memory:snapshot` (rehidratar
+   * el historial del cliente) y el healthcheck para emitir `system:health`.
    *
-   * Solo se admite un handler; llamadas posteriores lo sustituyen. Si el
-   * handler devuelve `Promise`, se ejecuta fire-and-forget (los errores
-   * van al log; nunca tumban la conexión recién aceptada).
+   * Se admiten **varios** handlers y se invocan todos, en orden de registro.
+   * (Antes solo se guardaba el último, así que un segundo `onConnection`
+   * pisaba al primero — por eso el snapshot dejó de emitirse en cuanto el
+   * healthcheck añadió el suyo.) Si un handler devuelve `Promise`, se ejecuta
+   * fire-and-forget: los errores van al log y nunca tumban la conexión recién
+   * aceptada.
    */
   onConnection(handler: () => void | Promise<void>): void {
-    this.connectionHandler = handler;
+    this.connectionHandlers.push(handler);
   }
 
   async close(): Promise<void> {
@@ -228,8 +231,7 @@ export class WebSocketServerTransport implements ITransport {
     this.clients.add(ws);
     this.logger.info(`cliente conectado (total=${this.clients.size})`);
 
-    if (this.connectionHandler !== undefined) {
-      const h = this.connectionHandler;
+    for (const h of this.connectionHandlers) {
       Promise.resolve(h()).catch((err: unknown) => {
         this.logger.error('connection handler falló', { err });
       });

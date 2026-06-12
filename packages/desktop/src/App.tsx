@@ -1,13 +1,14 @@
 /**
  * App — layout final del cliente desktop.
  *
- * Sustituye el playground del PR B por la estructura real: BusProvider
- * envuelve todo, Sidebar elige pantalla, Header muestra título + tema.
- * Las 5 pantallas conviven; solo se renderiza la activa.
- *
- * El reducer + suscripciones al bus viven dentro de
- * `ConversationScreen` vía `useCompanionState`. Las otras 4 pantallas
- * son stubs estáticos sin acoplamiento al state del companion.
+ * `BusProvider` envuelve todo; dentro, `CompanionProvider` monta el state
+ * del companion **una sola vez**, por encima del switch de pantallas. Eso
+ * es clave: el historial de chat y la suscripción a `memory:snapshot` viven
+ * en el provider, no en `ConversationScreen`, así que la conversación
+ * **sobrevive a los cambios de pantalla** (antes se perdía al navegar —
+ * ver `state/companion-context.tsx`). El `Sidebar` elige pantalla y el
+ * `Header` muestra título + tema. Las 5 pantallas conviven; solo se
+ * renderiza la activa.
  *
  * El `bus` se inyecta desde `main.tsx` (producción) con
  * `WebSocketTransport` al server. Si se omite (tests, demos), el
@@ -17,6 +18,7 @@
 import { useState } from 'react';
 import type { EventMap, IEventBus } from '@proyecto-shiro/core';
 import { BusProvider } from './bus-context';
+import { CompanionProvider } from './state/companion-context';
 import { Sidebar, Header, type ScreenId } from './layout';
 import {
   ConversationScreen,
@@ -35,27 +37,40 @@ export interface AppProps {
 }
 
 export function App({ bus }: AppProps = {}): JSX.Element {
+  return (
+    <BusProvider bus={bus}>
+      <CompanionProvider>
+        <AppShell />
+      </CompanionProvider>
+    </BusProvider>
+  );
+}
+
+/**
+ * Shell de UI: vive dentro de `CompanionProvider`, mantiene el tema y la
+ * pantalla activa, y renderiza el layout. Estado puramente de UI — el state
+ * del companion lo lee cada pantalla con `useCompanion()`.
+ */
+function AppShell(): JSX.Element {
   const [theme, setTheme] = useState<ThemeName>('kawaii');
   const [screen, setScreen] = useState<ScreenId>('chat');
 
   return (
-    <BusProvider bus={bus}>
-      <div className={styles.app}>
-        {/* Aviso de auto-update (ADR 0024 §4). Invisible fuera de Tauri
-            y cuando la app está al día. */}
-        <UpdateBanner />
-        <Sidebar active={screen} onChange={setScreen} />
-        <main className={styles.main}>
-          <Header screen={screen} theme={theme} onThemeChange={setTheme} />
-          <div className={styles.content}>
-            {screen === 'chat' && <ConversationScreen />}
-            {screen === 'modules' && <ModulesScreen />}
-            {screen === 'character' && <CharacterScreen />}
-            {screen === 'avatar' && <AvatarScreen />}
-            {screen === 'setup' && <SetupScreen />}
-          </div>
-        </main>
-      </div>
-    </BusProvider>
+    <div className={styles.app}>
+      {/* Aviso de auto-update (ADR 0024 §4). Invisible fuera de Tauri
+          y cuando la app está al día. */}
+      <UpdateBanner />
+      <Sidebar active={screen} onChange={setScreen} />
+      <main className={styles.main}>
+        <Header screen={screen} theme={theme} onThemeChange={setTheme} />
+        <div className={styles.content}>
+          {screen === 'chat' && <ConversationScreen />}
+          {screen === 'modules' && <ModulesScreen />}
+          {screen === 'character' && <CharacterScreen />}
+          {screen === 'avatar' && <AvatarScreen />}
+          {screen === 'setup' && <SetupScreen />}
+        </div>
+      </main>
+    </div>
   );
 }
