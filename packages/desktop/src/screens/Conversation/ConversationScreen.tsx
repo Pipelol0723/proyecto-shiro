@@ -27,7 +27,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
-import { useCompanionState } from '../../state/useCompanionState';
+import { useCompanion } from '../../state/use-companion';
 import { useMicrophonePTT } from '../../audio/useMicrophonePTT';
 import { useTtsPlayback } from '../../audio/useTtsPlayback';
 import { ChatPanel } from './ChatPanel';
@@ -44,7 +44,7 @@ function clampAvatarSize(size: number): number {
 
 export function ConversationScreen(): JSX.Element {
   const bus = useBus();
-  const [state] = useCompanionState();
+  const [state] = useCompanion();
   const [draft, setDraft] = useState('');
   const [chatOpen, setChatOpen] = useState(true);
   const stageRef = useRef<HTMLElement | null>(null);

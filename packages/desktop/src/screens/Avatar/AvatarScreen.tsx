@@ -13,11 +13,11 @@
  */
 
 import { Avatar } from '../../components/Avatar';
-import { useCompanionState } from '../../state/useCompanionState';
+import { useCompanion } from '../../state/use-companion';
 import styles from './AvatarScreen.module.css';
 
 export function AvatarScreen(): JSX.Element {
-  const [state] = useCompanionState();
+  const [state] = useCompanion();
 
   return (
     <div className={styles.screen}>

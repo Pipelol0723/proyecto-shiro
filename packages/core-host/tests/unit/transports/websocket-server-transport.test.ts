@@ -240,6 +240,31 @@ describe('WebSocketServerTransport', () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
+  it('onConnection() admite varios handlers y los invoca todos', async () => {
+    // Regresión: antes `onConnection` guardaba un solo handler y el segundo
+    // pisaba al primero. En el bootstrap eso hacía que el healthcheck
+    // (registrado después) borrara el push de `memory:snapshot` → el chat no
+    // rehidrataba al reconectar. Ahora ambos handlers deben dispararse.
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+
+    const first = vi.fn();
+    const second = vi.fn();
+    t.onConnection(first);
+    t.onConnection(second);
+
+    const client = new WebSocket(`ws://localhost:${t.port}/bus`);
+    cleanup.push(() => {
+      client.close();
+    });
+    await new Promise<void>((resolve) => client.once('open', () => resolve()));
+    await tick(20);
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
   it('onConnection() captura errores del handler sin tumbar la conexión', async () => {
     const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
     cleanup.push(() => t.close());
