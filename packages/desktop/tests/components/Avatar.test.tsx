@@ -27,12 +27,16 @@ import { Avatar } from '../../src/components/Avatar/Avatar';
 import { __resetCubismCoreCache } from '../../src/components/Avatar/cubism-core';
 
 // Mock del canvas: render un placeholder simple, expone el onLoadError
-// para el test que verifica el fallback a posteriori.
+// para el test que verifica el fallback a posteriori. Si `canvasShouldThrow`
+// está activo, lanza EN RENDER — simula el crash de pixi-live2d-display en la
+// WebView empaquetada que debe atrapar el ErrorBoundary.
 let capturedOnLoadError: ((err: unknown) => void) | undefined;
+let canvasShouldThrow = false;
 
 vi.mock('../../src/components/Avatar/Live2DCanvas', () => {
   return {
     Live2DCanvas: (props: { size: number; onLoadError?: (err: unknown) => void }): JSX.Element => {
+      if (canvasShouldThrow) throw new Error('pixi render boom');
       capturedOnLoadError = props.onLoadError;
       return <div data-testid="live2d-canvas" style={{ width: props.size, height: props.size }} />;
     },
@@ -54,6 +58,7 @@ const NEVER_RESOLVES = (): Promise<never> => new Promise<never>(() => undefined)
 
 beforeEach(() => {
   capturedOnLoadError = undefined;
+  canvasShouldThrow = false;
   ensureCubismCoreMock.mockReset();
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
@@ -127,6 +132,28 @@ describe('<Avatar /> swap a Live2D', () => {
       expect(wrap?.getAttribute('data-render')).toBe('live2d');
     });
     expect(screen.queryByTestId('live2d-canvas')).not.toBeNull();
+  });
+
+  it('cae al Orbe si el canvas Live2D LANZA al renderizar (ErrorBoundary)', async () => {
+    // Regresión del white-screen en el binario: pixi-live2d-display crasheaba
+    // en pleno render dentro de la WebView empaquetada. Sin boundary, ese
+    // throw desmontaba toda la app. Ahora debe caer al Orbe.
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    stubModelReachable(true);
+    ensureCubismCoreMock.mockResolvedValue(true);
+    canvasShouldThrow = true;
+
+    const { container } = render(<Avatar size={240} />);
+
+    await waitFor(() => {
+      const wrap = container.querySelector('[data-render]');
+      expect(wrap?.getAttribute('data-render')).toBe('orb');
+    });
+    expect(screen.queryByTestId('live2d-canvas')).toBeNull();
+
+    errSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it('vuelve al Orbe si el canvas notifica onLoadError tras montar', async () => {
