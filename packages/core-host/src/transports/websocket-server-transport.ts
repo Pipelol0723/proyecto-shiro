@@ -98,6 +98,17 @@ export class WebSocketServerTransport implements ITransport {
       this.httpServer.listen(options.port);
     });
 
+    // `ws` re-emite los errores del httpServer (incluido el EADDRINUSE al
+    // bindear el puerto) sobre la instancia del WebSocketServer. Sin un
+    // listener aquí, Node trata ese 'error' como no manejado y tumba el
+    // proceso con un stack feo ANTES de que `ready()` llegue a rechazar.
+    // Lo absorbemos a debug: el rechazo de `readyPromise` (via el 'error'
+    // del httpServer, arriba) es quien lleva el fallo a quien hizo `ready()`,
+    // que decide qué hacer (ver el manejo de EADDRINUSE en server.ts).
+    this.server.on('error', (err) => {
+      this.logger.debug('WebSocketServer error (se maneja vía ready())', { err });
+    });
+
     this.server.on('connection', (ws) => {
       this.handleConnection(ws);
     });

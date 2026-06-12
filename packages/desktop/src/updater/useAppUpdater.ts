@@ -23,10 +23,10 @@ function isTauri(): boolean {
 export type UpdaterPhase =
   | 'unsupported' // no estamos en Tauri (dev web)
   | 'checking' // consultando el feed
-  | 'none' // al día, no hay update
+  | 'none' // al día, no hay update (o el check falló silenciosamente)
   | 'available' // hay update, esperando decisión del usuario
   | 'downloading' // descargando/instalando
-  | 'error'; // falló el check o la instalación
+  | 'error'; // falló la instalación de una update que el usuario aceptó
 
 export interface AvailableUpdate {
   version: string;
@@ -63,8 +63,14 @@ export function useAppUpdater(): UseAppUpdaterResult {
         setUpdate({ version: found.version, notes: found.body ?? undefined });
         setPhase('available');
       } catch {
+        // Un check fallido NO es un error visible: lo más común es que aún
+        // no haya ningún release publicado (el feed `latest.json` da 404) o
+        // que no haya red. En ambos casos no hay nada que el usuario pueda
+        // "reintentar", así que resolvemos en silencio (`none`) en vez de
+        // alarmar con el banner rojo. El banner de error queda reservado a
+        // un fallo de instalación de una update que el usuario sí aceptó.
         if (cancelled) return;
-        setPhase('error');
+        setPhase('none');
       }
     })();
     return () => {

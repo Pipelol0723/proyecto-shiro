@@ -127,10 +127,21 @@ La primera vez `pkg` descarga el runtime base de Node (~40 MB, cacheado).
 El resultado queda en `packages/desktop/src-tauri/binaries/` (gitignored;
 se reconstruye en cada release).
 
-**En `tauri:dev`**: si NO has corrido `build:sidecar`, Tauri detecta que
-faltan los recursos del sidecar y asume que corres el `core-host` a mano
-(`npm run dev -w @proyecto-shiro/core-host`) — el cliente se conecta por
-WS igual. Si SÍ lo corriste, Tauri lanza el sidecar empaquetado.
+**En `tauri:dev`** el `beforeDevCommand` arranca **solo Vite** — el
+`core-host` lo provee el sidecar, no un segundo proceso. Por eso:
+
+- Si corriste `build:sidecar`, Tauri lanza el sidecar empaquetado (que **no**
+  hereda el `.env` de la raíz: sus keys salen de su propio entorno, o del
+  `secrets.env` que escribe el setup wizard cuando esa pieza esté en su sitio).
+- Si NO lo corriste, no hay `core-host`: arráncalo a mano en otra terminal
+  con `npm run dev -w @proyecto-shiro/core-host` y el cliente se conecta por
+  WS igual.
+
+> Antes el `beforeDevCommand` levantaba también un `core-host` con `tsx`,
+> que chocaba con el sidecar por el puerto `9876` (`EADDRINUSE`) y hacía que
+> la app leyera las keys del `.env` en vez del `secrets.env`. Ya no: en
+> `tauri:dev` solo corre el sidecar. (Y si dos `core-host` coinciden, el que
+> llega tarde se aparta en silencio en lugar de crashear.)
 
 > **API keys en modo empaquetado**: el sidecar hereda las env vars del
 > proceso Tauri. Hoy, sin un `.env` junto al binario, `ANTHROPIC_API_KEY`

@@ -46,6 +46,28 @@ describe('WebSocketServerTransport', () => {
     expect(t.port).toBeGreaterThan(0);
   });
 
+  it('ready() rechaza con EADDRINUSE si el puerto ya está ocupado, sin tumbar el proceso', async () => {
+    const t1 = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t1.close());
+    await t1.ready();
+
+    // Un segundo transport sobre el MISMO puerto debe rechazar `ready()`
+    // limpiamente. `ws` re-emite el EADDRINUSE sobre el WebSocketServer; sin
+    // el listener de 'error' que añadimos, Node lo trataría como 'error' no
+    // manejado y tumbaría el proceso (regresión del conflicto dev/sidecar —
+    // dos core-hosts peleando por el 9876; ver server.ts `isAddrInUse`).
+    const t2 = new WebSocketServerTransport({ port: t1.port, logger: makeLogger() });
+    cleanup.push(async () => {
+      try {
+        await t2.close();
+      } catch {
+        // t2 nunca llegó a bindear; no hay handle que cerrar.
+      }
+    });
+
+    await expect(t2.ready()).rejects.toMatchObject({ code: 'EADDRINUSE' });
+  });
+
   it('clientCount empieza en 0', async () => {
     const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
     cleanup.push(() => t.close());
