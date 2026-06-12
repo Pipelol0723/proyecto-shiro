@@ -19,6 +19,7 @@ import { useState } from 'react';
 import type { EventMap, IEventBus } from '@proyecto-shiro/core';
 import { BusProvider } from './bus-context';
 import { CompanionProvider } from './state/companion-context';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar, Header, type ScreenId } from './layout';
 import {
   ConversationScreen,
@@ -40,9 +41,62 @@ export function App({ bus }: AppProps = {}): JSX.Element {
   return (
     <BusProvider bus={bus}>
       <CompanionProvider>
-        <AppShell />
+        {/* Red de seguridad: si algo en el árbol lanza al renderizar, antes
+            se llevaba TODA la app a blanco. Ahora el boundary muestra el
+            error (diagnosticable) en vez de una pantalla muerta. El Avatar
+            tiene además su propio boundary que cae al Orbe sin molestar. */}
+        <ErrorBoundary fallback={(error) => <AppCrashFallback error={error} />}>
+          <AppShell />
+        </ErrorBoundary>
       </CompanionProvider>
     </BusProvider>
+  );
+}
+
+/** Fallback de último recurso cuando algo del árbol crashea al renderizar. */
+function AppCrashFallback({ error }: { error: Error }): JSX.Element {
+  return (
+    <div
+      role="alert"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        height: '100vh',
+        padding: 24,
+        textAlign: 'center',
+        fontFamily: 'system-ui, sans-serif',
+      }}
+    >
+      <h1 style={{ margin: 0, fontSize: 20 }}>Algo se rompió en la interfaz</h1>
+      <p style={{ margin: 0, opacity: 0.7, maxWidth: 480 }}>
+        Shiro encontró un error inesperado al renderizar. El detalle de abajo ayuda a
+        diagnosticarlo.
+      </p>
+      <pre
+        style={{
+          maxWidth: 560,
+          overflow: 'auto',
+          padding: 12,
+          borderRadius: 8,
+          background: 'rgba(0,0,0,0.06)',
+          fontSize: 12,
+        }}
+      >
+        {error.message}
+      </pre>
+      <button
+        type="button"
+        onClick={() => {
+          window.location.reload();
+        }}
+        style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer' }}
+      >
+        Recargar
+      </button>
+    </div>
   );
 }
 

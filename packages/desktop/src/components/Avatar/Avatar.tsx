@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import type { Emotion } from '@proyecto-shiro/core';
 import { Orb } from '../Orb';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { ensureCubismCore } from './cubism-core';
 import { isModelReachable } from './model-loader';
 import { AVATAR_CONFIG, type AvatarRuntimeConfig } from './config';
@@ -124,15 +125,38 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
   }, []);
 
   if (status === 'available' && Live2DCanvas !== null) {
+    // `onLoadError` cubre fallos asíncronos (texturas 404 tras montar). Pero
+    // pixi-live2d-display también puede **lanzar en pleno render** (crash del
+    // renderer en la WebView empaquetada) — eso no lo atrapa ningún try/catch
+    // ni el onLoadError, y sin un boundary se llevaba TODA la app a blanco.
+    // El ErrorBoundary captura ese throw y cae al Orbe, igual que el resto de
+    // fallbacks (ADR 0021 §3: el fallback al Orbe debe ser a prueba de balas).
+    const orbFallback = (
+      <Orb
+        emotion={emotion}
+        speaking={speaking}
+        listening={listening}
+        thinking={thinking}
+        size={size}
+      />
+    );
     return (
       <div className={styles.avatarWrap} data-emotion={emotion} data-render="live2d">
-        <Live2DCanvas
-          size={size}
-          config={config}
-          audioElement={audioElement}
-          emotion={emotion}
-          onLoadError={handleCanvasLoadError}
-        />
+        <ErrorBoundary
+          fallback={orbFallback}
+          onError={(err) => {
+            console.warn('[Avatar] Live2D crasheó al renderizar — cayendo al Orbe', err);
+            handleCanvasLoadError();
+          }}
+        >
+          <Live2DCanvas
+            size={size}
+            config={config}
+            audioElement={audioElement}
+            emotion={emotion}
+            onLoadError={handleCanvasLoadError}
+          />
+        </ErrorBoundary>
       </div>
     );
   }
