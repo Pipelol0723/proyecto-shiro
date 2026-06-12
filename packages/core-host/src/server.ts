@@ -66,7 +66,29 @@ async function main(): Promise<void> {
   });
 }
 
+/** `true` si el error es un EADDRINUSE (puerto ya ocupado). */
+function isAddrInUse(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: unknown }).code === 'EADDRINUSE'
+  );
+}
+
 main().catch((err: unknown) => {
+  if (isAddrInUse(err)) {
+    // El puerto ya lo tiene otro core-host. Pasa típicamente en `tauri dev`
+    // si quedó un `npm run dev` corriendo, o si se abren dos instancias del
+    // binario. No es un fallo real: este proceso se aparta en silencio y
+    // deja servir al que llegó primero (el sidecar es best-effort, ADR 0024
+    // §2). Salimos con código 0 para que el lanzador no lo marque como crash.
+    console.warn(
+      `core-host: el puerto ${String(process.env.SHIRO_HOST_PORT ?? DEFAULT_PORT)} ya está en uso — ` +
+        'ya hay otro core-host corriendo. Este proceso se cierra limpiamente.',
+    );
+    process.exit(0);
+  }
   console.error('fallo al arrancar core-host:', err);
   process.exit(1);
 });
