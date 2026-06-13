@@ -13,3 +13,5 @@ export type { IMemoryModule, MemoryEntry } from './IMemoryModule.js';
 export type { IAvatarModule } from './IAvatarModule.js';
 export type { IRouterModule, LLMTier } from './IRouterModule.js';
 export type { IDeviceModule, DeviceStatus, DeviceCommand } from './IDeviceModule.js';
+export type { IToolModule, ToolContext, ToolResult, PermissionTier } from './IToolModule.js';
+export type { IToolsRegistry, ToolDefinition } from './IToolsRegistry.js';

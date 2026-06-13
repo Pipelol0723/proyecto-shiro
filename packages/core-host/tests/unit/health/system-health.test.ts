@@ -34,6 +34,7 @@ function makeConfig(overrides?: {
         config: { letta: { base_url: overrides?.lettaUrl } },
       },
       avatar: { active: 'Live2DAvatar', config: {} },
+      tools: { active: 'ToolsRegistry', config: {} },
     },
     character: { file: 'x.yaml' },
   };

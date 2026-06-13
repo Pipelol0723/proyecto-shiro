@@ -22,6 +22,7 @@ import {
   ModulesConfigSchema,
   Orchestrator,
   OrchestratorError,
+  ToolsRegistry,
 } from '../../src/index.js';
 import { ConfigLoader, ConfigValidationError } from '../../src/node.js';
 import type { ModuleDeps } from '../../src/core/module-loader.js';
@@ -84,6 +85,8 @@ function registerAllMocks(loader: ModuleLoader): void {
   loader.register('MockTTS', () => new MockTTS());
   loader.register('MockMemory', () => new MockMemory());
   loader.register('MockAvatar', () => new MockAvatar());
+  // El slot `tools` se default-ea a ToolsRegistry en el schema (ADR 0022).
+  loader.register('ToolsRegistry', (cfg, deps) => new ToolsRegistry(cfg, deps));
 }
 
 describe('bootstrap completo del core', () => {
@@ -141,6 +144,9 @@ describe('bootstrap completo del core', () => {
       expect(modules.tts).toBeInstanceOf(MockTTS);
       expect(modules.memory).toBeInstanceOf(MockMemory);
       expect(modules.avatar).toBeInstanceOf(MockAvatar);
+      // Slot `tools` (ADR 0022): registry vacío en este PR (andamiaje).
+      expect(modules.tools).toBeInstanceOf(ToolsRegistry);
+      expect(modules.tools.list()).toEqual([]);
     });
 
     it('módulos cargados son funcionales (LLM responde)', async () => {

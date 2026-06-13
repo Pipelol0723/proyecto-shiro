@@ -17,6 +17,7 @@ import type {
   IMemoryModule,
   IRouterModule,
   ISTTModule,
+  IToolsRegistry,
   ITTSModule,
   LLMRequest,
   LLMResponse,
@@ -145,6 +146,7 @@ function makeModules(overrides: Partial<LoadedModules> = {}): LoadedModules {
     tts: { id: 'tts:noop' } as ITTSModule,
     memory: makeMemory(),
     avatar: { id: 'avatar:noop' } as IAvatarModule,
+    tools: { id: 'tools:noop' } as IToolsRegistry,
     ...overrides,
   };
 }

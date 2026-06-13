@@ -34,6 +34,7 @@ import {
   ModuleLoader,
   OllamaLLM,
   Orchestrator,
+  ToolsRegistry,
   WhisperSTT,
   type Character,
   type EventMap,
@@ -141,6 +142,9 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
         expressionAliases: HIYORI_EXPRESSION_ALIASES,
       }),
   );
+  // Tools agénticas (ADR 0022). PR #1: el registry arranca vacío. Las
+  // tools FS/shell (Node-only) se registrarán en él en PRs siguientes.
+  loader.register('ToolsRegistry', (cfg, deps) => new ToolsRegistry(cfg, deps));
 
   // 4. Orchestrator: instancia los 7 módulos y emite `bus:ready`.
   const orchestrator = new Orchestrator({ bus, loader, logger, config: options.config });

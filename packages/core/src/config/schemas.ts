@@ -55,6 +55,10 @@ export const ModulesConfigSchema = z.object({
     tts: ModuleSlotSchema,
     memory: ModuleSlotSchema,
     avatar: ModuleSlotSchema,
+    // Slot de herramientas agénticas (ADR 0022). `.default` para no
+    // romper configs/tests que aún no lo declaren: si falta, se asume el
+    // registry vacío.
+    tools: ModuleSlotSchema.default({ active: 'ToolsRegistry' }),
   }),
   character: CharacterRefSchema,
 });
