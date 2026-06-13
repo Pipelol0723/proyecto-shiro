@@ -25,6 +25,7 @@ import type { IMemoryModule } from '../interfaces/IMemoryModule.js';
 import type { IRouterModule } from '../interfaces/IRouterModule.js';
 import type { ISTTModule } from '../interfaces/ISTTModule.js';
 import type { ITTSModule } from '../interfaces/ITTSModule.js';
+import type { IToolsRegistry } from '../interfaces/IToolsRegistry.js';
 import type { ModulesConfig } from '../config/schemas.js';
 import type { Logger } from './logger.js';
 import type { ModuleDeps, ModuleLoader } from './module-loader.js';
@@ -37,6 +38,7 @@ export interface LoadedModules {
   tts: ITTSModule;
   memory: IMemoryModule;
   avatar: IAvatarModule;
+  tools: IToolsRegistry;
 }
 
 export interface OrchestratorOptions {
@@ -92,6 +94,7 @@ export class Orchestrator {
       tts: this.loader.load<ITTSModule>(m.tts.active, m.tts.config, deps),
       memory: this.loader.load<IMemoryModule>(m.memory.active, m.memory.config, deps),
       avatar: this.loader.load<IAvatarModule>(m.avatar.active, m.avatar.config, deps),
+      tools: this.loader.load<IToolsRegistry>(m.tools.active, m.tools.config, deps),
     };
 
     this.started = true;

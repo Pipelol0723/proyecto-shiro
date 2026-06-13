@@ -152,6 +152,19 @@ modules:
       # personaje; el alias de Hiyori la traduce a `default` en runtime.
       idle_expression: 'idle'
 
+  # ─────────────────────────────────────────────────────────────
+  # Tools — herramientas agénticas (ADR 0022). PR #1: andamiaje.
+  # El registry arranca VACÍO; las tools FS/shell (read/write/list/
+  # delete/exec) se registran en PRs siguientes y declararán aquí su
+  # scope, por ejemplo:
+  #   config:
+  #     fs:    { paths: ['~/Documents/shiro-workspace'] }
+  #     shell: { commands: [{ cmd: git, allowed_args_pattern: '^(status|log|diff)' }] }
+  # ─────────────────────────────────────────────────────────────
+  tools:
+    active: ToolsRegistry
+    config: {}
+
 # ─────────────────────────────────────────────────────────────
 # Personaje activo
 # ─────────────────────────────────────────────────────────────

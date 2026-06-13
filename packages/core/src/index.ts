@@ -114,6 +114,16 @@ export {
 export type { Live2DAvatarConfig, Live2DAvatarOptions } from './modules/avatar/live2d-avatar.js';
 export { HIYORI_EXPRESSION_ALIASES } from './modules/avatar/hiyori-expression-aliases.js';
 
+// Tools — registry de herramientas agénticas (ADR 0022). Browser-safe:
+// solo agrupa `IToolModule`. Las tools FS/shell (Node-only) se registran
+// en el registry desde el bootstrap del core-host en PRs siguientes.
+export {
+  ToolsRegistry,
+  ToolsRegistryConfigSchema,
+  ToolsRegistryError,
+} from './modules/tools/tools-registry.js';
+export type { ToolsRegistryConfig } from './modules/tools/tools-registry.js';
+
 // Memoria — toda la pila (LettaMemory sobre el SDK de Letta, LocalMemory
 // sobre SQLite nativo, y el MemoryManager que los orquesta) vive en
 // `@proyecto-shiro/core/node`: el SDK de Letta no debe entrar al bundle
