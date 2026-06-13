@@ -42,7 +42,7 @@ import {
   type ITTSModule,
   type ModulesConfig,
 } from '@proyecto-shiro/core';
-import { MemoryManager, SystemTTS } from '@proyecto-shiro/core/node';
+import { MemoryManager, registerFsTools, SystemTTS } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
 import { AudioCache } from './audio/audio-cache.js';
@@ -149,6 +149,15 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   // 4. Orchestrator: instancia los 7 módulos y emite `bus:ready`.
   const orchestrator = new Orchestrator({ bus, loader, logger, config: options.config });
   await orchestrator.init();
+
+  // Tools FS (ADR 0022 §3): el slot `tools` se cargó vacío; aquí le
+  // registramos las tools Node-only con su scope desde `tools.config.fs`.
+  // Las `confirm` (write/delete) quedan dormidas hasta el loop tool-use
+  // (PR #4) + el modal de aprobación (PR #5) — nada las invoca aún.
+  registerFsTools(orchestrator.getModules().tools, options.config.modules.tools.config?.fs, {
+    logger,
+    bus,
+  });
 
   // 4b. MemoryManager necesita lifecycle propio (drainer en background +
   //     SQLite). El factory devuelve IMemoryModule pero sabemos por el

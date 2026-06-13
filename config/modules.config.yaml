@@ -153,17 +153,22 @@ modules:
       idle_expression: 'idle'
 
   # ─────────────────────────────────────────────────────────────
-  # Tools — herramientas agénticas (ADR 0022). PR #1: andamiaje.
-  # El registry arranca VACÍO; las tools FS/shell (read/write/list/
-  # delete/exec) se registran en PRs siguientes y declararán aquí su
-  # scope, por ejemplo:
-  #   config:
-  #     fs:    { paths: ['~/Documents/shiro-workspace'] }
-  #     shell: { commands: [{ cmd: git, allowed_args_pattern: '^(status|log|diff)' }] }
+  # Tools — herramientas agénticas (ADR 0022).
+  # Filesystem (PR #2): fs:read/list (auto) + fs:write/delete (confirm),
+  # operan SOLO dentro de `fs.paths` (sandbox). Amplía la lista para darle
+  # más alcance a Shiro. Shell (allowlist) llega en un PR siguiente.
   # ─────────────────────────────────────────────────────────────
   tools:
     active: ToolsRegistry
-    config: {}
+    config:
+      fs:
+        # Carpetas donde Shiro puede leer/escribir. `~` = home del
+        # usuario. Por defecto, un sandbox dedicado (se crea si no existe).
+        # Fuera de estas rutas, cualquier fs:* falla con error claro.
+        paths:
+          - '~/shiro-workspace'
+        # Tope de bytes que fs:read devuelve (evita cargar archivos enormes).
+        max_read_bytes: 262144
 
 # ─────────────────────────────────────────────────────────────
 # Personaje activo
