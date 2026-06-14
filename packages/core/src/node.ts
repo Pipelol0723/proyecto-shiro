@@ -58,3 +58,14 @@ export {
   FsToolError,
   registerFsTools,
 } from './modules/tools/fs/fs-tools.js';
+
+// Tool shell:exec (ADR 0022 §3) — Node-only. Allowlist de comandos +
+// patrón de args, spawn sin shell (cero inyección), cwd acotado + timeout.
+export {
+  ShellExecTool,
+  ShellAllowlist,
+  ShellToolConfigSchema,
+  ShellToolError,
+  registerShellTool,
+} from './modules/tools/shell/shell-tool.js';
+export type { ShellToolConfig, AllowCheck } from './modules/tools/shell/shell-tool.js';

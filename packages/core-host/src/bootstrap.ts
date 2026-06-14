@@ -42,7 +42,12 @@ import {
   type ITTSModule,
   type ModulesConfig,
 } from '@proyecto-shiro/core';
-import { MemoryManager, registerFsTools, SystemTTS } from '@proyecto-shiro/core/node';
+import {
+  MemoryManager,
+  registerFsTools,
+  registerShellTool,
+  SystemTTS,
+} from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { wireConversationFlow } from './pipeline/conversation-flow.js';
 import { AudioCache } from './audio/audio-cache.js';
@@ -155,6 +160,13 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   // Las `confirm` (write/delete) quedan dormidas hasta el loop tool-use
   // (PR #4) + el modal de aprobación (PR #5) — nada las invoca aún.
   registerFsTools(orchestrator.getModules().tools, options.config.modules.tools.config?.fs, {
+    logger,
+    bus,
+  });
+  // Tool shell:exec (ADR 0022 §3): allowlist de comandos desde
+  // `tools.config.shell`. Tier `confirm` — dormida hasta el loop tool-use
+  // (PR #4) + el modal de aprobación (PR #5).
+  registerShellTool(orchestrator.getModules().tools, options.config.modules.tools.config?.shell, {
     logger,
     bus,
   });
