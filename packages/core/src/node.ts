@@ -43,3 +43,18 @@ export type {
 // para exportar a WAV; estrictamente Node-only.
 export { SystemTTS, SystemTTSConfigSchema, SystemTTSError } from './modules/tts/system-tts.js';
 export type { SystemTTSConfig, SystemTTSDeps } from './modules/tts/system-tts.js';
+
+// Tools de filesystem (ADR 0022 §3) — Node-only (`node:fs`). El scope
+// guard (`FsScope`) valida que cada ruta cae dentro de los paths
+// permitidos. `registerFsTools` las instancia y registra en el slot
+// `tools` desde el bootstrap del core-host.
+export { FsScope, FsScopeConfigSchema, expandTilde } from './modules/tools/fs/fs-scope.js';
+export type { FsScopeConfig, ResolveResult } from './modules/tools/fs/fs-scope.js';
+export {
+  FsReadTool,
+  FsListTool,
+  FsWriteTool,
+  FsDeleteTool,
+  FsToolError,
+  registerFsTools,
+} from './modules/tools/fs/fs-tools.js';
