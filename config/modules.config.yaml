@@ -155,8 +155,9 @@ modules:
   # ─────────────────────────────────────────────────────────────
   # Tools — herramientas agénticas (ADR 0022).
   # Filesystem (PR #2): fs:read/list (auto) + fs:write/delete (confirm),
-  # operan SOLO dentro de `fs.paths` (sandbox). Amplía la lista para darle
-  # más alcance a Shiro. Shell (allowlist) llega en un PR siguiente.
+  # operan SOLO dentro de `fs.paths` (sandbox).
+  # Shell (PR #3): shell:exec (confirm) con allowlist de comandos + patrón
+  # de args, spawn sin shell. Amplía ambas listas para más alcance.
   # ─────────────────────────────────────────────────────────────
   tools:
     active: ToolsRegistry
@@ -169,6 +170,19 @@ modules:
           - '~/shiro-workspace'
         # Tope de bytes que fs:read devuelve (evita cargar archivos enormes).
         max_read_bytes: 262144
+      shell:
+        # Comandos que Shiro puede ejecutar (shell:exec, tier confirm).
+        # Cada entry: un `cmd` y un regex `allowed_args_pattern` que los
+        # argumentos (unidos por espacio) deben casar. El spawn es directo
+        # SIN shell → un `; rm -rf` sería un argumento literal, no inyección.
+        # Por defecto solo `git` de LECTURA; amplía la lista con cuidado.
+        commands:
+          - cmd: git
+            allowed_args_pattern: '^(status|log|diff|branch|show)\b'
+        # Directorio de trabajo de los comandos (sandbox por defecto).
+        cwd: '~/shiro-workspace'
+        # Timeout por comando (ms): mata procesos colgados.
+        timeout_ms: 30000
 
 # ─────────────────────────────────────────────────────────────
 # Personaje activo
