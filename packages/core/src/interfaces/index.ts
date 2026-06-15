@@ -6,7 +6,14 @@
 
 export type { IEventBus, EventHandler, Unsubscribe } from './IEventBus.js';
 export type { ITransport, TransportReceiveHandler } from './ITransport.js';
-export type { ILLMModule, LLMRequest, LLMResponse } from './ILLMModule.js';
+export type {
+  ILLMModule,
+  LLMRequest,
+  LLMResponse,
+  LLMToolDefinition,
+  LLMToolExecutor,
+  GenerateWithToolsOptions,
+} from './ILLMModule.js';
 export type { ITTSModule, TTSRequest, TTSResponse } from './ITTSModule.js';
 export type { ISTTModule, STTRequest, STTResult } from './ISTTModule.js';
 export type { IMemoryModule, MemoryEntry } from './IMemoryModule.js';

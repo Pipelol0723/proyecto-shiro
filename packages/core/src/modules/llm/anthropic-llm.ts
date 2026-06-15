@@ -28,7 +28,12 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import type { ILLMModule, LLMRequest, LLMResponse } from '../../interfaces/ILLMModule.js';
+import type {
+  GenerateWithToolsOptions,
+  ILLMModule,
+  LLMRequest,
+  LLMResponse,
+} from '../../interfaces/ILLMModule.js';
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
 import { type Emotion, EMOTIONS, isEmotion } from '../../types/emotions.js';
@@ -45,6 +50,11 @@ export const AnthropicLLMConfigSchema = z.object({
   max_tokens: z.number().int().positive().default(1024),
   /** Temperatura. Anthropic usa 0-1 (no 0-2 como Ollama). */
   temperature: z.number().min(0).max(1).default(1.0),
+  /**
+   * Cota de vueltas LLM↔tools en el loop tool-use (ADR 0022 §5). Evita
+   * que el modelo entre en bucle pidiendo tools. Default 5.
+   */
+  max_tool_rounds: z.number().int().positive().default(5),
 });
 
 export type AnthropicLLMConfig = z.infer<typeof AnthropicLLMConfigSchema>;
@@ -93,6 +103,20 @@ function buildResponseToolSchema(): Record<string, unknown> {
   };
 }
 
+/**
+ * La tool `respond` — el "canal" del structured output `{text, emotion}`.
+ * En `generate` es la única tool (forzada). En `generateWithTools` es la
+ * tool TERMINAL del loop: el modelo la llama cuando ya tiene la respuesta
+ * final, en vez de pedir otra herramienta.
+ */
+function respondTool(): Anthropic.Tool {
+  return {
+    name: TOOL_NAME,
+    description: 'Responde al usuario con un texto y la emoción dominante de la respuesta.',
+    input_schema: buildResponseToolSchema() as Anthropic.Tool.InputSchema,
+  };
+}
+
 // ─── Implementación ───────────────────────────────────────────────────
 
 export class AnthropicLLM implements ILLMModule {
@@ -137,18 +161,7 @@ export class AnthropicLLM implements ILLMModule {
       );
     }
 
-    // Construye el contexto. Anthropic separa `system` de `messages` —
-    // el systemPrompt va aparte (no como mensaje role:'system' como en
-    // Ollama). El `context` adicional se concatena al system con un
-    // separador para no perder información.
-    const systemParts: string[] = [];
-    if (request.systemPrompt !== undefined && request.systemPrompt.length > 0) {
-      systemParts.push(request.systemPrompt);
-    }
-    if (request.context !== undefined && request.context.length > 0) {
-      systemParts.push(`Contexto adicional:\n${request.context}`);
-    }
-    const system = systemParts.join('\n\n');
+    const system = this.buildSystem(request);
 
     let response: Anthropic.Message;
     try {
@@ -158,15 +171,7 @@ export class AnthropicLLM implements ILLMModule {
         temperature: this.config.temperature,
         ...(system.length > 0 ? { system } : {}),
         messages: [{ role: 'user', content: request.text }],
-        tools: [
-          {
-            name: TOOL_NAME,
-            description: 'Responde al usuario con un texto y la emoción dominante de la respuesta.',
-            // Anthropic acepta un JSON Schema arbitrario; nuestro objeto
-            // cumple la forma que pide.
-            input_schema: buildResponseToolSchema() as Anthropic.Tool.InputSchema,
-          },
-        ],
+        tools: [respondTool()],
         tool_choice: { type: 'tool', name: TOOL_NAME },
       });
     } catch (err) {
@@ -183,36 +188,134 @@ export class AnthropicLLM implements ILLMModule {
   }
 
   /**
-   * Busca el bloque `tool_use` del response y extrae `{ text, emotion }`.
-   * Si no hay tool_use (raro con `tool_choice` forzado pero posible si la
-   * API cambia o el modelo se rebela), degradamos al primer bloque de
-   * texto disponible con emoción `'neutral'`.
+   * Loop tool-use (ADR 0022 §5). Ofrece las `options.tools` + la tool
+   * terminal `respond`, con `tool_choice: any` (el modelo SIEMPRE llama
+   * una tool: o una real, o `respond`). Cada vuelta: si pide `respond` →
+   * respuesta final; si pide una tool real → la ejecuta vía
+   * `options.executeTool` (donde vive el gate de permisos) y mete el
+   * `tool_result` en la conversación → siguiente vuelta. Cota `maxRounds`.
+   */
+  async generateWithTools(
+    request: LLMRequest,
+    options: GenerateWithToolsOptions,
+  ): Promise<LLMResponse> {
+    if (this.client === null) {
+      throw new AnthropicLLMError(
+        'AnthropicLLM: ANTHROPIC_API_KEY no está configurada — no se puede invocar generateWithTools.',
+      );
+    }
+    const client = this.client;
+    const system = this.buildSystem(request);
+    const tools: Anthropic.Tool[] = [
+      ...options.tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+      })),
+      respondTool(),
+    ];
+    const maxRounds = options.maxRounds ?? this.config.max_tool_rounds;
+    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: request.text }];
+    let totalTokens = 0;
+
+    for (let round = 0; round < maxRounds; round++) {
+      let response: Anthropic.Message;
+      try {
+        response = await client.messages.create({
+          model: this.config.model,
+          max_tokens: this.config.max_tokens,
+          temperature: this.config.temperature,
+          ...(system.length > 0 ? { system } : {}),
+          messages,
+          tools,
+          tool_choice: { type: 'any' },
+        });
+      } catch (err) {
+        throw new AnthropicLLMError('AnthropicLLM: fallo al llamar a la API (tool loop)', err);
+      }
+      totalTokens += response.usage.input_tokens + response.usage.output_tokens;
+
+      const toolUses = response.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+      );
+      const respondBlock = toolUses.find((b) => b.name === TOOL_NAME);
+      if (respondBlock) {
+        const { text, emotion } = this.parseRespondInput(
+          respondBlock.input as Record<string, unknown>,
+        );
+        return { text, emotion, tokensUsed: totalTokens };
+      }
+      if (toolUses.length === 0) {
+        // Sin tool_use (raro con tool_choice:any). Degradamos a texto.
+        const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
+        return { text: textBlock?.text ?? '', emotion: 'neutral', tokensUsed: totalTokens };
+      }
+
+      // Ejecuta cada tool real y prepara los tool_result para la próxima vuelta.
+      messages.push({ role: 'assistant', content: response.content });
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const use of toolUses) {
+        const result = await options.executeTool(use.name, use.input);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: use.id,
+          content: result.output,
+          is_error: !result.ok,
+        });
+      }
+      messages.push({ role: 'user', content: toolResults });
+    }
+
+    this.logger.warn(`tool loop superó ${String(maxRounds)} vueltas sin respuesta final`);
+    return {
+      text: '(no pude completar la tarea con las herramientas disponibles)',
+      emotion: 'neutral',
+      tokensUsed: totalTokens,
+    };
+  }
+
+  /**
+   * Construye el `system` de Anthropic: systemPrompt del personaje +
+   * contexto de memoria del turno, separados.
+   */
+  private buildSystem(request: LLMRequest): string {
+    const parts: string[] = [];
+    if (request.systemPrompt !== undefined && request.systemPrompt.length > 0) {
+      parts.push(request.systemPrompt);
+    }
+    if (request.context !== undefined && request.context.length > 0) {
+      parts.push(`Contexto adicional:\n${request.context}`);
+    }
+    return parts.join('\n\n');
+  }
+
+  /** Lee `{ text, emotion }` del `input` de la tool `respond`. */
+  private parseRespondInput(input: Record<string, unknown>): { text: string; emotion: Emotion } {
+    const text = typeof input.text === 'string' ? input.text : '';
+    const emotion: Emotion = isEmotion(input.emotion) ? input.emotion : 'neutral';
+    if (!isEmotion(input.emotion)) {
+      this.logger.warn(`emoción desconocida "${String(input.emotion)}", usando neutral`);
+    }
+    return { text, emotion };
+  }
+
+  /**
+   * Busca el bloque `tool_use` `respond` del response y extrae
+   * `{ text, emotion }`. Si no hay tool_use válido, degrada al primer
+   * bloque de texto disponible con emoción `'neutral'`.
    */
   private extractToolUse(response: Anthropic.Message): { text: string; emotion: Emotion } {
     const toolBlock = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
     );
-
     if (toolBlock?.name === TOOL_NAME) {
-      const input = toolBlock.input as Record<string, unknown>;
-      const text = typeof input.text === 'string' ? input.text : '';
-      const emotion: Emotion = isEmotion(input.emotion) ? input.emotion : 'neutral';
-      if (!isEmotion(input.emotion)) {
-        this.logger.warn(`emoción desconocida "${String(input.emotion)}", usando neutral`);
-      }
-      return { text, emotion };
+      return this.parseRespondInput(toolBlock.input as Record<string, unknown>);
     }
-
-    // Fallback: el modelo no emitió tool_use válido. Buscamos cualquier
-    // texto y degradamos a neutral.
     const textBlock = response.content.find(
       (block): block is Anthropic.TextBlock => block.type === 'text',
     );
     this.logger.warn('respuesta sin tool_use válido, degradando a texto crudo + neutral');
-    return {
-      text: textBlock?.text ?? '',
-      emotion: 'neutral',
-    };
+    return { text: textBlock?.text ?? '', emotion: 'neutral' };
   }
 }
 

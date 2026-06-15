@@ -42,6 +42,7 @@ import type {
   MemoryEntry,
 } from '@proyecto-shiro/core';
 import type { AudioCache } from '../audio/audio-cache.js';
+import { buildToolDefs, makeToolExecutor } from './tool-loop.js';
 
 export interface MemoryReadsConfig {
   /** Cantidad de turnos cronológicos recientes a inyectar como contexto. */
@@ -188,8 +189,27 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       let effectiveTier = tier;
       let response: LLMResponse;
       try {
-        const llm = tier === 'local' ? modules.llmLocal : modules.llmCloud;
-        response = await llm.generate(llmRequest);
+        // Loop tool-use (ADR 0022 §5): solo en cloud, solo si el slot cloud
+        // lo soporta y hay tools registradas. El gate de permisos vive en
+        // `makeToolExecutor` (auto ejecuta; confirm → "requiere aprobación"
+        // hasta el modal del PR #5). El local no recibe tools (ADR §5).
+        if (
+          tier === 'cloud' &&
+          typeof modules.llmCloud.generateWithTools === 'function' &&
+          modules.tools.list().length > 0
+        ) {
+          response = await modules.llmCloud.generateWithTools(llmRequest, {
+            tools: buildToolDefs(modules.tools),
+            executeTool: makeToolExecutor(
+              modules.tools,
+              { logger: child, userId: payload.userId },
+              child,
+            ),
+          });
+        } else {
+          const llm = tier === 'local' ? modules.llmLocal : modules.llmCloud;
+          response = await llm.generate(llmRequest);
+        }
       } catch (err) {
         if (tier !== 'cloud') throw err;
         child.warn('LLM cloud falló — reintentando con local', { err });
