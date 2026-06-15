@@ -43,6 +43,7 @@ import type {
 } from '@proyecto-shiro/core';
 import type { AudioCache } from '../audio/audio-cache.js';
 import { buildToolDefs, makeToolExecutor } from './tool-loop.js';
+import { createApprovalGate } from './approval-gate.js';
 
 export interface MemoryReadsConfig {
   /** Cantidad de turnos cronológicos recientes a inyectar como contexto. */
@@ -127,6 +128,15 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
   // cache para que cualquier fetch en vuelo desde otro cliente reciba 410.
   // Esta lista se usa para limpiar al disposer.
   const unsubscribers: (() => void)[] = [];
+
+  // Gate de aprobación de tools `confirm` (ADR 0022 §4). Se crea una vez
+  // (una sola suscripción al bus); cada turno que invoque una tool confirm
+  // lo reutiliza. `dispose` limpia al shutdown.
+  const approvalGate = createApprovalGate(bus, child);
+  unsubscribers.push(() => {
+    approvalGate.dispose();
+  });
+
   if (audioCache !== undefined) {
     unsubscribers.push(
       bus.on('tts:cancel', (p) => {
@@ -191,8 +201,9 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       try {
         // Loop tool-use (ADR 0022 §5): solo en cloud, solo si el slot cloud
         // lo soporta y hay tools registradas. El gate de permisos vive en
-        // `makeToolExecutor` (auto ejecuta; confirm → "requiere aprobación"
-        // hasta el modal del PR #5). El local no recibe tools (ADR §5).
+        // `makeToolExecutor` (auto ejecuta; confirm pasa por el
+        // `approvalGate` → modal del cliente). El local no recibe tools
+        // (ADR §5).
         if (
           tier === 'cloud' &&
           typeof modules.llmCloud.generateWithTools === 'function' &&
@@ -204,6 +215,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
               modules.tools,
               { logger: child, userId: payload.userId },
               child,
+              approvalGate,
             ),
           });
         } else {
