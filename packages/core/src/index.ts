@@ -121,6 +121,7 @@ export {
   ToolsRegistry,
   ToolsRegistryConfigSchema,
   ToolsRegistryError,
+  toLLMToolDefinitions,
 } from './modules/tools/tools-registry.js';
 export type { ToolsRegistryConfig } from './modules/tools/tools-registry.js';
 

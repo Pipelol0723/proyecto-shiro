@@ -231,4 +231,72 @@ describe('AnthropicLLM', () => {
     const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
     await expect(llm.generate({ text: 'hola' })).rejects.toBeInstanceOf(AnthropicLLMError);
   });
+
+  describe('generateWithTools (loop tool-use)', () => {
+    const toolDef = {
+      name: 'fs_read',
+      description: 'Lee un archivo',
+      inputSchema: {
+        type: 'object',
+        properties: { path: { type: 'string' } },
+        required: ['path'],
+      },
+    };
+
+    function toolUse(id: string, name: string, input: Record<string, unknown>): Anthropic.Message {
+      return makeMockMessage([
+        { type: 'tool_use', id, name, input },
+      ] as Anthropic.Message['content']);
+    }
+
+    it('ejecuta una tool real y cierra con respond', async () => {
+      mockCreate
+        .mockResolvedValueOnce(toolUse('tu_1', 'fs_read', { path: 'notas.txt' }))
+        .mockResolvedValueOnce(
+          toolUse('tu_2', 'respond', { text: 'dice hola', emotion: 'divertida' }),
+        );
+      const executeTool = vi.fn(() => Promise.resolve({ ok: true, output: 'hola' }));
+
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      const result = await llm.generateWithTools(
+        { text: 'lee notas.txt' },
+        { tools: [toolDef], executeTool },
+      );
+
+      expect(executeTool).toHaveBeenCalledWith('fs_read', { path: 'notas.txt' });
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      expect(result.text).toBe('dice hola');
+      expect(result.emotion).toBe('divertida');
+    });
+
+    it('responde directo (respond) sin usar tools', async () => {
+      mockCreate.mockResolvedValueOnce(
+        toolUse('tu_1', 'respond', { text: 'hola', emotion: 'neutral' }),
+      );
+      const executeTool = vi.fn(() => Promise.resolve({ ok: true, output: '' }));
+
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      const result = await llm.generateWithTools(
+        { text: 'hola' },
+        { tools: [toolDef], executeTool },
+      );
+
+      expect(executeTool).not.toHaveBeenCalled();
+      expect(result.text).toBe('hola');
+    });
+
+    it('corta en maxRounds si el modelo nunca llama respond', async () => {
+      mockCreate.mockResolvedValue(toolUse('tu_x', 'fs_read', { path: 'x' }));
+      const executeTool = vi.fn(() => Promise.resolve({ ok: true, output: 'x' }));
+
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      const result = await llm.generateWithTools(
+        { text: 'loop' },
+        { tools: [toolDef], executeTool, maxRounds: 2 },
+      );
+
+      expect(mockCreate).toHaveBeenCalledTimes(2);
+      expect(result.text).toContain('no pude completar');
+    });
+  });
 });

@@ -14,6 +14,7 @@
 import { z } from 'zod';
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
+import type { LLMToolDefinition } from '../../interfaces/ILLMModule.js';
 import type { IToolModule } from '../../interfaces/IToolModule.js';
 import type { IToolsRegistry, ToolDefinition } from '../../interfaces/IToolsRegistry.js';
 
@@ -88,4 +89,24 @@ export class ToolsRegistry implements IToolsRegistry {
       permissionTier: tool.permissionTier,
     }));
   }
+}
+
+/**
+ * Convierte tools a definiciones para el LLM (loop tool-use, ADR 0022 §5):
+ * el `schema` Zod de cada tool → JSON Schema (lo que la API de tool-use
+ * espera). El modelo ve el `name` (LLM-safe, `fs_read`), no el `id`
+ * (`fs:read`). Vive en core (no en core-host) porque la conversión
+ * Zod→JSON Schema usa zod, que es dependencia de core.
+ */
+export function toLLMToolDefinitions(tools: readonly IToolModule[]): LLMToolDefinition[] {
+  return tools.map((tool) => {
+    const inputSchema = z.toJSONSchema(tool.schema) as Record<string, unknown>;
+    // `$schema` no aporta nada al endpoint de tool-use; lo quitamos.
+    delete inputSchema.$schema;
+    return {
+      name: tool.name,
+      description: tool.description,
+      inputSchema,
+    };
+  });
 }
