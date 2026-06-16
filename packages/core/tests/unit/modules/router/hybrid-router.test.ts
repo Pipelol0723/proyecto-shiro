@@ -6,6 +6,7 @@ import {
   HybridRouterConfigSchema,
   HybridRouterError,
   routeByHeuristic,
+  requiresToolsByHeuristic,
 } from '../../../../src/modules/router/hybrid-router.js';
 import type { ModuleDeps } from '../../../../src/core/module-loader.js';
 
@@ -23,9 +24,12 @@ function mockResponse(body: unknown, init: { ok?: boolean; status?: number } = {
 }
 
 /** Construye un response Ollama que envuelve un JSON string en `message.content`. */
-function classifierResponse(tier: 'local' | 'cloud'): Response {
+function classifierResponse(tier: 'local' | 'cloud', requiresTools = false): Response {
   return mockResponse({
-    message: { role: 'assistant', content: JSON.stringify({ tier }) },
+    message: {
+      role: 'assistant',
+      content: JSON.stringify({ tier, requires_tools: requiresTools }),
+    },
   });
 }
 
@@ -80,6 +84,29 @@ describe('routeByHeuristic', () => {
     expect(routeByHeuristic('EXPLICA esto')).toBe('cloud');
     expect(routeByHeuristic('Compara A y B')).toBe('cloud');
   });
+
+  it('fuerza cloud cuando la query pide una acción sobre el sistema (ADR 0022 §5)', () => {
+    expect(routeByHeuristic('lee el archivo README')).toBe('cloud');
+    expect(routeByHeuristic('ejecuta git status')).toBe('cloud');
+    expect(routeByHeuristic('muestra el contenido de notas.txt')).toBe('cloud');
+  });
+});
+
+describe('requiresToolsByHeuristic', () => {
+  it('detecta vocabulario de archivos, rutas y comandos', () => {
+    expect(requiresToolsByHeuristic('lee el archivo config')).toBe(true);
+    expect(requiresToolsByHeuristic('lista la carpeta de descargas')).toBe(true);
+    expect(requiresToolsByHeuristic('ejecuta el comando de build')).toBe(true);
+    expect(requiresToolsByHeuristic('haz git commit')).toBe(true);
+    expect(requiresToolsByHeuristic('abre notas.md')).toBe(true);
+    expect(requiresToolsByHeuristic('cuál es la ruta del proyecto')).toBe(true);
+  });
+
+  it('no dispara con charla casual ni razonamiento sin acción', () => {
+    expect(requiresToolsByHeuristic('hola, cómo estás')).toBe(false);
+    expect(requiresToolsByHeuristic('explícame los modelos de difusión')).toBe(false);
+    expect(requiresToolsByHeuristic('qué hora es')).toBe(false);
+  });
 });
 
 describe('HybridRouter', () => {
@@ -121,7 +148,7 @@ describe('HybridRouter', () => {
     expect(body.model).toBe('qwen2.5:3b');
     expect(body.format).toMatchObject({
       type: 'object',
-      required: ['tier'],
+      required: ['tier', 'requires_tools'],
     });
     const options = body.options as Record<string, unknown>;
     expect(options.temperature).toBe(0.1);
@@ -141,6 +168,44 @@ describe('HybridRouter', () => {
     const router = new HybridRouter({}, makeDeps());
     const tier = await router.route({ text: 'explica los modelos de difusión' });
     expect(tier).toBe('cloud');
+  });
+
+  it('fast-path: query con tool-markers va a cloud SIN consultar al clasificador', async () => {
+    fetchSpy.mockResolvedValue(classifierResponse('local'));
+
+    const router = new HybridRouter({}, makeDeps());
+    const tier = await router.route({ text: 'lee el archivo README' });
+
+    expect(tier).toBe('cloud');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('fuerza cloud cuando el clasificador marca requires_tools (aunque tier sea local)', async () => {
+    fetchSpy.mockResolvedValue(classifierResponse('local', true));
+
+    const router = new HybridRouter({}, makeDeps());
+    // Texto sin tool-markers explícitos → llega al clasificador, que lo marca.
+    const tier = await router.route({ text: 'necesito que prepares mi entorno' });
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(tier).toBe('cloud');
+  });
+
+  it('respeta el tier del clasificador cuando requires_tools es false', async () => {
+    fetchSpy.mockResolvedValue(classifierResponse('local', false));
+
+    const router = new HybridRouter({}, makeDeps());
+    expect(await router.route({ text: 'cuéntame un chiste' })).toBe('local');
+  });
+
+  it('tolera un clasificador que omite requires_tools (default false)', async () => {
+    // Shape "viejo" sin el campo requires_tools.
+    fetchSpy.mockResolvedValue(
+      mockResponse({ message: { role: 'assistant', content: JSON.stringify({ tier: 'local' }) } }),
+    );
+
+    const router = new HybridRouter({}, makeDeps());
+    expect(await router.route({ text: 'cuéntame un chiste' })).toBe('local');
   });
 
   it('route cae a heurística cuando fetch rechaza', async () => {

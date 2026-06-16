@@ -81,6 +81,7 @@ export {
   HybridRouterConfigSchema,
   HybridRouterError,
   routeByHeuristic,
+  requiresToolsByHeuristic,
 } from './modules/router/hybrid-router.js';
 export type { HybridRouterConfig } from './modules/router/hybrid-router.js';
 

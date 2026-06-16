@@ -1,17 +1,29 @@
 /**
  * HybridRouter — clasifica `user:message` en tier `local` o `cloud`.
  *
- * Algoritmo (ver [ADR 0015](../../../../../docs/adr/0015-hybrid-router-classifier-llm-based.md)):
+ * Algoritmo (ver [ADR 0015](../../../../../docs/adr/0015-hybrid-router-classifier-llm-based.md)
+ * y [ADR 0022 §5](../../../../../docs/adr/0022-shiro-agentic-tools-fs-shell.md)):
  *
- *   1. Pregunta a Ollama con `format: { tier: 'local'|'cloud' }`
- *      (clasificador LLM, prompt corto, temperatura baja).
+ *   0. **Pre-decisión tool-required**: si la query pide claramente una
+ *      acción sobre el sistema (leer/escribir archivos, ejecutar comandos),
+ *      fuerza `cloud` **sin** consultar al clasificador. El slot local
+ *      (qwen 2.5 3b) no hace tool-use fiable, así que cualquier turno que
+ *      vaya a necesitar tools tiene que ir a Claude. Determinista y barato.
+ *   1. Pregunta a Ollama con `format: { tier, requires_tools }`
+ *      (clasificador LLM, prompt corto, temperatura baja). Si el modelo
+ *      marca `requires_tools`, se fuerza `cloud` aunque el `tier` sea local.
  *   2. Race con timeout de 2s.
  *   3. Si algo falla (timeout, fetch, parse, malformed) → heurística
- *      determinista basada en longitud + keywords de razonamiento complejo.
+ *      determinista basada en tool-markers + longitud + keywords de
+ *      razonamiento complejo.
  *
  * Privacy-first: el default del fallback es `'local'`. Si todo falla,
  * el mensaje se queda en el modelo local (Ollama) y no se manda a cloud
  * sin querer.
+ *
+ * **Hito futuro** (ADR 0022 §5): cuando exista un modelo local con tool-use
+ * fiable (qwen3-coder + 5080), el router ganará `local.can_do_tools`; hoy es
+ * `false` siempre, así que tool-required ⇒ cloud.
  *
  * Browser-safe: usa `fetch` global. El cliente raramente lo necesita
  * (el router corre server-side por ADR 0012), pero queda en core para
@@ -67,16 +79,37 @@ const COMPLEX_MARKERS =
 const LONG_TEXT_THRESHOLD = 200;
 
 /**
+ * Marcadores de que la query probablemente necesita **ejecutar una tool**
+ * (filesystem o shell, ADR 0022 §5): vocabulario de archivos/rutas/comandos
+ * y verbos de ejecución. Deliberadamente conservador para no mandar charla
+ * casual a cloud — los casos sutiles ("verifica que el build pase") los
+ * recoge el clasificador LLM vía `requires_tools`.
+ */
+const TOOL_MARKERS =
+  /(\b(archivo|fichero|carpeta|directorio|file|folder|directory|ruta|path|terminal|shell|comando|command|ejecut\w*|git|commit|repositorio|repo)\b|\.(txt|md|json|ts|js|py|csv|log)\b)/i;
+
+/**
+ * `true` si la query pide claramente una acción sobre el sistema que
+ * requeriría tool-use. Determinista; usado como fast-path en `route` y como
+ * regla del fallback heurístico. Ver ADR 0022 §5.
+ */
+export function requiresToolsByHeuristic(text: string): boolean {
+  return TOOL_MARKERS.test(text);
+}
+
+/**
  * Heurística determinista para clasificar un mensaje. Útil como
  * fallback cuando el clasificador LLM no está disponible, y como
  * referencia testeable aislada.
  *
  * Reglas:
+ * - Pide una acción sobre el sistema (tool-markers) → 'cloud' (ADR 0022 §5).
  * - Texto > 200 caracteres → 'cloud'.
  * - Contiene verbos de razonamiento complejo → 'cloud'.
  * - En cualquier otro caso → 'local' (privacy-first).
  */
 export function routeByHeuristic(text: string): LLMTier {
+  if (requiresToolsByHeuristic(text)) return 'cloud';
   if (text.length > LONG_TEXT_THRESHOLD) return 'cloud';
   if (COMPLEX_MARKERS.test(text)) return 'cloud';
   return 'local';
@@ -93,12 +126,22 @@ const ClassifierResponseSchema = z.object({
 
 const ClassifierPayloadSchema = z.object({
   tier: z.union([z.literal('local'), z.literal('cloud')]),
+  /**
+   * `true` si el mensaje pide una acción sobre el sistema (leer/escribir
+   * archivos, ejecutar comandos) que necesitaría tool-use. Opcional con
+   * default `false` para tolerar modelos que omitan el campo. Ver ADR 0022 §5.
+   */
+  requires_tools: z.boolean().optional().default(false),
 });
 
 const CLASSIFIER_SYSTEM_PROMPT = [
-  'Clasificas mensajes de usuario en "local" o "cloud".',
-  '- "local": saludos, charla casual, preguntas factuales simples.',
-  '- "cloud": razonamiento complejo, código, análisis técnico largo.',
+  'Clasificas mensajes de usuario para enrutarlos a un LLM.',
+  'Devuelves dos campos:',
+  '- "tier": "local" para saludos, charla casual y preguntas factuales',
+  '  simples; "cloud" para razonamiento complejo, código o análisis largo.',
+  '- "requires_tools": true si el mensaje pide ACTUAR sobre el sistema del',
+  '  usuario (leer/escribir/borrar archivos, listar carpetas, ejecutar',
+  '  comandos o git); false si solo requiere conversar o razonar.',
   'Respondes SOLO con el JSON requerido.',
 ].join('\n');
 
@@ -107,8 +150,9 @@ function buildClassifierSchema(): Record<string, unknown> {
     type: 'object',
     properties: {
       tier: { type: 'string', enum: ['local', 'cloud'] },
+      requires_tools: { type: 'boolean' },
     },
-    required: ['tier'],
+    required: ['tier', 'requires_tools'],
   };
 }
 
@@ -131,8 +175,19 @@ export class HybridRouter implements IRouterModule {
   }
 
   async route(request: LLMRequest): Promise<LLMTier> {
+    // 0. Fast-path determinista: si la query pide claramente una acción
+    //    sobre el sistema, va a cloud sin consultar al clasificador (el
+    //    local no hace tool-use fiable). Ver ADR 0022 §5.
+    if (requiresToolsByHeuristic(request.text)) {
+      this.logger.debug('query requiere tools (heurística) → forzando cloud');
+      return 'cloud';
+    }
     try {
-      const tier = await this.askClassifier(request.text);
+      const { tier, requiresTools } = await this.askClassifier(request.text);
+      if (requiresTools) {
+        this.logger.debug('clasificador marcó requires_tools → forzando cloud');
+        return 'cloud';
+      }
       return tier;
     } catch (err) {
       this.logger.warn(`clasificador no disponible, usando heurística`, { err });
@@ -140,7 +195,7 @@ export class HybridRouter implements IRouterModule {
     }
   }
 
-  private async askClassifier(text: string): Promise<LLMTier> {
+  private async askClassifier(text: string): Promise<{ tier: LLMTier; requiresTools: boolean }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
@@ -183,6 +238,6 @@ export class HybridRouter implements IRouterModule {
       throw new HybridRouterError('payload del clasificador con shape inválido');
     }
 
-    return payload.data.tier;
+    return { tier: payload.data.tier, requiresTools: payload.data.requires_tools };
   }
 }
