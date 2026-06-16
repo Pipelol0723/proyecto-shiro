@@ -7,6 +7,7 @@
 import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import {
   LocalMemory,
@@ -120,11 +121,33 @@ describe('LocalMemory', () => {
       expect(entry?.metadata).toBeUndefined();
     });
 
-    it('persiste el role tal cual (user y assistant)', () => {
+    it('persiste el role tal cual (user, assistant y tool)', () => {
       memory.save(makeEntry({ id: 'u', role: 'user', timestamp: '2026-05-29T12:00:00.000Z' }));
       memory.save(makeEntry({ id: 'a', role: 'assistant', timestamp: '2026-05-29T12:00:01.000Z' }));
+      memory.save(makeEntry({ id: 't', role: 'tool', timestamp: '2026-05-29T12:00:02.000Z' }));
       const pending = memory.getPending();
-      expect(pending.map((e) => e.role)).toEqual(['user', 'assistant']);
+      expect(pending.map((e) => e.role)).toEqual(['user', 'assistant', 'tool']);
+    });
+
+    it('persiste un turno tool con su metadata estructurada (ADR 0022 §6)', () => {
+      memory.save(
+        makeEntry({
+          id: 'tool-1',
+          role: 'tool',
+          text: 'Ejecuté fs:read con {"path":"a.txt"}',
+          metadata: {
+            kind: 'tool',
+            toolId: 'fs:read',
+            toolName: 'fs_read',
+            args: { path: 'a.txt' },
+            result: { ok: true, output: 'contenido' },
+            approved: null,
+          },
+        }),
+      );
+      const [entry] = memory.getPending();
+      expect(entry?.role).toBe('tool');
+      expect(entry?.metadata).toMatchObject({ kind: 'tool', toolId: 'fs:read', approved: null });
     });
 
     it('lanza si el id se repite (idempotencia respetada por PRIMARY KEY)', () => {
@@ -228,6 +251,73 @@ describe('LocalMemory', () => {
       // Un turno más posterior queda pendiente solo él.
       memory.save(makeEntry({ id: 't4', timestamp: '2026-05-29T12:02:00.000Z' }));
       expect(memory.getPending().map((e) => e.id)).toEqual(['t4']);
+    });
+  });
+
+  describe('migración del CHECK de rol (ADR 0022 §6)', () => {
+    it('migra una DB con el CHECK viejo (sin tool) y preserva los datos', () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'shiro-mig-'));
+      const dbPath = join(tmp, 'memory.db');
+      try {
+        // Crea una DB con el schema PREVIO a ADR 0022 (CHECK solo
+        // user/assistant) y una fila existente.
+        const old = new Database(dbPath);
+        old.exec(`
+          CREATE TABLE messages (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+            text TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            metadata TEXT,
+            synced_at TEXT
+          );
+        `);
+        old
+          .prepare(
+            `INSERT INTO messages (id, user_id, role, text, timestamp) VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run('old-1', USER, 'assistant', 'recuerdo viejo', '2026-05-29T12:00:00.000Z');
+        old.close();
+
+        // Al abrir con LocalMemory se migra: ahora admite role 'tool' y la
+        // fila vieja sobrevive.
+        const migrated = new LocalMemory({ dbPath });
+        try {
+          expect(() =>
+            migrated.save(
+              makeEntry({ id: 'tool-1', role: 'tool', timestamp: '2026-05-29T12:01:00.000Z' }),
+            ),
+          ).not.toThrow();
+          const ids = migrated.getPending().map((e) => e.id);
+          expect(ids).toContain('old-1');
+          expect(ids).toContain('tool-1');
+        } finally {
+          migrated.close();
+        }
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+
+    it('reabrir una DB ya migrada es idempotente (no vuelve a migrar)', () => {
+      const tmp = mkdtempSync(join(tmpdir(), 'shiro-mig2-'));
+      const dbPath = join(tmp, 'memory.db');
+      try {
+        const first = new LocalMemory({ dbPath });
+        first.save(makeEntry({ id: 'tool-1', role: 'tool' }));
+        first.close();
+
+        const second = new LocalMemory({ dbPath });
+        try {
+          expect(second.getPending().map((e) => e.id)).toEqual(['tool-1']);
+          expect(() => second.save(makeEntry({ id: 'tool-2', role: 'tool' }))).not.toThrow();
+        } finally {
+          second.close();
+        }
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
     });
   });
 

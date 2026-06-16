@@ -216,6 +216,11 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
               { logger: child, userId: payload.userId },
               child,
               approvalGate,
+              // Persiste cada acción como turno `tool` (ADR 0022 §6).
+              // Fire-and-forget vía el WAL, igual que user/assistant.
+              (entry) => {
+                void persistEntry(modules.memory, child, entry);
+              },
             ),
           });
         } else {
@@ -392,14 +397,20 @@ function withDeadline(
   });
 }
 
+/** Etiqueta legible del rol de un turno para el contexto del LLM. */
+function roleLabel(role: MemoryEntry['role']): string {
+  if (role === 'user') return 'Usuario';
+  if (role === 'tool') return 'Acción de Shiro';
+  return 'Shiro';
+}
+
 function formatContext(recent: readonly MemoryEntry[], semantic: readonly MemoryEntry[]): string {
   const lines: string[] = [];
 
   if (recent.length > 0) {
     lines.push('Conversación reciente:');
     for (const entry of recent) {
-      const label = entry.role === 'user' ? 'Usuario' : 'Shiro';
-      lines.push(`- ${label}: ${entry.text}`);
+      lines.push(`- ${roleLabel(entry.role)}: ${entry.text}`);
     }
   }
 
@@ -407,8 +418,7 @@ function formatContext(recent: readonly MemoryEntry[], semantic: readonly Memory
     if (lines.length > 0) lines.push('');
     lines.push('Otros momentos relevantes de la conversación:');
     for (const entry of semantic) {
-      const label = entry.role === 'user' ? 'Usuario' : 'Shiro';
-      lines.push(`- ${label}: ${entry.text}`);
+      lines.push(`- ${roleLabel(entry.role)}: ${entry.text}`);
     }
   }
 

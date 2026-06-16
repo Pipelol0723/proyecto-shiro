@@ -184,6 +184,17 @@ describe('LettaMemory', () => {
       });
     });
 
+    it('serializa el rol tool en los tags (ADR 0022 §6)', async () => {
+      mock.pCreate.mockResolvedValueOnce([{ id: 'letta-id-t', text: 'Ejecuté fs:read' }]);
+      await memory.save(makeEntry({ id: 'uuid-t', role: 'tool', text: 'Ejecuté fs:read' }));
+
+      expect(mock.pCreate).toHaveBeenCalledWith(AGENT, {
+        text: 'Ejecuté fs:read',
+        created_at: '2026-05-29T12:00:00.000Z',
+        tags: ['shiro:id:uuid-t', 'shiro:role:tool'],
+      });
+    });
+
     it('propaga el error del SDK si el insert falla', async () => {
       mock.pCreate.mockRejectedValueOnce(new Error('boom'));
       await expect(memory.save(makeEntry())).rejects.toThrow('boom');
@@ -223,6 +234,22 @@ describe('LettaMemory', () => {
       expect(entries[0]?.role).toBe('user');
       expect(entries[1]?.role).toBe('assistant');
       expect(entries[0]?.text).toBe('primero');
+    });
+
+    it('recupera el rol tool desde los tags (ADR 0022 §6)', async () => {
+      mock.pList.mockResolvedValueOnce([
+        {
+          id: 'pt',
+          text: 'Ejecuté fs:read',
+          created_at: '2026-05-29T12:02:00.000Z',
+          tags: ['shiro:id:uuid-t', 'shiro:role:tool'],
+        },
+      ]);
+
+      const [entry] = await memory.getRecent(USER, 1);
+
+      expect(entry?.id).toBe('uuid-t');
+      expect(entry?.role).toBe('tool');
     });
 
     it('si el passage no tiene tags shiro, usa el id de Letta y role user', async () => {

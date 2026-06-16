@@ -207,6 +207,27 @@ describe('companionReducer', () => {
       expect(result.history).toEqual([]);
     });
 
+    it('filtra los turnos tool del snapshot (memoria interna, no chat)', () => {
+      const conTool = [
+        entries[0]!,
+        {
+          id: 'tool-1',
+          role: 'tool' as const,
+          text: 'Ejecuté fs:read con {"path":"a.txt"}',
+          timestamp: '2026-05-30T12:00:03.000Z',
+          userId: 'pipe',
+          metadata: { kind: 'tool', toolId: 'fs:read', approved: null },
+        },
+        entries[1]!,
+      ];
+      const result = companionReducer(baseState, {
+        type: 'HYDRATE_FROM_MEMORY',
+        entries: conTool,
+      });
+      expect(result.history).toHaveLength(2);
+      expect(result.history.map((m) => m.role)).toEqual(['user', 'shiro']);
+    });
+
     it('no inyecta emotion/tier/latencyMs en mensajes de role user', () => {
       const userEntry = {
         id: 'mu',

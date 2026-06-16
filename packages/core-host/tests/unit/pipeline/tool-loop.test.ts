@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { EventBus, Logger, ToolsRegistry } from '@proyecto-shiro/core';
-import type { IToolModule, ModuleDeps, ToolContext } from '@proyecto-shiro/core';
+import type { IToolModule, MemoryEntry, ModuleDeps, ToolContext } from '@proyecto-shiro/core';
 import { buildToolDefs, makeToolExecutor } from '../../../src/pipeline/tool-loop.js';
 import type { ApprovalGate } from '../../../src/pipeline/approval-gate.js';
 
@@ -124,5 +124,69 @@ describe('makeToolExecutor', () => {
 
     expect(res.ok).toBe(false);
     expect(res.output).toBe('no existe');
+  });
+});
+
+describe('makeToolExecutor — registro de turnos tool (ADR 0022 §6)', () => {
+  it('registra un turno tool tras ejecutar una auto (approved=null)', async () => {
+    const reg = registryWith([fakeTool()]);
+    const record = vi.fn();
+    const run = makeToolExecutor(reg, ctx(), new Logger('error'), gateStub(true), record);
+
+    await run('fs_read', { path: 'a.txt' });
+
+    expect(record).toHaveBeenCalledTimes(1);
+    const entry = record.mock.calls[0]?.[0] as MemoryEntry;
+    expect(entry.role).toBe('tool');
+    expect(entry.metadata).toMatchObject({
+      kind: 'tool',
+      toolId: 'fs:read',
+      result: { ok: true, output: 'contenido' },
+      approved: null,
+    });
+  });
+
+  it('registra approved=true cuando una confirm se aprueba y ejecuta', async () => {
+    const reg = registryWith([
+      fakeTool({ id: 'fs:write', name: 'fs_write', permissionTier: 'confirm' }),
+    ]);
+    const record = vi.fn();
+    const run = makeToolExecutor(reg, ctx(), new Logger('error'), gateStub(true), record);
+
+    await run('fs_write', { path: 'a.txt' });
+
+    const entry = record.mock.calls[0]?.[0] as MemoryEntry;
+    expect(entry.metadata).toMatchObject({ toolId: 'fs:write', approved: true });
+  });
+
+  it('registra approved=false y no-ejecución cuando una confirm se rechaza', async () => {
+    const exec = vi.fn(() => Promise.resolve({ ok: true, output: 'x' }));
+    const reg = registryWith([
+      fakeTool({ id: 'fs:write', name: 'fs_write', permissionTier: 'confirm', execute: exec }),
+    ]);
+    const record = vi.fn();
+    const run = makeToolExecutor(reg, ctx(), new Logger('error'), gateStub(false), record);
+
+    await run('fs_write', { path: 'a.txt' });
+
+    expect(exec).not.toHaveBeenCalled();
+    const entry = record.mock.calls[0]?.[0] as MemoryEntry;
+    expect(entry.metadata).toMatchObject({ approved: false, result: { ok: false } });
+    expect(entry.text).toContain('no me lo aprobaste');
+  });
+
+  it('no registra nada para una tool desconocida', async () => {
+    const record = vi.fn();
+    const run = makeToolExecutor(
+      registryWith([fakeTool()]),
+      ctx(),
+      new Logger('error'),
+      gateStub(true),
+      record,
+    );
+
+    await run('no_existe', {});
+
+    expect(record).not.toHaveBeenCalled();
   });
 });

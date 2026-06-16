@@ -72,9 +72,11 @@ export type CompanionAction =
 
 /**
  * Mapea un `MemoryEntry` (server-side) a un `CompanionMessage` (UI). El
- * cambio sutil: `MemoryEntry.role` es `'user' | 'assistant'` y el chat de
- * la UI usa `'user' | 'shiro'`. La metadata rica (emoción, tier,
- * latencia) viaja en `MemoryEntry.metadata`; aquí la desempacamos.
+ * cambio sutil: `MemoryEntry.role` es `'user' | 'assistant' | 'tool'` y el
+ * chat de la UI usa `'user' | 'shiro'`. Los turnos `tool` (acciones agénticas,
+ * ADR 0022 §6) son memoria interna y se filtran antes de llegar aquí. La
+ * metadata rica (emoción, tier, latencia) viaja en `MemoryEntry.metadata`;
+ * aquí la desempacamos.
  */
 function entryToMessage(entry: MemoryEntry): CompanionMessage {
   const role: 'user' | 'shiro' = entry.role === 'assistant' ? 'shiro' : 'user';
@@ -159,7 +161,10 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
       // posteriores para no duplicar. RESET vuelve a habilitar la
       // hidratación.
       if (state.history.length > 0) return state;
-      return { ...state, history: action.entries.map(entryToMessage) };
+      return {
+        ...state,
+        history: action.entries.filter((e) => e.role !== 'tool').map(entryToMessage),
+      };
 
     case 'RESET':
       return INITIAL_STATE;

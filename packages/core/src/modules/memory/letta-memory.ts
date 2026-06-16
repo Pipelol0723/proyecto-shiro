@@ -32,9 +32,10 @@
  * - `text` ↔ `text` (list/create) o `content` (search): Letta usa nombres
  *   distintos según el endpoint; normalizamos al leer.
  * - `timestamp` ↔ `created_at` (list) o `timestamp` (search).
- * - `id` ↔ tag `shiro:id:<uuid>`; `role` ↔ tag `shiro:role:<user|assistant>`.
- * - `metadata` (emotion, tier, latencyMs) **no se persiste en Letta**; vive
- *   solo en el WAL local. Letta guarda lo esencial para reconstruir contexto.
+ * - `id` ↔ tag `shiro:id:<uuid>`; `role` ↔ tag `shiro:role:<user|assistant|tool>`.
+ * - `metadata` (emotion, tier, latencyMs; o los detalles de un turno `tool`)
+ *   **no se persiste en Letta**; vive solo en el WAL local. Letta guarda lo
+ *   esencial (`text` + rol) para reconstruir contexto y embeber.
  * - Si el drainer reintenta tras un timeout y crea un passage duplicado, lo
  *   aceptamos como limitación conocida (mejor un turno duplicado raro que
  *   un turno perdido).
@@ -184,16 +185,18 @@ function buildTags(entry: MemoryEntry): string[] {
 
 function extractFromTags(tags: readonly string[] | null | undefined): {
   id: string | undefined;
-  role: 'user' | 'assistant' | undefined;
+  role: MemoryEntry['role'] | undefined;
 } {
   let id: string | undefined;
-  let role: 'user' | 'assistant' | undefined;
+  let role: MemoryEntry['role'] | undefined;
   for (const tag of tags ?? []) {
     if (tag.startsWith(TAG_PREFIX_ID)) {
       id = tag.slice(TAG_PREFIX_ID.length);
     } else if (tag.startsWith(TAG_PREFIX_ROLE)) {
       const candidate = tag.slice(TAG_PREFIX_ROLE.length);
-      if (candidate === 'user' || candidate === 'assistant') role = candidate;
+      if (candidate === 'user' || candidate === 'assistant' || candidate === 'tool') {
+        role = candidate;
+      }
     }
   }
   return { id, role };
