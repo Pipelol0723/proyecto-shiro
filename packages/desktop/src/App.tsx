@@ -30,6 +30,7 @@ import {
 } from './screens';
 import type { ThemeName } from './themes';
 import { UpdateBanner } from './updater/UpdateBanner';
+import { ToolApprovalModal } from './components/ToolApproval';
 import styles from './App.module.css';
 
 export interface AppProps {
@@ -114,6 +115,9 @@ function AppShell(): JSX.Element {
       {/* Aviso de auto-update (ADR 0024 §4). Invisible fuera de Tauri
           y cuando la app está al día. */}
       <UpdateBanner />
+      {/* Modal de aprobación de tools agénticas confirm (ADR 0022 §4).
+          Invisible salvo cuando Shiro pide permiso para una acción. */}
+      <ToolApprovalModal />
       <Sidebar active={screen} onChange={setScreen} />
       <main className={styles.main}>
         <Header screen={screen} theme={theme} onThemeChange={setTheme} />

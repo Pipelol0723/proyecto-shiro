@@ -186,6 +186,31 @@ export interface EventMap {
    */
   'tts:audio-ended': { userId: string; audioId?: string };
 
+  // ─── Tools agénticas (aprobación, ADR 0022 §4) ─────────────────────
+  /**
+   * El pipeline pide aprobación humana antes de ejecutar una tool `confirm`
+   * (`fs:write`, `fs:delete`, `shell:exec`). El loop tool-use queda
+   * **pausado** hasta que el cliente responde con `tool:approval` (mismo
+   * `requestId`). El cliente materializa un modal de aprobación.
+   */
+  'tool:requires-approval': {
+    /** Correlaciona la petición con su respuesta `tool:approval`. */
+    requestId: string;
+    /** Id namespaced de la tool (p.ej. `fs:write`). */
+    toolId: string;
+    /** Nombre LLM-safe de la tool (p.ej. `fs_write`). */
+    toolName: string;
+    /** Resumen legible de lo que se va a ejecutar (args truncados). */
+    argsPreview: string;
+    userId: string;
+  };
+  /**
+   * Decisión del usuario sobre una `tool:requires-approval`. La emite el
+   * cliente al pulsar "Permitir una vez" (`approved:true`) o "Cancelar"
+   * (`approved:false`). El server ejecuta la tool o la cancela.
+   */
+  'tool:approval': { requestId: string; approved: boolean; userId: string };
+
   // ─── Memoria (sincronización con cliente) ───────────────────────────
   /**
    * Snapshot del historial reciente que el server empuja al detectar
