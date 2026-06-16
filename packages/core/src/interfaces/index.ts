@@ -16,7 +16,7 @@ export type {
 } from './ILLMModule.js';
 export type { ITTSModule, TTSRequest, TTSResponse } from './ITTSModule.js';
 export type { ISTTModule, STTRequest, STTResult } from './ISTTModule.js';
-export type { IMemoryModule, MemoryEntry } from './IMemoryModule.js';
+export type { IMemoryModule, MemoryEntry, ToolTurnMetadata } from './IMemoryModule.js';
 export type { IAvatarModule } from './IAvatarModule.js';
 export type { IRouterModule, LLMTier } from './IRouterModule.js';
 export type { IDeviceModule, DeviceStatus, DeviceCommand } from './IDeviceModule.js';

@@ -75,12 +75,27 @@ export interface LocalMemoryOptions {
 interface MessageRow {
   id: string;
   user_id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   text: string;
   timestamp: string;
   metadata: string | null;
   synced_at: string | null;
 }
+
+/**
+ * Cuerpo de columnas de la tabla `messages`. Factorizado porque se usa tanto
+ * en la creación (`CREATE TABLE IF NOT EXISTS`) como en la migración que
+ * reconstruye la tabla para ampliar el CHECK del rol (ADR 0022 §6).
+ */
+const MESSAGES_COLUMNS_DDL = `
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  role       TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'tool')),
+  text       TEXT NOT NULL,
+  timestamp  TEXT NOT NULL,
+  metadata   TEXT,
+  synced_at  TEXT
+`;
 
 export class LocalMemory {
   private readonly db: DatabaseInstance;
@@ -221,28 +236,55 @@ export class LocalMemory {
   }
 
   private initSchema(): void {
+    // Tablas primero (DBs nuevas nacen ya con el CHECK que incluye 'tool').
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id         TEXT PRIMARY KEY,
-        user_id    TEXT NOT NULL,
-        role       TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
-        text       TEXT NOT NULL,
-        timestamp  TEXT NOT NULL,
-        metadata   TEXT,
-        synced_at  TEXT
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_messages_pending
-        ON messages(timestamp) WHERE synced_at IS NULL;
-
-      CREATE INDEX IF NOT EXISTS idx_messages_user_time
-        ON messages(user_id, timestamp);
+      CREATE TABLE IF NOT EXISTS messages (${MESSAGES_COLUMNS_DDL});
 
       CREATE TABLE IF NOT EXISTS meta (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
     `);
+
+    // Migración: DBs creadas antes de ADR 0022 §6 tienen el CHECK viejo
+    // (solo user/assistant) y rechazarían un INSERT con role 'tool'. La
+    // reconstruimos en sitio. No-op en DBs nuevas (ya traen 'tool').
+    this.migrateRoleCheck();
+
+    // Índices al final — tras la migración, para que queden sobre la tabla
+    // definitiva (la reconstrucción descarta los índices de la tabla vieja).
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_messages_pending
+        ON messages(timestamp) WHERE synced_at IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_messages_user_time
+        ON messages(user_id, timestamp);
+    `);
+  }
+
+  /**
+   * Amplía el CHECK del rol para admitir `'tool'` en DBs ya existentes
+   * (ADR 0022 §6). SQLite no permite alterar un CHECK in-place, así que se
+   * reconstruye la tabla: rename → create nueva → copy → drop. Idempotente:
+   * si el CHECK ya incluye `'tool'` (DB nueva o ya migrada), no hace nada.
+   */
+  private migrateRoleCheck(): void {
+    const row = this.db
+      .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'`)
+      .get() as { sql: string } | undefined;
+    if (row === undefined || row.sql.includes("'tool'")) return;
+
+    this.logger?.info('migrando schema de memoria: el rol ahora admite turnos tool (ADR 0022)');
+    const migrate = this.db.transaction(() => {
+      this.db.exec(`ALTER TABLE messages RENAME TO messages_old;`);
+      this.db.exec(`CREATE TABLE messages (${MESSAGES_COLUMNS_DDL});`);
+      this.db.exec(
+        `INSERT INTO messages (id, user_id, role, text, timestamp, metadata, synced_at)
+         SELECT id, user_id, role, text, timestamp, metadata, synced_at FROM messages_old;`,
+      );
+      this.db.exec(`DROP TABLE messages_old;`);
+    });
+    migrate();
   }
 }
 

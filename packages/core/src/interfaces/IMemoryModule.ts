@@ -6,7 +6,16 @@ export interface MemoryEntry {
    * garantizar idempotencia. Ver ADR 0017.
    */
   id: string;
-  role: 'user' | 'assistant';
+  /**
+   * Rol del turno:
+   * - `user` / `assistant`: conversación normal.
+   * - `tool`: acción agéntica que Shiro ejecutó (ADR 0022 §6). El `text`
+   *   es un resumen legible en primera persona (alimenta el contexto del
+   *   LLM y los embeddings de `searchSemantic`); los detalles estructurados
+   *   (tool, args, resultado, aprobación) viajan en `metadata` con la forma
+   *   de {@link ToolTurnMetadata}.
+   */
+  role: 'user' | 'assistant' | 'tool';
   text: string;
   /** ISO 8601 timestamp. */
   timestamp: string;
@@ -18,6 +27,29 @@ export interface MemoryEntry {
   userId: string;
   /** Metadata libre (emoción detectada, modelo usado, etc.). */
   metadata?: Record<string, unknown>;
+}
+
+/**
+ * Forma de `metadata` en los turnos con `role: 'tool'` (ADR 0022 §6). Se
+ * guarda íntegra en el WAL local; Letta solo conserva el `text` + el tag de
+ * rol (la metadata estructurada no se persiste en Letta, ver `letta-memory`).
+ */
+export interface ToolTurnMetadata {
+  /** Marca discriminante para distinguir estos turnos en `metadata`. */
+  kind: 'tool';
+  /** Id namespaced de la tool ejecutada (p.ej. `fs:read`). */
+  toolId: string;
+  /** Nombre LLM-safe de la tool (p.ej. `fs_read`). */
+  toolName: string;
+  /** Argumentos con los que se invocó (tal cual los pasó el modelo). */
+  args: unknown;
+  /** Resultado simplificado de la ejecución. */
+  result: { ok: boolean; output: string };
+  /**
+   * Decisión de aprobación: `true`/`false` para tools `confirm`, `null` para
+   * tools `auto` (no requieren aprobación).
+   */
+  approved: boolean | null;
 }
 
 /**
