@@ -61,6 +61,12 @@ export const ModulesConfigSchema = z.object({
     tools: ModuleSlotSchema.default({ active: 'ToolsRegistry' }),
   }),
   character: CharacterRefSchema,
+  // Config de self-improvement (ADR 0023). Top-level a propósito ("config
+  // separada" del slot `tools` del usuario). Opcional: si falta, self-dev
+  // está apagado. Se valida en detalle con `parseSelfDevConfig` en el módulo
+  // Node-only (mismo patrón que cada slot valida su propia `config`), para
+  // que este schema siga siendo browser-safe.
+  selfdev: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type ModuleSlot = z.infer<typeof ModuleSlotSchema>;

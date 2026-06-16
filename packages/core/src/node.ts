@@ -69,3 +69,17 @@ export {
   registerShellTool,
 } from './modules/tools/shell/shell-tool.js';
 export type { ShellToolConfig, AllowCheck } from './modules/tools/shell/shell-tool.js';
+
+// Tools de self-improvement (ADR 0023) — juego SEPARADO scoped al worktree
+// aislado, con denylist de inmutables. Node-only. La cimentación (este PR);
+// el `SelfDevSession` que las cablea llega en PRs siguientes.
+export { isImmutable, immutablePathError } from './modules/tools/selfdev/immutable-paths.js';
+export {
+  SelfDevConfigSchema,
+  SelfDevConfigError,
+  SelfDevWriteGuard,
+  parseSelfDevConfig,
+  createSelfDevFsRegistry,
+  createSelfDevShell,
+} from './modules/tools/selfdev/selfdev-tools.js';
+export type { SelfDevConfig } from './modules/tools/selfdev/selfdev-tools.js';
