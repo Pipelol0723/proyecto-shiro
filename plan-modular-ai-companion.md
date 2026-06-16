@@ -18,7 +18,10 @@
 > - **Numeración de fases → nombres**: el cliente desktop se intercaló
 >   entre Core y LLM, así que pasamos a llamar las fases por su contenido
 >   (Setup, Core, Cliente desktop, LLM, Memoria, STT, TTS, Avatar Live2D,
->   Packaging Tauri) en lugar de Fase 0–7.
+>   Packaging Tauri, Agentic tools) en lugar de Fase 0–7.
+> - **Hito Agentic** (no previsto en este plan): Shiro gana capacidad
+>   ejecutiva (FS + shell con permisos mixtos, loop tool-use, modal de
+>   aprobación). Ver [ADR 0022](docs/adr/0022-shiro-agentic-tools-fs-shell.md).
 > - **Cliente desktop adelantado**: ya no es Fase 7. Se construye ahora,
 >   entre Core y LLM, con stack Vite + React + TS (no solo Tauri).
 >   Ver [ADR 0008](docs/adr/0008-cliente-desktop-vite-react.md).
