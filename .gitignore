@@ -92,3 +92,12 @@ data/
 # desde checks locales y deja bytecode; nunca debe entrar al repo.
 __pycache__/
 *.pyc
+
+# design-sync (claude.ai/design): scripts staged + output del conversor +
+# estado de máquina. Lo durable (config.json, ds-entry.tsx, previews/,
+# NOTES.md, conventions.md) SÍ se commitea; el resto se regenera.
+.ds-sync/
+/ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules

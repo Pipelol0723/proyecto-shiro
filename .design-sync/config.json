@@ -1,0 +1,32 @@
+{
+  "pkg": "@proyecto-shiro/desktop",
+  "globalName": "ShiroUI",
+  "projectId": "b2b9fce5-ad62-450e-91d4-e2cdf3fbc8a8",
+  "shape": "package",
+  "entry": ".design-sync/ds-entry.tsx",
+  "readmeHeader": ".design-sync/conventions.md",
+  "guidelinesGlob": [],
+  "srcDir": "packages/desktop/src",
+  "componentSrcMap": {
+    "Orb": "packages/desktop/src/components/Orb/Orb.tsx",
+    "ThemeSwitcher": "packages/desktop/src/components/ThemeSwitcher/ThemeSwitcher.tsx",
+    "IconChat": "packages/desktop/src/components/Icons/Icons.tsx",
+    "IconModules": "packages/desktop/src/components/Icons/Icons.tsx",
+    "IconCharacter": "packages/desktop/src/components/Icons/Icons.tsx",
+    "IconAvatar": "packages/desktop/src/components/Icons/Icons.tsx",
+    "IconSetup": "packages/desktop/src/components/Icons/Icons.tsx",
+    "IconMic": "packages/desktop/src/components/Icons/Icons.tsx",
+    "IconSend": "packages/desktop/src/components/Icons/Icons.tsx"
+  },
+  "dtsPropsFor": {
+    "Orb": "emotion?: 'neutral' | 'divertida' | 'pensativa' | 'molesta' | 'vulnerable';\n  speaking?: boolean;\n  listening?: boolean;\n  thinking?: boolean;\n  size?: number;",
+    "ThemeSwitcher": "value: 'kawaii' | 'cyber' | 'editorial';\n  onChange: (next: 'kawaii' | 'cyber' | 'editorial') => void;",
+    "IconChat": "size?: number;",
+    "IconModules": "size?: number;",
+    "IconCharacter": "size?: number;",
+    "IconAvatar": "size?: number;",
+    "IconSetup": "size?: number;",
+    "IconMic": "size?: number;",
+    "IconSend": "size?: number;"
+  }
+}
