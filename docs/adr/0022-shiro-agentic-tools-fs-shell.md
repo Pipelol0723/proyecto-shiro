@@ -1,8 +1,9 @@
 # ADR 0022: Shiro agentic — slot `tools:`, FS + shell con permisos mixtos
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Fecha**: 2026-06-09
 - **Decidido por**: Pipelol0723
+- **Implementado**: 2026-06-15 (PRs #1–#8 del hito agentic)
 
 ## Contexto
 

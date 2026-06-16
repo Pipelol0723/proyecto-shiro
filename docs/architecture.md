@@ -91,6 +91,7 @@ graph LR
             IAv[IAvatarModule]
             IRou[IRouterModule]
             IDev[IDeviceModule]
+            ITool["IToolModule /<br>IToolsRegistry"]
             ITrans[ITransport]
             IBus[IEventBus]
         end
@@ -102,6 +103,7 @@ graph LR
             Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL ✅]
             Av["avatar/<br>Live2DAvatar ✅ (server)<br>render + lip-sync en cliente ✅<br>VRM ⏸️"]
             Rou[router/<br>HybridRouter ✅]
+            Tool["tools/<br>ToolsRegistry + FS / Shell ✅<br>(FsScope, ShellAllowlist)"]
         end
 
         Character[character/<br>Loader + personalidad]
@@ -114,6 +116,7 @@ graph LR
     ModuleLoader --> IMem
     ModuleLoader --> IAv
     ModuleLoader --> IRou
+    ModuleLoader --> ITool
 
     ConfigLoader --> Schemas
     ModuleLoader --> ConfigLoader
@@ -124,6 +127,7 @@ graph LR
     IMem -.implementa.-> Mem
     IAv -.implementa.-> Av
     IRou -.implementa.-> Rou
+    ITool -.implementa.-> Tool
 
     Orchestrator --> EventBus
     EventBus --> ITrans
@@ -517,6 +521,65 @@ graph LR
 - **Auto-provisión**: si no hay `agent_id` configurado, el manager crea el
   agente Letta al arrancar (con los handles de Ollama) y persiste su id en el
   WAL local para sobrevivir reinicios.
+
+## Tools agénticas: loop tool-use + aprobación
+
+El hito **Agentic** (ver [ADR 0022](adr/0022-shiro-agentic-tools-fs-shell.md))
+convierte a Shiro en agente: además de hablar, **lee/modifica archivos y
+ejecuta comandos**. Un slot nuevo `tools:` en el orchestrator
+(`IToolsRegistry` de `IToolModule`) registra las herramientas; cada una
+declara un `permissionTier`:
+
+- `auto` (`fs:read`, `fs:list`) → se ejecuta sin preguntar.
+- `confirm` (`fs:write`, `fs:delete`, `shell:exec`) → pide aprobación humana.
+
+```mermaid
+sequenceDiagram
+    participant Claude as AnthropicLLM<br/>generateWithTools
+    participant Loop as tool-loop<br/>(executor + gate)
+    participant Gate as ApprovalGate
+    participant Client as Cliente<br/>(modal)
+    participant Tool as IToolModule
+    participant Mem as MemoryManager
+
+    Claude->>Loop: tool_use { name, args }
+    alt tier auto
+        Loop->>Tool: execute(args)
+    else tier confirm
+        Loop->>Gate: requestApproval()
+        Gate->>Client: tool:requires-approval
+        Client-->>Gate: tool:approval { approved }
+        alt aprobada
+            Loop->>Tool: execute(args)
+        else cancelada
+            Note over Loop: no se ejecuta
+        end
+    end
+    Loop->>Mem: save(turno role:'tool')
+    Loop-->>Claude: tool_result
+    Claude->>Claude: ...sigue hasta el respond final
+```
+
+Piezas clave:
+
+- **Loop tool-use** (solo slot cloud / Claude — ADR 0022 §5):
+  `AnthropicLLM.generateWithTools` itera LLM↔tools hasta que el modelo emite
+  el `respond` terminal (`{text, emotion}`). El local (Qwen 3b) **no** recibe
+  tools (no hace tool-use fiable).
+- **Seguridad**: `FsScope` confina los paths a una allowlist (containment +
+  anti-symlink vía `realpath`); `ShellAllowlist` valida comando + args por
+  regex. Ambos desde `modules.config.yaml`.
+- **Aprobación** (ADR 0022 §4): el `ApprovalGate` (server) correla la petición
+  por `requestId` y pausa el turno hasta el `tool:approval` del cliente (o un
+  timeout). El modal del desktop (`ToolApprovalModal`) lo materializa —
+  aprobación por acción, sin "remember".
+- **Memoria** (ADR 0022 §6): cada acción (ejecutada o cancelada) se persiste
+  como turno `role:'tool'` por el mismo WAL + drainer, con los detalles en
+  `metadata` (`ToolTurnMetadata`). Así Shiro recuerda lo que hizo. Los turnos
+  `tool` se filtran del chat del cliente (memoria interna, no burbujas).
+- **Routing** (ADR 0022 §5): el `HybridRouter` gana la dimensión
+  `requires_tools` (fast-path determinista + flag del clasificador) que fuerza
+  cloud cuando el turno va a necesitar tools.
 
 ## Evolución de transportes
 

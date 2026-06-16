@@ -4,16 +4,18 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **Packaging Tauri** ✅ completo — Shiro se instala y se
-> abre con doble click como app de escritorio Windows. Binario **Tauri 2.0**
-> con tray icon + close-to-tray + single-instance; el `core-host` viaja como
-> **sidecar** (empaquetado con ncc+pkg, `better-sqlite3` nativo) que Tauri
-> lanza y mata. **Auto-updater** firmado (ed25519, GitHub Releases) + workflow
-> CI de release por tag. **Setup wizard** que chequea los servicios externos
-> y deja meter las **API keys en runtime** (`secrets.env`, sin tocar `.env`).
-> Modo overlay diferido a post-MVP. Hitos previos: **Setup**, **Core**,
-> **Cliente desktop**, **LLM**, **Memoria**, **STT**, **TTS**, **Avatar
-> Live2D**. Ver [ADR 0024](docs/adr/0024-packaging-tauri-windows-sidecar.md).
+> **Estado**: hito **Agentic tools** ✅ completo — Shiro deja de ser solo
+> interlocutora y pasa a **agente**: lee y modifica archivos (`fs:*`) y
+> ejecuta comandos allowlisted (`shell:exec`) en un **loop tool-use** con
+> Claude. Las acciones destructivas piden permiso por un **modal de
+> aprobación**; lo que ejecuta se **recuerda** (turnos `role:'tool'` en
+> memoria) y el router fuerza cloud cuando un turno va a necesitar tools.
+> Permisos mixtos (read auto, write/shell confirm). Ver
+> [ADR 0022](docs/adr/0022-shiro-agentic-tools-fs-shell.md). Antes, el hito
+> **Packaging Tauri** dejó a Shiro instalable con doble click (binario Tauri
+> 2.0 + sidecar `core-host` + auto-updater firmado + setup wizard). Hitos
+> previos: **Setup**, **Core**, **Cliente desktop**, **LLM**, **Memoria**,
+> **STT**, **TTS**, **Avatar Live2D**, **Packaging Tauri**.
 > Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
 > historial de decisiones en [`docs/adr/`](docs/adr/).
 
@@ -36,8 +38,10 @@ histórico.
 | **TTS**             | ✅ completo | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                                                                                                          |
 | **Avatar Live2D**   | ✅ completo | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe, lip-sync con el audio del TTS y expresiones faciales por emoción. ADR 0021.                                                                                           |
 | **Packaging Tauri** | ✅ completo | Binario Tauri 2.0 (Windows): sidecar `core-host` (ncc+pkg), tray + close-to-tray + single-instance, auto-updater firmado (ed25519 + GitHub Releases), CI release por tag, setup wizard con healthcheck + API keys en runtime (`secrets.env`). Overlay diferido a post-MVP. ADR 0024. |
+| **Agentic tools**   | ✅ completo | Slot `tools:` (FS read/list auto, write/delete confirm con `FsScope`; `shell:exec` con allowlist), loop tool-use en Claude, modal de aprobación (`tool:requires-approval`/`tool:approval`), persistencia `role:'tool'` y router con dimensión `requires_tools`. ADR 0022.            |
 | **Post-MVP**        |             |                                                                                                                                                                                                                                                                                      |
 | Modo overlay        | ⏳ futuro   | Toggle a ventana flotante always-on-top transparente estilo VTuber (ADR 0024 §3)                                                                                                                                                                                                     |
+| Self-improvement    | ⏳ futuro   | Shiro propone mejoras a su propio código en un worktree aislado (propose-only, ADR 0023). Reusa el slot agentic.                                                                                                                                                                     |
 | Plugins             | ⏳ futuro   | Sistema de extensiones                                                                                                                                                                                                                                                               |
 | Móvil               | ⏳ futuro   | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                                                                                                           |
 | Avatar 3D (VRM)     | ⏳ futuro   | `@pixiv/three-vrm`                                                                                                                                                                                                                                                                   |
