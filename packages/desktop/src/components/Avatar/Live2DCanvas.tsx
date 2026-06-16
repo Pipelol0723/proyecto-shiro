@@ -16,7 +16,9 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import * as PIXI from 'pixi.js';
 import { Application, Ticker } from 'pixi.js';
+import { install as installUnsafeEvalShaders } from '@pixi/unsafe-eval';
 // `pixi-live2d-display-lipsyncpatch` es el fork mantenido activamente
 // que arregla bugs del original `pixi-live2d-display@0.5.0-beta` —
 // principalmente el crash `Cannot read properties of undefined (reading '0')`
@@ -31,6 +33,15 @@ import { useAvatarExpression } from './useAvatarExpression';
 import type { Emotion } from '@proyecto-shiro/core';
 import type { AvatarRuntimeConfig } from './config';
 import styles from './Avatar.module.css';
+
+// PixiJS genera shaders con `new Function()` (eval). La CSP del binario
+// Tauri (`script-src 'self' 'wasm-unsafe-eval'`, sin `unsafe-eval`) lo
+// bloquea en producción → `Application` lanzaba en systemCheck y el
+// avatar caía al Orbe SOLO en la app instalada (en dev la CSP no se
+// inyecta, por eso ahí funcionaba). `@pixi/unsafe-eval` reemplaza esos
+// paths por shaders precompilados sin eval — la solución oficial de
+// PixiJS para entornos con CSP estricta; así no aflojamos la CSP.
+installUnsafeEvalShaders(PIXI);
 
 // pixi-live2d-display espera que el Ticker de PIXI esté registrado
 // globalmente como motor de animación del modelo. Sin esto el avatar
