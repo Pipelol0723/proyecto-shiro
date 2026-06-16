@@ -13,7 +13,15 @@ all color and font tokens are defined. Without it the tokens are unset: the
 
 ```jsx
 // pick ONE theme on a root wrapper; everything inside inherits the tokens
-<div className="theme-kawaii" style={{ background: 'var(--bg)', backgroundImage: 'var(--bg-grad)', color: 'var(--ink)', fontFamily: 'var(--font-body)' }}>
+<div
+  className="theme-kawaii"
+  style={{
+    background: 'var(--bg)',
+    backgroundImage: 'var(--bg-grad)',
+    color: 'var(--ink)',
+    fontFamily: 'var(--font-body)',
+  }}
+>
   <ShiroUI.Orb emotion="divertida" speaking size={180} />
 </div>
 ```
@@ -27,16 +35,16 @@ them (it sets `theme-<name>` on `document.body`).
 There are **no utility classes and no styling props** — you style your own
 layout with these tokens (all defined per theme, so they adapt automatically):
 
-| Family | Tokens |
-|---|---|
-| Surface / bg | `--bg`, `--bg-grad`, `--surface`, `--surface-solid`, `--surface-border`, `--surface-hover` |
-| Text | `--ink`, `--ink-mute`, `--ink-faint` |
-| Accent | `--accent`, `--accent-soft`, `--accent-2` |
+| Family        | Tokens                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Surface / bg  | `--bg`, `--bg-grad`, `--surface`, `--surface-solid`, `--surface-border`, `--surface-hover`                         |
+| Text          | `--ink`, `--ink-mute`, `--ink-faint`                                                                               |
+| Accent        | `--accent`, `--accent-soft`, `--accent-2`                                                                          |
 | Emotion (Orb) | `--neutral-color`, `--divertida-color`, `--pensativa-color`, `--molesta-color`, `--vulnerable-color`, `--orb-halo` |
-| Radius | `--radius-sm` (8) `--radius-md` (14) `--radius-lg` (22) `--radius-xl` (32) |
-| Fonts | `--font-display`, `--font-body`, `--font-mono` |
-| Elevation | `--shadow-md`, `--shadow-lg` |
-| Easing | `--ease-out`, `--ease-in-out` |
+| Radius        | `--radius-sm` (8) `--radius-md` (14) `--radius-lg` (22) `--radius-xl` (32)                                         |
+| Fonts         | `--font-display`, `--font-body`, `--font-mono`                                                                     |
+| Elevation     | `--shadow-md`, `--shadow-lg`                                                                                       |
+| Easing        | `--ease-out`, `--ease-in-out`                                                                                      |
 
 Icons (`IconChat`, `IconModules`, `IconCharacter`, `IconAvatar`, `IconSetup`,
 `IconMic`, `IconSend`) are line glyphs that draw in `currentColor` and take a
@@ -53,12 +61,28 @@ Icons (`IconChat`, `IconModules`, `IconCharacter`, `IconAvatar`, `IconSetup`,
 
 ```jsx
 // A companion chat header, on-brand, no hard-coded colors
-<header className="theme-kawaii" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, background: 'var(--surface)', border: '1px solid var(--surface-border)', borderRadius: 'var(--radius-lg)', color: 'var(--ink)', fontFamily: 'var(--font-body)', boxShadow: 'var(--shadow-md)' }}>
+<header
+  className="theme-kawaii"
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    padding: 16,
+    background: 'var(--surface)',
+    border: '1px solid var(--surface-border)',
+    borderRadius: 'var(--radius-lg)',
+    color: 'var(--ink)',
+    fontFamily: 'var(--font-body)',
+    boxShadow: 'var(--shadow-md)',
+  }}
+>
   <ShiroUI.Orb emotion="neutral" size={56} />
   <div style={{ flex: 1 }}>
     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>Shiro</div>
     <div style={{ color: 'var(--ink-mute)', fontSize: 13 }}>online</div>
   </div>
-  <span style={{ color: 'var(--accent)' }}><ShiroUI.IconMic size={22} /></span>
+  <span style={{ color: 'var(--accent)' }}>
+    <ShiroUI.IconMic size={22} />
+  </span>
 </header>
 ```

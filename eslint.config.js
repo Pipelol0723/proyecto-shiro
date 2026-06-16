@@ -37,6 +37,14 @@ export default tseslint.config(
       // Node que no participan del proyecto TS, así que el typed-linting
       // no aplica. Llevan `// @ts-check` para chequeo a nivel de editor.
       'packages/desktop/scripts/*.mjs',
+      // Inputs de /design-sync (claude.ai/design): el entry sintético y las
+      // previews importan del bundle exportado y no pertenecen a ningún
+      // tsconfig del monorepo, así que el typed-linting rompería. El output
+      // del conversor (ds-bundle/) y los scripts staged (.ds-sync/) ya están
+      // en .gitignore; se listan aquí porque el flat config no lo hereda.
+      '.design-sync/**',
+      '.ds-sync/**',
+      'ds-bundle/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
