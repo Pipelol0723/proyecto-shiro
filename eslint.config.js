@@ -45,6 +45,13 @@ export default tseslint.config(
       '.design-sync/**',
       '.ds-sync/**',
       'ds-bundle/**',
+      // Estado del harness de Claude Code: `.claude/worktrees/<id>/` son copias
+      // COMPLETAS del repo (worktrees git de agentes en aislamiento) que
+      // `eslint .` recorrería, con archivos fuera de todo tsconfig (p.ej.
+      // `build-sidecar.mjs`) que rompen el typed-linting. Es estado local del
+      // harness, nunca código del proyecto. CI (checkout limpio) no lo tiene;
+      // esto solo evita que `npm run lint` reviente en local.
+      '.claude/**',
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
