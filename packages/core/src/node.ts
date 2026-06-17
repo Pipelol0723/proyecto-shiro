@@ -83,3 +83,9 @@ export {
   createSelfDevShell,
 } from './modules/tools/selfdev/selfdev-tools.js';
 export type { SelfDevConfig } from './modules/tools/selfdev/selfdev-tools.js';
+export {
+  WorktreeManager,
+  createWorktreeManager,
+  slugTopic,
+} from './modules/tools/selfdev/worktree.js';
+export type { GitExec, GitResult, WorktreeInfo } from './modules/tools/selfdev/worktree.js';
