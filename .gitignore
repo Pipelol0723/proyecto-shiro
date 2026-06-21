@@ -53,6 +53,11 @@ Thumbs.db
 # Estado local de Claude Code (worktrees, settings de sesión).
 .claude/
 
+# Cache del MCP de WhatsApp Web (whatsapp-web.js): se crea en la raíz al
+# correr ese MCP localmente. Artefacto de entorno, nunca código del proyecto.
+.wwebjs_cache/
+.wwebjs_auth/
+
 # Tauri signing key local (cuando se genere para el auto-updater, task #35).
 # La pública entra en `tauri.conf.json`; la privada NUNCA al repo.
 **/.tauri/
