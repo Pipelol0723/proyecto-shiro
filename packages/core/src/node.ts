@@ -89,3 +89,5 @@ export {
   slugTopic,
 } from './modules/tools/selfdev/worktree.js';
 export type { GitExec, GitResult, WorktreeInfo } from './modules/tools/selfdev/worktree.js';
+export { GhPrCreateTool, createGhPrCreateTool } from './modules/tools/selfdev/gh-pr.js';
+export type { GhExec } from './modules/tools/selfdev/gh-pr.js';
