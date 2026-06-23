@@ -9,3 +9,8 @@ plan-modular-ai-companion.md
 
 # Bundle del diseño exportado por Claude Design — referencia, no codigo
 docs/design-mockup/**
+
+# Cache local del MCP de WhatsApp Web — artefacto de entorno, no código.
+# (prettier no hereda .gitignore, hay que listarlo aquí también.)
+.wwebjs_cache/**
+.wwebjs_auth/**
