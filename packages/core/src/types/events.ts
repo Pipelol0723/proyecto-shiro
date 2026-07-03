@@ -211,6 +211,42 @@ export interface EventMap {
    */
   'tool:approval': { requestId: string; approved: boolean; userId: string };
 
+  // ─── Self-improvement (ADR 0023) ───────────────────────────────────
+  /**
+   * Progreso de una sesión de self-dev. La emite el `SelfDevSession` al
+   * pasar de fase (setup → generar → eval → fix → PR → done). El cliente
+   * muestra un indicador de estado discreto. No bloquea nada — es
+   * informativo. Las **aprobaciones** (arrancar sesión / crear PR) NO van
+   * por aquí: reusan `tool:requires-approval`/`tool:approval` (tools
+   * `selfdev:propose` y `gh:pr-create` son `confirm`).
+   */
+  'selfdev:progress': {
+    /** Correlaciona los eventos de una misma sesión. */
+    sessionId: string;
+    /** Tema libre que arrancó la sesión (para mostrar "trabajando en …"). */
+    topic: string;
+    /** Fase actual del flujo. */
+    phase: 'setup' | 'generating' | 'eval' | 'fixing' | 'pr' | 'done';
+    /** Detalle opcional legible (p.ej. qué check del eval falló). */
+    message?: string;
+  };
+  /**
+   * Fin de una sesión de self-dev. `ok:true` → PR abierto (`prUrl`).
+   * `ok:false` → abortó (eval rojo tras los reintentos, PR no aprobado,
+   * o error); `reason` lo explica y `branch` queda para inspección manual.
+   */
+  'selfdev:done': {
+    sessionId: string;
+    topic: string;
+    ok: boolean;
+    /** URL del PR si se creó (`ok:true`). */
+    prUrl?: string;
+    /** Rama `shiro/<topic>` (queda viva si `ok:false` para revisar). */
+    branch?: string;
+    /** Motivo del fallo cuando `ok:false`. */
+    reason?: string;
+  };
+
   // ─── Memoria (sincronización con cliente) ───────────────────────────
   /**
    * Snapshot del historial reciente que el server empuja al detectar
