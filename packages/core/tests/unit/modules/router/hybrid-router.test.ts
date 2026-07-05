@@ -107,6 +107,16 @@ describe('requiresToolsByHeuristic', () => {
     expect(requiresToolsByHeuristic('explícame los modelos de difusión')).toBe(false);
     expect(requiresToolsByHeuristic('qué hora es')).toBe(false);
   });
+
+  it('detecta los gatillos de self-dev (ADR 0023) → fuerza cloud', () => {
+    expect(requiresToolsByHeuristic('usá tu self-dev para proponer un PR')).toBe(true);
+    expect(requiresToolsByHeuristic('Shiro, arrancá una sesión de selfdev')).toBe(true);
+    expect(requiresToolsByHeuristic('abrí un pull request con esa mejora')).toBe(true);
+    expect(requiresToolsByHeuristic('proponé un PR que agregue un comentario a slugTopic')).toBe(
+      true,
+    );
+    expect(routeByHeuristic('usá tu self-dev para proponer un PR')).toBe('cloud');
+  });
 });
 
 describe('HybridRouter', () => {

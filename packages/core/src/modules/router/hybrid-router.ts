@@ -84,9 +84,14 @@ const LONG_TEXT_THRESHOLD = 200;
  * y verbos de ejecución. Deliberadamente conservador para no mandar charla
  * casual a cloud — los casos sutiles ("verifica que el build pase") los
  * recoge el clasificador LLM vía `requires_tools`.
+ *
+ * Incluye también los gatillos de **self-dev** (ADR 0023): pedirle a Shiro que
+ * proponga un PR / mejore su propio código dispara el loop tool-use
+ * (`selfdev:propose`), que solo el slot cloud ejecuta. Sin estos markers, con el
+ * clasificador caído el turno cae a local y self-dev nunca arranca.
  */
 const TOOL_MARKERS =
-  /(\b(archivo|fichero|carpeta|directorio|file|folder|directory|ruta|path|terminal|shell|comando|command|ejecut\w*|git|commit|repositorio|repo)\b|\.(txt|md|json|ts|js|py|csv|log)\b)/i;
+  /(\b(archivo|fichero|carpeta|directorio|file|folder|directory|ruta|path|terminal|shell|comando|command|ejecut\w*|git|commit|repositorio|repo|selfdev)\b|\bself-dev\b|\bpull request\b|\bPR\b|\.(txt|md|json|ts|js|py|csv|log)\b)/i;
 
 /**
  * `true` si la query pide claramente una acción sobre el sistema que
@@ -141,7 +146,8 @@ const CLASSIFIER_SYSTEM_PROMPT = [
   '  simples; "cloud" para razonamiento complejo, código o análisis largo.',
   '- "requires_tools": true si el mensaje pide ACTUAR sobre el sistema del',
   '  usuario (leer/escribir/borrar archivos, listar carpetas, ejecutar',
-  '  comandos o git); false si solo requiere conversar o razonar.',
+  '  comandos o git) o PROPONER cambios al propio código de Shiro / abrir un',
+  '  PR (self-dev); false si solo requiere conversar o razonar.',
   'Respondes SOLO con el JSON requerido.',
 ].join('\n');
 
