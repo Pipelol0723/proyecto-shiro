@@ -122,4 +122,18 @@ describe('ShellExecTool', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toContain('no encontrado');
   });
+
+  it('spawnea un .cmd/.bat en Windows sin EINVAL (npm --version)', async () => {
+    // Regresión: en Windows `npm` es `npm.cmd`; spawnearlo con shell:false
+    // lanza EINVAL (Node, mitigación de CVE-2024-27980) y rompía el eval de
+    // self-dev. El ShellExecTool usa shell:true para batch files. Cross-platform:
+    // en POSIX `npm` no es batch y va por el mismo camino sin problema.
+    const allow = new ShellAllowlist([{ cmd: 'npm', allowed_args_pattern: '^--version' }]);
+    const res = await new ShellExecTool(allow, tmpdir(), 30_000).execute(
+      { command: 'npm', args: ['--version'] },
+      ctx(),
+    );
+    expect(res.ok).toBe(true);
+    expect(res.output).toMatch(/\d+\.\d+\.\d+/);
+  });
 });

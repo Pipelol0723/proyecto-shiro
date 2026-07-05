@@ -10,7 +10,10 @@
  *    clases enteras de error tipo "Shiro corrió `git push --force`".
  * 3. **Spawn directo, SIN shell** (`shell: false`): los args van como argv
  *    separados, NO interpolados en una shell → cero inyección (`; rm -rf`
- *    es un argumento literal, no un comando nuevo).
+ *    es un argumento literal, no un comando nuevo). Excepción: en Windows los
+ *    `.cmd`/`.bat` (p.ej. `npm`) requieren `shell:true` (Node lanza EINVAL con
+ *    shell:false desde CVE-2024-27980); ahí el allowlist + los args acotados
+ *    son la contención. Ver `execute`.
  * 4. **cwd acotado** (sandbox por defecto) + **timeout** (mata procesos
  *    colgados) + **tope de salida**.
  *
@@ -149,10 +152,10 @@ interface RunResult {
 function runCommand(
   cmd: string,
   args: string[],
-  opts: { cwd: string; timeoutMs: number; maxOutputBytes: number },
+  opts: { cwd: string; timeoutMs: number; maxOutputBytes: number; shell: boolean },
 ): Promise<RunResult> {
   return new Promise<RunResult>((res) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, shell: false });
+    const child = spawn(cmd, args, { cwd: opts.cwd, shell: opts.shell });
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -233,10 +236,19 @@ export class ShellExecTool implements IToolModule {
     const resolved = await resolveCommand(command);
     if (resolved === null) return fail(`comando no encontrado en PATH: ${command}`);
 
-    const r = await runCommand(resolved, cmdArgs, {
+    // Windows: los `.cmd`/`.bat` (p.ej. `npm.cmd`) NO se pueden `spawn` con
+    // shell:false — Node lanza EINVAL desde el fix de CVE-2024-27980. Para
+    // esos usamos shell:true con el NOMBRE del comando (no la ruta resuelta,
+    // que puede llevar espacios y rompería el modo shell). Los `.exe`
+    // (git, gh) siguen por shell:false (cero interpolación). El allowlist y,
+    // en self-dev, los args controlados por el orquestador (no por el LLM),
+    // acotan la superficie del modo shell.
+    const isWinBatch = process.platform === 'win32' && /\.(cmd|bat)$/i.test(resolved);
+    const r = await runCommand(isWinBatch ? command : resolved, cmdArgs, {
       cwd: this.cwd,
       timeoutMs: this.timeoutMs,
       maxOutputBytes: this.maxOutputBytes,
+      shell: isWinBatch,
     });
     if (r.spawnError !== undefined) return fail(`error al ejecutar: ${r.spawnError}`);
     if (r.timedOut) return fail(`timeout (${String(this.timeoutMs)} ms) ejecutando: ${command}`);
