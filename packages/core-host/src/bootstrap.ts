@@ -49,7 +49,9 @@ import {
   SystemTTS,
 } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
-import { wireConversationFlow } from './pipeline/conversation-flow.js';
+import { dispatchTTS, wireConversationFlow } from './pipeline/conversation-flow.js';
+import { createApprovalGate } from './pipeline/approval-gate.js';
+import { wireSelfDev } from './selfdev/wire-selfdev.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { TtsWithFallback } from './tts/tts-with-fallback.js';
@@ -321,6 +323,56 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     ...(audioCache !== undefined && serverOrigin !== undefined ? { audioCache, serverOrigin } : {}),
   });
 
+  // 8. Self-improvement (ADR 0023). Solo se activa en entorno de desarrollo
+  //    (repo clonado + git/gh en el PATH); en el binario instalado queda
+  //    apagado (lo auto-detecta `wireSelfDev`). El reporte hablado reusa la
+  //    cadena TTS vía `announce`; el PR final pasa por un gate DEDICADO
+  //    (`selfDevGate`) — distinto del gate del pipeline conversacional pero
+  //    escuchando el mismo `tool:approval`, así reusa el modal del cliente.
+  //
+  //    En modo test (`simulationSpeed === 0`) se omite: no queremos spawnear
+  //    git/gh de detección en la suite (igual que se salta el TTS real).
+  let disposeSelfDev: () => void = () => undefined;
+  if (ttsRealEnabled) {
+    const selfDevGate = createApprovalGate(bus, logger);
+    const announce = async (
+      text: string,
+      emotion: EventMap['llm:responded']['emotion'],
+    ): Promise<void> => {
+      await bus.emit('llm:responded', {
+        text,
+        emotion,
+        userId: snapshotUserId,
+        tier: 'cloud',
+        latencyMs: 0,
+      });
+      await dispatchTTS(
+        bus,
+        ttsChain,
+        audioCache,
+        serverOrigin,
+        text,
+        emotion,
+        snapshotUserId,
+        options.simulationSpeed ?? 1,
+        child,
+      );
+    };
+    const selfDev = await wireSelfDev({
+      bus,
+      modules,
+      config: options.config,
+      logger,
+      userId: snapshotUserId,
+      approvalGate: selfDevGate,
+      announce,
+    });
+    disposeSelfDev = () => {
+      selfDev.dispose();
+      selfDevGate.dispose();
+    };
+  }
+
   child.info(
     `core-host listo en puerto ${transport.port}${options.path ?? '/bus'} (personaje: ${options.character.identity.name})`,
   );
@@ -334,6 +386,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     systemPrompt,
     shutdown: async () => {
       disposeFlow();
+      disposeSelfDev();
       unsubscribeHealth();
       unsubscribeSecrets();
       audioCache?.stop();

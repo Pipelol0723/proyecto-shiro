@@ -433,8 +433,11 @@ function formatContext(recent: readonly MemoryEntry[], semantic: readonly Memory
  * (tests legacy), cae al simulador que emite `tts:audio-ended` con un
  * delay proporcional al texto — así el resto del estado del cliente
  * (Orbe que vuelve a idle, subtítulos) se desbloquea aunque no haya audio.
+ *
+ * Exportado para que el reporte hablado de self-dev (ADR 0023) reuse la misma
+ * cadena TTS: el bootstrap lo llama desde el callback `announce`.
  */
-async function dispatchTTS(
+export async function dispatchTTS(
   bus: IEventBus<EventMap>,
   tts: ITTSModule,
   audioCache: AudioCache | undefined,

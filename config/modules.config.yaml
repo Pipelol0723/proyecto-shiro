@@ -194,7 +194,8 @@ character:
 # Self-improvement (ADR 0023) — Shiro propone PRs a su propio repo.
 # Config SEPARADA del slot `tools` del usuario: estas tools operan SOLO
 # dentro del worktree aislado `../shiro-selfdev`, nunca en tu working tree.
-# (Apagado mientras el flow no esté cableado — llega en un PR posterior.)
+# Solo se activa en entorno de desarrollo (repo clonado + git/gh/npm); el
+# `SelfDevSession` lo auto-detecta y queda apagado en el binario instalado.
 # ─────────────────────────────────────────────────────────────
 selfdev:
   # Worktree aislado (relativo a la raíz del repo) donde Shiro genera sus
@@ -212,10 +213,13 @@ selfdev:
   # Timeout por comando shell (ms) — builds/test tardan, generoso.
   shell_timeout_ms: 120000
   # Allowlist de comandos para los helpers del orquestador (worktree / eval /
-  # gh-pr). Spawn SIN shell. Conservador: sin `push` ni `gh` todavía — se
-  # añaden con guardas en sus PRs. Refínalo con cuidado.
+  # commit-push / gh-pr). Spawn SIN shell. `git push` está acotado a ramas
+  # `shiro/…` hacia `origin` (nunca develop/main — no-goal duro del ADR 0023);
+  # el `$` final bloquea refspecs tipo `shiro/x:develop` y args extra. `gh` NO
+  # va aquí: su allowlist está hardcodeado a `gh pr create` en la propia tool
+  # (frontera inmutable, no sale de config). Refínalo con cuidado.
   shell_commands:
     - cmd: git
-      allowed_args_pattern: '^(status|diff|log|branch|show|add|commit|checkout|worktree|rev-parse)\b'
+      allowed_args_pattern: '^(?:(?:status|diff|log|branch|show|add|commit|checkout|worktree|rev-parse|fetch)\b|push(?: -u)? origin shiro/[A-Za-z0-9._-]+$)'
     - cmd: npm
       allowed_args_pattern: '^(run|ci)\b'
