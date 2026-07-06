@@ -16,6 +16,7 @@
  * Node-only (`@proyecto-shiro/core/node`).
  */
 
+import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Logger } from '../../../core/logger.js';
 import type { ModuleDeps } from '../../../core/module-loader.js';
@@ -66,6 +67,7 @@ export function slugTopic(topic: string): string {
 export class WorktreeManager {
   private readonly gitExec: GitExec;
   private readonly worktreePath: string;
+  private readonly repoRoot: string;
   private readonly branchPrefix: string;
   private readonly logger: Logger;
 
@@ -73,11 +75,14 @@ export class WorktreeManager {
     gitExec: GitExec;
     /** Ruta absoluta del worktree. */
     worktreePath: string;
+    /** Raíz del repo — guard para no `fs.rm` el repo por una config errónea. */
+    repoRoot: string;
     branchPrefix: string;
     logger: Logger;
   }) {
     this.gitExec = opts.gitExec;
     this.worktreePath = opts.worktreePath;
+    this.repoRoot = opts.repoRoot;
     this.branchPrefix = opts.branchPrefix;
     this.logger = opts.logger;
   }
@@ -104,20 +109,42 @@ export class WorktreeManager {
       : ['worktree', 'add', this.worktreePath, '-b', branch, ...(base ? [base] : [])];
     const r = await this.gitExec(args);
     if (!r.ok) {
-      return { ok: false, worktreePath: this.worktreePath, branch, error: r.error ?? r.output };
+      // Prefiere la salida real de git (p.ej. "fatal: … already exists") sobre
+      // el genérico "código 128" del ShellExecTool — el SelfDevSession la reporta.
+      const detail = r.output && r.output !== '(sin salida)' ? r.output : (r.error ?? 'git falló');
+      return { ok: false, worktreePath: this.worktreePath, branch, error: detail };
     }
     this.logger.info(`worktree creado en ${this.worktreePath} (rama ${branch})`);
     return { ok: true, worktreePath: this.worktreePath, branch, reused: false };
   }
 
-  /** Elimina el worktree. No-op (ok) si no existe. `--force` por si quedó sucio. */
+  /**
+   * Elimina el worktree por completo. En Windows, `git worktree remove` deja el
+   * directorio cuando contiene junctions (el node_modules enlazado que git no
+   * borra), y entonces el próximo `git worktree add` falla con "already exists".
+   * Por eso, tras el remove de git, borramos el directorio a mano con `fs.rm`
+   * (junction-safe: quita los enlaces sin seguir al target, así el node_modules
+   * del repo queda intacto) y hacemos `prune`. No-op si no había nada.
+   */
   async remove(): Promise<GitResult> {
-    if (!(await this.worktreeExists())) {
-      return { ok: true, output: '(el worktree no existía)' };
+    if (await this.worktreeExists()) {
+      await this.gitExec(['worktree', 'remove', this.worktreePath, '--force']);
     }
-    const r = await this.gitExec(['worktree', 'remove', this.worktreePath, '--force']);
-    if (r.ok) this.logger.info(`worktree eliminado: ${this.worktreePath}`);
-    return r;
+    if (this.isSafeToDelete()) {
+      await fs.rm(this.worktreePath, { recursive: true, force: true });
+    } else {
+      this.logger.warn(`no borro ${this.worktreePath}: contiene o es la raíz del repo`);
+    }
+    await this.gitExec(['worktree', 'prune']);
+    this.logger.info(`worktree eliminado: ${this.worktreePath}`);
+    return { ok: true, output: 'worktree eliminado' };
+  }
+
+  /** Guard para el `fs.rm`: el worktree no debe ser la raíz del repo ni un ancestro. */
+  private isSafeToDelete(): boolean {
+    const wt = normalizePath(this.worktreePath);
+    const repo = normalizePath(this.repoRoot);
+    return wt !== repo && !repo.startsWith(`${wt}/`);
   }
 
   /** True si hay un worktree registrado en `worktreePath`. */
@@ -162,6 +189,7 @@ export function createWorktreeManager(opts: {
   return new WorktreeManager({
     gitExec,
     worktreePath: resolve(repoRoot, config.worktree_path),
+    repoRoot,
     branchPrefix: config.branch_prefix,
     logger,
   });

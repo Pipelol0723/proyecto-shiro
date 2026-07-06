@@ -57,6 +57,7 @@ function mgr(fake: FakeGit, worktreePath: string): WorktreeManager {
   return new WorktreeManager({
     gitExec: fake.gitExec,
     worktreePath,
+    repoRoot: join(tmpdir(), 'shiro-repo-fake'),
     branchPrefix: 'shiro/',
     logger: logger(),
   });
@@ -123,6 +124,49 @@ describe('WorktreeManager.remove (git mockeado)', () => {
     await mgr(fake, wt).remove();
     const rm = fake.calls.find((c) => c[1] === 'remove')!;
     expect(rm).toContain('--force');
+  });
+
+  it('borra el worktree en disco (incl. junctions) sin seguir al target', async () => {
+    // Regresión del bug de Windows: `git worktree remove` deja el node_modules
+    // enlazado (junctions) y el próximo `add` falla. remove() borra el dir con
+    // fs.rm (junction-safe): quita los enlaces sin tocar su target.
+    const base = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'shiro-rm-')));
+    const wtDir = join(base, 'wt');
+    const target = join(base, 'target', 'pkg');
+    await fs.mkdir(target, { recursive: true });
+    await fs.writeFile(join(target, 'keep.txt'), 'keep');
+    await fs.mkdir(join(wtDir, 'node_modules'), { recursive: true });
+    await fs.symlink(target, join(wtDir, 'node_modules', 'pkg'), 'junction');
+
+    const fake = fakeGit({ worktrees: [wtDir] });
+    const m = new WorktreeManager({
+      gitExec: fake.gitExec,
+      worktreePath: wtDir,
+      repoRoot: base,
+      branchPrefix: 'shiro/',
+      logger: logger(),
+    });
+    const r = await m.remove();
+    expect(r.ok).toBe(true);
+    await expect(fs.access(wtDir)).rejects.toThrow(); // worktree borrado
+    await expect(fs.access(join(target, 'keep.txt'))).resolves.toBeUndefined(); // target intacto
+    await fs.rm(base, { recursive: true, force: true });
+  });
+
+  it('el guard evita borrar la raíz del repo si worktree_path resuelve a ella', async () => {
+    const base = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'shiro-guard-')));
+    await fs.writeFile(join(base, 'important.txt'), 'x');
+    const fake = fakeGit({ worktrees: [] });
+    const m = new WorktreeManager({
+      gitExec: fake.gitExec,
+      worktreePath: base, // == repoRoot → inseguro
+      repoRoot: base,
+      branchPrefix: 'shiro/',
+      logger: logger(),
+    });
+    await m.remove();
+    await expect(fs.access(join(base, 'important.txt'))).resolves.toBeUndefined(); // sobrevivió
+    await fs.rm(base, { recursive: true, force: true });
   });
 });
 
