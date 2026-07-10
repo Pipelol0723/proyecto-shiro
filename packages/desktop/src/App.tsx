@@ -31,6 +31,7 @@ import {
 import type { ThemeName } from './themes';
 import { UpdateBanner } from './updater/UpdateBanner';
 import { ToolApprovalModal } from './components/ToolApproval';
+import { SelfDevStatus } from './components/SelfDev';
 import styles from './App.module.css';
 
 export interface AppProps {
@@ -118,6 +119,9 @@ function AppShell(): JSX.Element {
       {/* Modal de aprobación de tools agénticas confirm (ADR 0022 §4).
           Invisible salvo cuando Shiro pide permiso para una acción. */}
       <ToolApprovalModal />
+      {/* Indicador de progreso de las sesiones de self-dev (ADR 0023).
+          Invisible salvo con una sesión en curso o un resultado sin cerrar. */}
+      <SelfDevStatus />
       <Sidebar active={screen} onChange={setScreen} />
       <main className={styles.main}>
         <Header screen={screen} theme={theme} onThemeChange={setTheme} />

@@ -1,0 +1,79 @@
+.panel {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(440px, 90vw);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-solid);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+}
+
+/* Borde acentuado según el resultado. */
+.ok {
+  border-color: var(--accent);
+}
+
+.fail {
+  border-color: #d65a30;
+}
+
+.text {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.dismiss {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--surface-border);
+  color: var(--ink-mute);
+}
+
+.dismiss:hover {
+  color: var(--ink);
+}
+
+/* Spinner sutil mientras la sesión corre. */
+.spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--surface-border);
+  border-top-color: var(--accent);
+  animation: selfdev-spin 0.8s linear infinite;
+}
+
+@keyframes selfdev-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
