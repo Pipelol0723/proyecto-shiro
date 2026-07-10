@@ -215,6 +215,7 @@ export class AnthropicLLM implements ILLMModule {
       respondTool(),
     ];
     const maxRounds = options.maxRounds ?? this.config.max_tool_rounds;
+    const maxTokens = options.maxTokens ?? this.config.max_tokens;
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: request.text }];
     let totalTokens = 0;
 
@@ -223,7 +224,7 @@ export class AnthropicLLM implements ILLMModule {
       try {
         response = await client.messages.create({
           model: this.config.model,
-          max_tokens: this.config.max_tokens,
+          max_tokens: maxTokens,
           temperature: this.config.temperature,
           ...(system.length > 0 ? { system } : {}),
           messages,
@@ -234,6 +235,14 @@ export class AnthropicLLM implements ILLMModule {
         throw new AnthropicLLMError('AnthropicLLM: fallo al llamar a la API (tool loop)', err);
       }
       totalTokens += response.usage.input_tokens + response.usage.output_tokens;
+      // Un tool_use grande (p.ej. `fs:write` de un archivo entero) truncado por
+      // `max_tokens` llega con el JSON de args incompleto → la tool falla con
+      // args inválidos. Avisamos claro en vez de dejarlo como un `ok:false` mudo.
+      if (response.stop_reason === 'max_tokens') {
+        this.logger.warn(
+          `respuesta truncada por max_tokens (${String(maxTokens)}) — un tool_use grande puede quedar con args incompletos. Subí maxTokens.`,
+        );
+      }
 
       const toolUses = response.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',

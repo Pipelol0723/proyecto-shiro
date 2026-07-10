@@ -35,6 +35,7 @@ describe('parseSelfDevConfig', () => {
     expect(c.branch_prefix).toBe('shiro/');
     expect(c.eval_commands).toContain('test');
     expect(c.max_fix_iterations).toBe(2);
+    expect(c.generation_max_tokens).toBe(16_384);
   });
 
   it('lanza con valores inválidos', () => {

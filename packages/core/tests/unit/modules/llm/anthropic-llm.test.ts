@@ -298,5 +298,28 @@ describe('AnthropicLLM', () => {
       expect(mockCreate).toHaveBeenCalledTimes(2);
       expect(result.text).toContain('no pude completar');
     });
+
+    it('usa options.maxTokens en la llamada al SDK (override del default del chat)', async () => {
+      mockCreate.mockResolvedValueOnce(
+        toolUse('tu_1', 'respond', { text: 'ok', emotion: 'neutral' }),
+      );
+      const executeTool = vi.fn(() => Promise.resolve({ ok: true, output: '' }));
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      await llm.generateWithTools(
+        { text: 'x' },
+        { tools: [toolDef], executeTool, maxTokens: 16_384 },
+      );
+      expect((mockCreate.mock.calls[0]?.[0] as { max_tokens: number }).max_tokens).toBe(16_384);
+    });
+
+    it('sin maxTokens usa el default de la config (1024)', async () => {
+      mockCreate.mockResolvedValueOnce(
+        toolUse('tu_1', 'respond', { text: 'ok', emotion: 'neutral' }),
+      );
+      const executeTool = vi.fn(() => Promise.resolve({ ok: true, output: '' }));
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      await llm.generateWithTools({ text: 'x' }, { tools: [toolDef], executeTool });
+      expect((mockCreate.mock.calls[0]?.[0] as { max_tokens: number }).max_tokens).toBe(1024);
+    });
   });
 });
