@@ -52,6 +52,11 @@ function normalizePath(p: string): string {
 /**
  * Convierte un topic libre en un slug válido para rama git: minúsculas,
  * no-alfanuméricos → `-`, recorta y limita longitud. Fallback `cambios`.
+ *
+ * @param topic - Texto libre que describe el tema del cambio (p.ej. el título
+ *   de la tarea). Puede contener mayúsculas, espacios y símbolos.
+ * @returns El slug normalizado apto para usar como sufijo de rama git; nunca
+ *   vacío (devuelve `cambios` si el resultado quedara vacío).
  */
 export function slugTopic(topic: string): string {
   const slug = topic
