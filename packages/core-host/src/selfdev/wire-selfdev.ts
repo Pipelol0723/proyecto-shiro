@@ -182,7 +182,13 @@ export function createSelfDevSteps(opts: {
             systemPrompt: buildSelfDevSystemPrompt(worktreePath),
             userId,
           },
-          { tools: buildToolDefs(fsRegistry), executeTool },
+          {
+            tools: buildToolDefs(fsRegistry),
+            executeTool,
+            // Alto: escribir archivos enteros necesita miles de tokens; con el
+            // default del chat (1024) el fs:write se trunca y falla.
+            maxTokens: config.generation_max_tokens,
+          },
         );
         return { ok: true, summary: resp.text };
       } catch (err) {

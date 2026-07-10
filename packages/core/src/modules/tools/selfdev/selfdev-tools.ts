@@ -52,6 +52,12 @@ export const SelfDevConfigSchema = z.object({
   eval_commands: z.array(z.string().min(1)).default(['format:check', 'lint', 'typecheck', 'test']),
   /** Reintentos de corrección si el eval falla, antes de abortar (PR 5). */
   max_fix_iterations: z.number().int().nonnegative().default(2),
+  /**
+   * Tope de tokens de salida del LLM por vuelta en la generación. Alto a
+   * propósito: escribir un archivo entero (`fs:write` con el `content`)
+   * necesita miles de tokens; el default del chat (1024) trunca el tool_use.
+   */
+  generation_max_tokens: z.number().int().positive().default(16_384),
   /** Timeout por comando shell (ms) — builds/test tardan, generoso. */
   shell_timeout_ms: z.number().int().positive().default(120_000),
   /** Allowlist de comandos de los helpers del orquestador (PRs 2-4). */

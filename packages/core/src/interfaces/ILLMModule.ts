@@ -62,6 +62,13 @@ export interface GenerateWithToolsOptions {
   executeTool: LLMToolExecutor;
   /** Cota de vueltas LLM↔tools para no entrar en bucle. Default impl-dependiente. */
   maxRounds?: number;
+  /**
+   * Tope de tokens de salida por vuelta. Default: el de la config del módulo.
+   * Self-dev lo sube fuerte: emitir un `fs:write` con el archivo entero como
+   * `content` puede necesitar miles de tokens, y con el default del chat (1024)
+   * el `tool_use` se trunca y los args llegan rotos (write falla).
+   */
+  maxTokens?: number;
 }
 
 /**
