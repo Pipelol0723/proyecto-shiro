@@ -53,6 +53,30 @@ export interface ToolTurnMetadata {
 }
 
 /**
+ * Forma de `metadata` en los turnos `role: 'tool'` que resumen una **sesión de
+ * self-dev** (ADR 0023, Fase 2). Reusa el rol `tool` (memoria interna, filtrada
+ * del chat) — así Shiro recuerda qué propuso sin un rol nuevo ni migración de
+ * SQLite. Como con {@link ToolTurnMetadata}, la estructura vive en el WAL; a
+ * Letta va solo el `text`.
+ */
+export interface SelfDevTurnMetadata {
+  /** Marca discriminante para distinguir estos turnos de los de `tool`. */
+  kind: 'selfdev';
+  /** Tema que arrancó la sesión. */
+  topic: string;
+  /** True si terminó abriendo un PR. */
+  ok: boolean;
+  /** URL del PR, si se abrió (`ok`). */
+  prUrl?: string;
+  /** Rama `shiro/<topic>` (queda viva aun si `!ok`, para inspección). */
+  branch?: string;
+  /** Motivo del fallo, si `!ok`. */
+  reason?: string;
+  /** Resumen de lo que cambió (la respuesta final del LLM), si lo hubo. */
+  summary?: string;
+}
+
+/**
  * Contrato de un módulo de memoria persistente.
  *
  * Implementaciones previstas (Fase 3):

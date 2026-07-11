@@ -35,6 +35,7 @@ interface Harness {
   session: SelfDevSession;
   steps: ReturnType<typeof makeSteps>;
   announce: ReturnType<typeof vi.fn>;
+  persist: ReturnType<typeof vi.fn>;
   done: EventMap['selfdev:done'][];
   progress: EventMap['selfdev:progress'][];
   bus: IEventBus<EventMap>;
@@ -53,14 +54,24 @@ function harness(opts: { steps?: Partial<SelfDevSteps>; maxFix?: number } = {}):
   });
   const steps = makeSteps(opts.steps);
   const announce = vi.fn();
+  const persist = vi.fn();
   const sessionOpts: SelfDevSessionOptions = {
     bus,
     logger,
     maxFixIterations: opts.maxFix ?? 2,
     steps,
     announce,
+    persist,
   };
-  return { session: new SelfDevSession(sessionOpts), steps, announce, done, progress, bus };
+  return {
+    session: new SelfDevSession(sessionOpts),
+    steps,
+    announce,
+    persist,
+    done,
+    progress,
+    bus,
+  };
 }
 
 describe('SelfDevSession happy path', () => {
@@ -78,6 +89,14 @@ describe('SelfDevSession happy path', () => {
     expect(h.announce.mock.calls[0]?.[0]).toContain('/pull/7');
     // Fases emitidas en orden.
     expect(h.progress.map((p) => p.phase)).toEqual(['setup', 'generating', 'eval', 'pr', 'done']);
+    // Persiste el outcome en memoria (ok + PR + resumen).
+    expect(h.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ok: true,
+        prUrl: 'https://github.com/o/r/pull/7',
+        summary: 'cambié foo.ts',
+      }),
+    );
   });
 });
 
@@ -112,6 +131,7 @@ describe('SelfDevSession fix-loop', () => {
     expect(h.steps.cleanup).not.toHaveBeenCalled();
     expect(h.done[0]).toMatchObject({ ok: false, branch: 'shiro/test' });
     expect(h.done[0]?.reason).toContain('eval');
+    expect(h.persist).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
   });
 });
 

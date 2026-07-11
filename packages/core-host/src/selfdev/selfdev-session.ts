@@ -87,6 +87,19 @@ export interface SelfDevSteps {
   cleanup(): Promise<void>;
 }
 
+/**
+ * Resumen del final de una sesión, para persistir en memoria (ADR 0023 Fase 2).
+ * Lo reporta la sesión; el bootstrap lo convierte en un turno `role:'tool'`.
+ */
+export interface SelfDevOutcome {
+  topic: string;
+  ok: boolean;
+  prUrl?: string;
+  branch?: string;
+  reason?: string;
+  summary?: string;
+}
+
 export interface SelfDevSessionOptions {
   bus: IEventBus<EventMap>;
   logger: Logger;
@@ -95,6 +108,11 @@ export interface SelfDevSessionOptions {
   steps: SelfDevSteps;
   /** Reporte hablado: emite `llm:responded` + TTS. Lo provee el bootstrap. */
   announce: (text: string, emotion: Emotion) => void | Promise<void>;
+  /**
+   * Persiste el final de la sesión en memoria (ADR 0023 Fase 2). Opcional
+   * (los tests lo omiten). Lo provee el bootstrap; fire-and-forget por el WAL.
+   */
+  persist?: (outcome: SelfDevOutcome) => void;
 }
 
 /** Trunca para no inflar previews/eventos. */
@@ -147,6 +165,7 @@ export class SelfDevSession {
   private readonly maxFixIterations: number;
   private readonly steps: SelfDevSteps;
   private readonly announce: (text: string, emotion: Emotion) => void | Promise<void>;
+  private readonly persist: (outcome: SelfDevOutcome) => void;
   private running = false;
 
   constructor(opts: SelfDevSessionOptions) {
@@ -155,6 +174,7 @@ export class SelfDevSession {
     this.maxFixIterations = opts.maxFixIterations;
     this.steps = opts.steps;
     this.announce = opts.announce;
+    this.persist = opts.persist ?? (() => undefined);
   }
 
   /** True mientras hay una sesión en curso (el trigger lo consulta). */
@@ -306,6 +326,7 @@ export class SelfDevSession {
         `Listo, abrí el PR sobre "${topic}": ${pr.url ?? branch}. Cuando puedas, revisalo y mergealo vos.`,
         'divertida',
       );
+      this.persist({ topic, ok: true, branch, prUrl: pr.url, summary: genSummary });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error('sesión self-dev lanzó una excepción', { err });
@@ -314,6 +335,7 @@ export class SelfDevSession {
         `Se me rompió la sesión de self-dev sobre "${topic}": ${msg}.`,
         'neutral',
       );
+      this.persist({ topic, ok: false, reason: msg });
     } finally {
       this.running = false;
     }
@@ -336,5 +358,6 @@ export class SelfDevSession {
       ...(branch !== undefined ? { branch } : {}),
     });
     await this.announce(reason, 'neutral');
+    this.persist({ topic, ok: false, reason, branch });
   }
 }

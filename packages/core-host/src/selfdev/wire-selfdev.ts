@@ -40,7 +40,12 @@ import type { ApprovalGate } from '../pipeline/approval-gate.js';
 import { createEvalRunner } from './eval-runner.js';
 import { linkNodeModules } from './node-modules-link.js';
 import { registerSelfDevTrigger } from './selfdev-trigger.js';
-import { SelfDevSession, type GenerateRound, type SelfDevSteps } from './selfdev-session.js';
+import {
+  SelfDevSession,
+  type GenerateRound,
+  type SelfDevOutcome,
+  type SelfDevSteps,
+} from './selfdev-session.js';
 
 type Emotion = EventMap['llm:responded']['emotion'];
 
@@ -55,6 +60,8 @@ export interface WireSelfDevOptions {
   approvalGate: ApprovalGate;
   /** Reporte hablado: emite `llm:responded` + TTS. Lo provee el bootstrap. */
   announce: (text: string, emotion: Emotion) => void | Promise<void>;
+  /** Persiste el final de la sesión en memoria (ADR 0023 Fase 2). Lo provee el bootstrap. */
+  persist?: (outcome: SelfDevOutcome) => void;
   /**
    * Detector de entorno. Default: chequea repo git + `gh` reales. Se inyecta
    * en tests para no depender de git/gh de la máquina.
@@ -302,7 +309,7 @@ async function detectSelfDevEnv(logger: Logger): Promise<SelfDevEnv> {
  * (registra la tool una vez). Devuelve `enabled` + `dispose`.
  */
 export async function wireSelfDev(opts: WireSelfDevOptions): Promise<WireSelfDevResult> {
-  const { bus, modules, config, logger, userId, approvalGate, announce } = opts;
+  const { bus, modules, config, logger, userId, approvalGate, announce, persist } = opts;
   const log = logger.child({ module: 'SelfDev' });
   const noop: WireSelfDevResult = { enabled: false, dispose: () => undefined };
 
@@ -343,6 +350,7 @@ export async function wireSelfDev(opts: WireSelfDevOptions): Promise<WireSelfDev
     maxFixIterations: sdConfig.max_fix_iterations,
     steps,
     announce,
+    persist,
   });
 
   registerSelfDevTrigger(modules.tools, {
