@@ -1,8 +1,19 @@
 # ADR 0023: Shiro self-improvement — propose only, worktree aislado, archivos inmutables
 
-- **Status**: Proposed
+- **Status**: Accepted (implementado 2026-07-11)
 - **Fecha**: 2026-06-09
 - **Decidido por**: Pipelol0723
+
+> **Implementado** (2026-07-11): `SelfDevSession` en `core-host/src/selfdev/` —
+> trigger `selfdev:propose`, worktree aislado + `linkNodeModules`, sub-loop de
+> generación con fs scoped al worktree + denylist de inmutables, eval gate
+> (rebuild de `core` + format/lint/typecheck/test con fix-loop), `gh:pr-create`,
+> eventos `selfdev:progress`/`selfdev:done` + panel `SelfDevStatus`. **Probado
+> end-to-end en Windows** (cuatro fixes de la primera prueba en vivo: routing a
+> cloud para los gatillos de self-dev, spawn de `.cmd`/`npm`, cleanup del
+> worktree con junctions, y `max_tokens` alto para escribir archivos enteros).
+> **Diferido a Fase 2**: persistencia de la sesión en Letta y una tool de
+> edición por parche (hoy el LLM reescribe el archivo entero).
 
 ## Contexto
 

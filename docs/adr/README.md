@@ -74,7 +74,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) | TTS — ElevenLabs + SystemTTS fallback, in-process en core-host | Accepted |
 | [0021](0021-avatar-live2d-pixi-display-fallback-orbe.md)                 | Avatar Live2D — pixi-live2d-display, 30 fps, fallback al Orbe  | Accepted |
 | [0022](0022-shiro-agentic-tools-fs-shell.md)                             | Shiro agentic — slot `tools:`, FS + shell, permisos mixtos     | Accepted |
-| [0023](0023-shiro-self-improvement-propose-only.md)                      | Shiro self-improvement — propose only, worktree aislado        | Proposed |
+| [0023](0023-shiro-self-improvement-propose-only.md)                      | Shiro self-improvement — propose only, worktree aislado        | Accepted |
 | [0024](0024-packaging-tauri-windows-sidecar.md)                          | Packaging Tauri — Windows V1, sidecar core-host, modo dual     | Accepted |
 
 ## Referencias externas

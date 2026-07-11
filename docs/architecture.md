@@ -581,6 +581,55 @@ Piezas clave:
   `requires_tools` (fast-path determinista + flag del clasificador) que fuerza
   cloud cuando el turno va a necesitar tools.
 
+## Self-improvement: worktree aislado + propose-only
+
+El hito **Self-improvement** (ver [ADR 0023](adr/0023-shiro-self-improvement-propose-only.md))
+lleva lo agéntico un paso más: Shiro propone **PRs a su propio repo**. Es
+_propose-only_ — el humano siempre mergea. Vive en `core-host/src/selfdev/`,
+reusa el loop tool-use y el `ApprovalGate` del hito Agentic, y **solo se activa
+en entorno de desarrollo** (repo clonado + `git`/`gh`/`npm`; en el binario
+instalado queda apagado por auto-detección con `git rev-parse` + `gh`).
+
+**Trigger**: la tool `selfdev:propose` (tier `confirm`, en el registry del
+chat). Cuando el usuario pide "proponé un fix para X", el LLM cloud la llama; el
+modal de aprobación arranca la sesión **en background** (no bloquea el turno).
+
+El **`SelfDevSession`** orquesta la secuencia determinista (el LLM solo razona
+código):
+
+1. **setup** — `git fetch` + worktree aislado (`../shiro-selfdev`, rama
+   `shiro/<topic>`) + `linkNodeModules` (enlaza el `node_modules` del repo sin
+   `npm ci`: terceros → repo por junction, `@proyecto-shiro/*` → worktree, para
+   que build/eval validen el código del worktree).
+2. **generate** — sub-loop `generateWithTools` con un `IToolsRegistry` de fs
+   **scoped al worktree** (todas `auto`) + **denylist de inmutables**
+   hardcodeada (carácter, ADRs, `config/`, `safety/`, `.env*`): si el LLM
+   intenta escribir uno, recibe `IMMUTABLE_PATH`. Usa `max_tokens` alto (el
+   `content` de un `fs:write` de un archivo entero no entra en los 1024 del chat).
+3. **verify** — reconstruye `core` (único `dist` cross-package) + corre el eval
+   (`format:check`/`lint`/`typecheck`/`test`). Si falla, realimenta la salida y
+   reintenta la generación (máx `max_fix_iterations`).
+4. **PR** — si el eval está verde: commit + push a `shiro/<topic>` + segundo
+   modal de aprobación (con el `git diff`) → `gh:pr-create` (allowlist
+   **hardcodeado** a `gh pr create` — no puede mergear ni hacer releases).
+5. **cleanup** — quita el worktree (solo en éxito; en fallo lo deja para
+   inspección — el `remove` en Windows borra el dir con `fs.rm` junction-safe,
+   porque `git worktree remove` deja el `node_modules` enlazado).
+
+**Fronteras duras** (no "si el LLM se acuerda"): eval-antes-de-PR e
+inmutabilidad son estructurales; `git push` está acotado por regex a ramas
+`shiro/…` (nunca develop/main); el `HybridRouter` fuerza cloud para los gatillos
+de self-dev (`self-dev`, `PR`, `pull request`).
+
+**Cliente**: eventos `selfdev:progress`/`selfdev:done` → panel `SelfDevStatus`
+(fase en curso + link del PR o motivo del fallo). Los dos modales de aprobación
+reusan el `ToolApprovalModal` del hito Agentic. Al terminar, Shiro lo anuncia
+por voz (`llm:responded` + TTS).
+
+**Diferido** (Fase 2): persistencia de la sesión en Letta (qué propuso y por
+qué), una tool de edición por parche (hoy reescribe el archivo entero) y
+orquestación multi-agente (planear/ejecutar/revisar con modelos distintos).
+
 ## Evolución de transportes
 
 Hoy el cliente desktop comparte el mismo proceso Node del core, así
