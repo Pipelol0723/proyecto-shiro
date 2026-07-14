@@ -52,6 +52,8 @@ import { WebSocketServerTransport } from './transports/websocket-server-transpor
 import { dispatchTTS, wireConversationFlow } from './pipeline/conversation-flow.js';
 import { createApprovalGate } from './pipeline/approval-gate.js';
 import { wireSelfDev } from './selfdev/wire-selfdev.js';
+import { buildSelfDevAnnounceTurn, buildSelfDevToolTurn } from './selfdev/selfdev-memory.js';
+import type { SelfDevOutcome } from './selfdev/selfdev-session.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { TtsWithFallback } from './tts/tts-with-fallback.js';
@@ -357,6 +359,23 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
         options.simulationSpeed ?? 1,
         child,
       );
+      // Opción B (ADR 0023 Fase 2): el reporte hablado también se guarda como
+      // turno `assistant`, así aparece en el chat al recargar (el `announce`
+      // solo emite `llm:responded` en vivo). Fire-and-forget por el WAL.
+      void memoryManager
+        .save(buildSelfDevAnnounceTurn(text, emotion, snapshotUserId))
+        .catch((err: unknown) => {
+          child.warn('persistir el reporte de self-dev falló — se ignora', { err });
+        });
+    };
+    // Persiste el final de la sesión como turno `role:'tool'` (memoria interna,
+    // filtrada del chat) — así Shiro recuerda qué propuso. Ver `selfdev-memory`.
+    const persist = (outcome: SelfDevOutcome): void => {
+      void memoryManager
+        .save(buildSelfDevToolTurn(outcome, snapshotUserId))
+        .catch((err: unknown) => {
+          child.warn('persistir la sesión de self-dev falló — se ignora', { err });
+        });
     };
     const selfDev = await wireSelfDev({
       bus,
@@ -366,6 +385,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
       userId: snapshotUserId,
       approvalGate: selfDevGate,
       announce,
+      persist,
     });
     disposeSelfDev = () => {
       selfDev.dispose();
