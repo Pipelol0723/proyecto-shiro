@@ -4,7 +4,6 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { SelfDevTurnMetadata } from '@proyecto-shiro/core';
 import {
   buildSelfDevAnnounceTurn,
   buildSelfDevToolTurn,
@@ -26,18 +25,19 @@ describe('buildSelfDevToolTurn', () => {
     expect(e.userId).toBe('me');
     expect(e.text).toContain('https://x/pull/9');
     expect(e.text).toContain('agregué un guard');
-    const md = e.metadata as SelfDevTurnMetadata;
-    expect(md.kind).toBe('selfdev');
-    expect(md.ok).toBe(true);
-    expect(md.topic).toBe('arreglar X');
-    expect(md.prUrl).toBe('https://x/pull/9');
+    expect(e.metadata).toMatchObject({
+      kind: 'selfdev',
+      ok: true,
+      topic: 'arreglar X',
+      prUrl: 'https://x/pull/9',
+    });
   });
 
   it('fallo → texto con el motivo, ok:false', () => {
     const e = buildSelfDevToolTurn({ topic: 'algo', ok: false, reason: 'eval rojo' }, 'me');
     expect(e.role).toBe('tool');
     expect(e.text).toContain('eval rojo');
-    expect((e.metadata as SelfDevTurnMetadata).ok).toBe(false);
+    expect(e.metadata).toMatchObject({ kind: 'selfdev', ok: false });
   });
 });
 
