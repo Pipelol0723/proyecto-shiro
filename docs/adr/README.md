@@ -76,6 +76,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0022](0022-shiro-agentic-tools-fs-shell.md)                             | Shiro agentic — slot `tools:`, FS + shell, permisos mixtos     | Accepted |
 | [0023](0023-shiro-self-improvement-propose-only.md)                      | Shiro self-improvement — propose only, worktree aislado        | Accepted |
 | [0024](0024-packaging-tauri-windows-sidecar.md)                          | Packaging Tauri — Windows V1, sidecar core-host, modo dual     | Accepted |
+| [0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)            | Modelo de confianza local y superficie de red                  | Proposed |
 
 ## Referencias externas
 

@@ -571,10 +571,11 @@ Convenciones de commit: `feat:`, `fix:`, `test:`, `docs:`, `refac:`, `chore:`, `
 
 ### Live2D Cubism SDK Web
 
-El **Cubism Core** (archivos `Live2DCubismCore.js` / `.dll`) es propietario
-y **NO se commitea al repo**. Cada desarrollador debe descargarlo manualmente
-desde https://www.live2d.com/sdk/download/web/ y colocarlo donde indique el
-script de setup (instrucciones detalladas llegarán en el hito Avatar Live2D).
+El **Cubism Core** (`live2dcubismcore.js`) es propietario y **NO se commitea
+al repo**. Cada desarrollador lo descarga manualmente desde
+https://www.live2d.com/sdk/download/web/ (**SDK for Web 4**, Core **4.2.2** —
+el del SDK 5 crashea el renderer). Instrucciones detalladas y la ruta exacta en
+[Requisitos para el hito Avatar Live2D](#requisitos-para-el-hito-avatar-live2d).
 
 ### Modelos de avatar
 
@@ -586,6 +587,15 @@ los commitees** salvo que tengas autorización explícita.
 
 Toda credencial (ANTHROPIC_API_KEY, ELEVENLABS_API_KEY) va en `.env`,
 nunca hardcodeada en el código ni commiteada. Plantilla en `.env.example`.
+
+### Seguridad
+
+Modelo de amenaza actual: **local, un solo usuario**. La revisión transversal
+de seguridad vive en
+[`docs/security-review-2026-07.md`](docs/security-review-2026-07.md); el
+modelo de confianza local y su trigger de reversión (cuando llegue el primer
+cliente de red) están en
+[ADR 0025](docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md).
 
 ## Licencia
 

@@ -13,6 +13,7 @@ Diseñado para escalar de app desktop a sistema con múltiples clientes
 
 - [`docs/architecture.md`](docs/architecture.md) — vista actual de la arquitectura, con diagramas mermaid.
 - [`docs/adr/`](docs/adr/) — historial de decisiones con su porqué. Léelo cuando algo te haga dudar de "por qué se hizo así".
+- [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md) — revisión de seguridad transversal (2026-07) + [ADR 0025](docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md) (modelo de confianza local). Léelo antes de tocar fronteras de confianza (auth, bind de red, permisos de tools, ACL de Tauri).
 - [`plan-modular-ai-companion.md`](plan-modular-ai-companion.md) — plan y visión original (histórico).
 
 ## ⚠️ Cuándo escribir un ADR (no te lo saltes)

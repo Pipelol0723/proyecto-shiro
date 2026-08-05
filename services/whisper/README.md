@@ -139,3 +139,10 @@ servicio crece, añadimos un workflow GitHub Actions específico.
   embeddings. Para modelos mayores, espera a hardware más holgado.
 - **Sin estado persistente**: cada conexión WS es independiente, no hay
   agentes ni sesiones que sobrevivan.
+- **Seguridad (deuda local diferida)**: el servicio escucha en `0.0.0.0` con
+  CORS `*`, sin autenticación, y el buffer del WS `/stt` no tiene tope (audio
+  ilimitado → DoS de memoria/CPU). Es aceptable en el modelo local-solo-yo;
+  antes de exponerlo fuera de `localhost` hay que bindear a `127.0.0.1`, topar
+  el buffer y añadir auth. Ver `SEC-02` en
+  [`docs/security-review-2026-07.md`](../../docs/security-review-2026-07.md) y
+  [ADR 0025](../../docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md).
