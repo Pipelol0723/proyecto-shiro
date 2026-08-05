@@ -49,6 +49,13 @@ Si en una regeneración futura le pones contraseña, añade ese secret y cambia
 la línea `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''` del workflow para que lea
 del secret.
 
+> ⚠️ **Nota de seguridad (`SEC-11`)**: la passphrase vacía deja la clave de
+> firma sin segundo factor — quien obtenga el archivo de la clave puede forjar
+> actualizaciones que el auto-updater instala solo. Está anotado como deuda en
+> [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md);
+> regenerar la clave **con** passphrase es la remediación recomendada antes de
+> distribuir el binario a terceros.
+
 Para volcar la privada al portapapeles y pegarla en el secret:
 
 ```powershell

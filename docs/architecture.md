@@ -3,16 +3,25 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-06-12 — hito **Packaging Tauri** ✅
-> completo (sobre Setup, Core, Cliente desktop, LLM, Memoria, STT, TTS,
-> Avatar Live2D). Shiro se instala y abre con doble click: binario **Tauri
-> 2.0** (Windows) con tray + close-to-tray + single-instance; el `core-host`
-> viaja como **sidecar** (ncc+pkg, `better-sqlite3` nativo) que Tauri lanza y
-> mata, con cwd en `app_local_data_dir` para que la memoria sea estable.
-> **Auto-updater** firmado (ed25519, GitHub Releases) + CI de release por tag.
-> **Setup wizard** con healthcheck de servicios y **API keys en runtime**
-> (`secrets.env`). Modo overlay diferido a post-MVP. Ver
-> [ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md).
+> **Última actualización**: 2026-07-15 — hitos **Agentic tools** ✅ y
+> **Self-improvement** ✅ completos (sobre Setup, Core, Cliente desktop, LLM,
+> Memoria, STT, TTS, Avatar Live2D, Packaging Tauri). Shiro pasó de
+> interlocutora a **agente** (lee/escribe archivos y ejecuta comandos
+> allowlisted en un loop tool-use con modal de aprobación —
+> [ADR 0022](adr/0022-shiro-agentic-tools-fs-shell.md)) y de agente a
+> **contribuidora de su propio repo** (propone PRs desde un worktree aislado,
+> propose-only — [ADR 0023](adr/0023-shiro-self-improvement-propose-only.md)).
+> Antes, el hito **Packaging Tauri** empaquetó todo como binario Tauri 2.0
+> (Windows) con sidecar `core-host`, tray, auto-updater firmado y setup wizard
+> ([ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md)). Ver las secciones
+> [Tools agénticas](#tools-agénticas-loop-tool-use--aprobación) y
+> [Self-improvement](#self-improvement-worktree-aislado--propose-only) abajo.
+>
+> **Seguridad**: revisión transversal en
+> [`security-review-2026-07.md`](security-review-2026-07.md) +
+> [ADR 0025](adr/0025-modelo-de-confianza-local-y-superficie-de-red.md) (modelo
+> de confianza local, `Proposed`). Ver
+> [Seguridad y modelo de confianza](#seguridad-y-modelo-de-confianza).
 
 ## Visión a vista de pájaro
 
@@ -36,8 +45,8 @@ graph TB
         Root[/"raíz<br>tooling compartido"/]
 
         subgraph "packages/"
-            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Setup + Core + LLM + Memoria + STT + TTS"]
-            Desktop["desktop<br>cliente Vite+React<br>@proyecto-shiro/desktop<br>✅ orbe + 5 pantallas + 3 temas + PTT + TTS playback"]
+            Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Core + LLM + Memoria + STT + TTS + Avatar + Tools"]
+            Desktop["desktop<br>cliente Vite+React (Tauri)<br>@proyecto-shiro/desktop<br>✅ orbe/Live2D + 5 pantallas + 3 temas + PTT + TTS + aprobación tools"]
             Mobile["mobile<br>cliente futuro<br>@proyecto-shiro/mobile"]
             Arduino["arduino-bridge<br>puente Serial<br>@proyecto-shiro/arduino-bridge"]
             IoT["iot-bridge<br>MQTT/Home Assistant<br>@proyecto-shiro/iot-bridge"]
@@ -75,7 +84,7 @@ graph LR
             Orchestrator[Orchestrator<br>✅]
             ModuleLoader[ModuleLoader<br>✅]
             Logger[Logger<br>✅]
-            Transports[transports/<br>InProcessTransport ✅]
+            Transports[transports/<br>InProcess + WebSocket ✅]
         end
 
         subgraph "config/"
@@ -154,36 +163,34 @@ graph LR
 ## Composición del cliente desktop
 
 `@proyecto-shiro/desktop` (Vite + React 18 + TS strict) consume el core
-como dependencia local del workspace. Estructura prevista (ADRs 0008,
-0009, 0010):
+como dependencia local del workspace y se conecta al `core-host` por
+WebSocket. Empaquetado con Tauri 2.0 (ADR 0024). Estructura actual (ADRs
+0008-0010, 0021-0024):
 
 ```
 packages/desktop/src/
-├── main.tsx                     ← Entry: instancia Logger, EventBus, Orchestrator
-├── bus-context.tsx              ← BusProvider + useBus() + useBusEvent()
-├── state/
-│   └── companion-reducer.ts     ← Reducer alimentado por eventos del bus
-├── components/
-│   ├── Orb/                     ← Placeholder visual del avatar
-│   │   ├── Orb.tsx
-│   │   ├── Orb.module.css
-│   │   └── useOrbAmplitude.ts
-│   ├── Avatar/                  ← Decide Orb vs Live2D (cuando llegue)
-│   ├── Sidebar/
-│   ├── Header/
-│   └── ChatPanel/
+├── main.tsx                     ← Entry: monta React + el BusProvider
+├── App.tsx                      ← Switch de pantallas + CompanionProvider
+├── bus-context.tsx              ← BusProvider (InProcess + WebSocket al core-host)
+├── companion-context.tsx        ← CompanionProvider: reducer del estado del chat
 ├── screens/
-│   ├── ConversationScreen.tsx
-│   ├── ModulesScreen.tsx        ← UI sobre modules.config.yaml
-│   ├── CharacterScreen.tsx
-│   ├── AvatarScreen.tsx
-│   ├── SetupScreen.tsx
-│   └── OnboardingScreen.tsx
-├── themes/
-│   ├── kawaii.css
-│   ├── cyber.css
-│   └── editorial.css
-└── tweaks/                      ← Panel de configuración runtime
+│   ├── Conversation/            ← ConversationScreen + ChatPanel
+│   ├── Modules/                 ← UI sobre modules.config.yaml
+│   ├── Character/
+│   ├── Avatar/
+│   └── Setup/                   ← wizard de salud + API keys en runtime
+├── components/
+│   ├── Orb/                     ← Placeholder visual del avatar (fallback)
+│   ├── Avatar/                  ← Decide Orb vs Live2D + lip-sync + expresión
+│   ├── ToolApproval/            ← Modal de aprobación de tools `confirm`
+│   ├── SelfDev/                 ← Panel de estado del flujo self-dev
+│   ├── ThemeSwitcher/
+│   ├── Icons/
+│   └── ErrorBoundary.tsx
+├── audio/                       ← captura PTT (AudioWorklet) + useTtsPlayback
+├── updater/                     ← useAppUpdater + UpdateBanner (auto-updater)
+├── health/                      ← wizard de salud + useSecretsSave
+└── themes/                      ← kawaii / cyber / editorial (CSS vars)
 ```
 
 **Tres temas swap-eables** (kawaii pastel / cyberpunk / editorial)
@@ -630,22 +637,50 @@ por voz (`llm:responded` + TTS).
 qué), una tool de edición por parche (hoy reescribe el archivo entero) y
 orquestación multi-agente (planear/ejecutar/revisar con modelos distintos).
 
+## Seguridad y modelo de confianza
+
+El modelo de amenaza vigente es **local, un solo usuario, sin exposición de red
+intencional**. Bajo ese supuesto, varias fronteras se dejaron abiertas a
+propósito y otras son salvaguardas reales. La revisión transversal de 2026-07
+([`security-review-2026-07.md`](security-review-2026-07.md)) las cataloga; lo
+esencial:
+
+- **Salvaguardas reales** (a mantener): spawn **sin shell** en `shell:exec`
+  (cero inyección), `ShellAllowlist` (comando + args por regex) y `FsScope`
+  (containment + anti-symlink) para las tools agénticas; **denylist de
+  inmutables hardcodeada** y `gh` acotado a `gh pr create` en self-dev;
+  `ApprovalGate` con timeout para las tools `confirm`; cota de vueltas del
+  tool-loop; CSP sin `unsafe-eval` y chat que renderiza texto plano.
+- **Fronteras abiertas por el modelo local** (deuda si Shiro sale a red): el
+  WebSocket `/bus` y el HTTP de audio del `core-host`, y el WS `/stt` de
+  Whisper, escuchan sin autenticación (y hoy en `0.0.0.0`). El
+  [ADR 0025](adr/0025-modelo-de-confianza-local-y-superficie-de-red.md)
+  (`Proposed`) formaliza esta postura, propone cerrar la superficie a
+  `localhost` + validar `Origin`, y fija el **trigger de reversión**: al
+  añadir el primer cliente que no sea el desktop local, se introduce
+  autenticación por token en el bus y el STT.
+
+Cualquier cambio en las fronteras de confianza (auth, bind, permisos de tools,
+ACL de Tauri) debe pasar por —o superseder— el ADR 0025.
+
 ## Evolución de transportes
 
-Hoy el cliente desktop comparte el mismo proceso Node del core, así
-que un único `InProcessTransport` cubre el caso. Conforme lleguen
-clientes en otros procesos/dispositivos, se añaden transports nuevos
-**sin tocar los módulos existentes**.
+Desde [ADR 0012](adr/0012-split-cliente-server-core-host.md), el cliente
+desktop corre en **su propio proceso** y habla con el `core-host` por
+**WebSocket**: el server monta un `WebSocketServerTransport` (que también
+aloja la ruta HTTP del audio TTS) y el cliente un `WebSocketTransport`, cada
+uno sobre su `InProcessTransport` local. Conforme lleguen clientes en otros
+dispositivos, se añaden transports nuevos **sin tocar los módulos existentes**.
 
 ```mermaid
 graph LR
-    subgraph "Hoy"
+    subgraph "Primitiva in-process (bus local de cada proceso)"
         Bus1[EventBus] --> IPT1[InProcessTransport]
     end
 
-    subgraph "Cliente desktop en proceso aparte"
-        Bus2[EventBus] --> IPT2[InProcessTransport]
-        Bus2 --> WSDesk[WebSocketTransport]
+    subgraph "Hoy — desktop en proceso aparte (WebSocket)"
+        Bus2[EventBus server] --> IPT2[InProcessTransport]
+        Bus2 --> WSDesk[WebSocketServerTransport]
         WSDesk -.localhost.-> ClientDesk[Cliente Tauri]
     end
 
@@ -697,10 +732,11 @@ El "carácter" del companion (Shiro) vive en
 - Rasgos de personalidad y estilo de habla.
 - Mapeo de **emociones → parámetros TTS y expresiones del avatar**.
 
-El `CharacterLoader` (que se implementará junto al primer LLM real)
-inyectará esta info como system prompt en cada conversación y
-propagará los parámetros emocionales al TTS y al Orbe/Avatar cuando
-llegue una respuesta.
+El `CharacterLoader` carga este YAML al arrancar el `core-host` y
+`buildSystemPrompt` lo convierte en el system prompt que se inyecta en cada
+conversación; los parámetros emocionales se propagan al TTS
+(`emotion → stability`) y al Orbe/Avatar (`emotion → expresión`) en cada
+respuesta.
 
 El **orbe placeholder** consume el campo `emotion` del payload de
 `llm:responded` y mapea cada emoción a un gradiente de color via
