@@ -50,33 +50,35 @@ estructura de un test). Sí hace falta para cambios estructurales.
 
 ## Índice
 
-| #                                                                        | Título                                                         | Estado   |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------- | -------- |
-| [0001](0001-arquitectura-modular-event-driven.md)                        | Arquitectura modular event-driven                              | Accepted |
-| [0002](0002-monorepo-npm-workspaces.md)                                  | Monorepo con npm workspaces                                    | Accepted |
-| [0003](0003-transport-abstraction-device-registry.md)                    | Transport abstraction y Device Registry                        | Accepted |
-| [0004](0004-custom-logger.md)                                            | Logger custom sin dependencias                                 | Accepted |
-| [0005](0005-typed-events-string-literals.md)                             | Tipado de eventos con string literals y EventMap               | Accepted |
-| [0006](0006-config-validation-zod.md)                                    | Validación de configuración con zod                            | Accepted |
-| [0007](0007-module-loader-registry.md)                                   | ModuleLoader con factory registry                              | Accepted |
-| [0008](0008-cliente-desktop-vite-react.md)                               | Cliente desktop con Vite + React + TypeScript                  | Accepted |
-| [0009](0009-orbe-placeholder-avatar.md)                                  | Orbe SVG como placeholder visual del avatar                    | Accepted |
-| [0010](0010-wiring-cliente-core-eventbus.md)                             | Wiring del cliente desktop con el EventBus                     | Accepted |
-| [0011](0011-core-split-browser-node.md)                                  | Split del core en entries browser-safe / Node                  | Accepted |
-| [0012](0012-split-cliente-server-core-host.md)                           | Split cliente/server — el core corre en `core-host`            | Accepted |
-| [0013](0013-protocolo-websocket-eventbus.md)                             | Protocolo WebSocket para el EventBus                           | Accepted |
-| [0014](0014-llm-structured-output-text-emotion.md)                       | Salida estructurada del LLM — `{ text, emotion }`              | Accepted |
-| [0015](0015-hybrid-router-classifier-llm-based.md)                       | HybridRouter — clasificador LLM con fallback heurístico        | Accepted |
-| [0016](0016-pipeline-conversational-wiring.md)                           | Wiring del pipeline conversacional en `core-host`              | Accepted |
-| [0017](0017-memoria-persistente-local-y-letta.md)                        | Memoria persistente — LocalMemory + LettaMemory                | Accepted |
-| [0018](0018-letta-sdk-oficial-embeddings-ollama.md)                      | Integración Letta — SDK oficial + embeddings Ollama            | Accepted |
-| [0019](0019-stt-faster-whisper-microservicio-python.md)                  | STT — microservicio Python con faster-whisper                  | Accepted |
-| [0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) | TTS — ElevenLabs + SystemTTS fallback, in-process en core-host | Accepted |
-| [0021](0021-avatar-live2d-pixi-display-fallback-orbe.md)                 | Avatar Live2D — pixi-live2d-display, 30 fps, fallback al Orbe  | Accepted |
-| [0022](0022-shiro-agentic-tools-fs-shell.md)                             | Shiro agentic — slot `tools:`, FS + shell, permisos mixtos     | Accepted |
-| [0023](0023-shiro-self-improvement-propose-only.md)                      | Shiro self-improvement — propose only, worktree aislado        | Accepted |
-| [0024](0024-packaging-tauri-windows-sidecar.md)                          | Packaging Tauri — Windows V1, sidecar core-host, modo dual     | Accepted |
-| [0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)            | Modelo de confianza local y superficie de red                  | Proposed |
+| #                                                                        | Título                                                         | Estado             |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------- | ------------------ |
+| [0001](0001-arquitectura-modular-event-driven.md)                        | Arquitectura modular event-driven                              | Accepted           |
+| [0002](0002-monorepo-npm-workspaces.md)                                  | Monorepo con npm workspaces                                    | Accepted           |
+| [0003](0003-transport-abstraction-device-registry.md)                    | Transport abstraction y Device Registry                        | Accepted           |
+| [0004](0004-custom-logger.md)                                            | Logger custom sin dependencias                                 | Accepted           |
+| [0005](0005-typed-events-string-literals.md)                             | Tipado de eventos con string literals y EventMap               | Accepted           |
+| [0006](0006-config-validation-zod.md)                                    | Validación de configuración con zod                            | Accepted           |
+| [0007](0007-module-loader-registry.md)                                   | ModuleLoader con factory registry                              | Accepted           |
+| [0008](0008-cliente-desktop-vite-react.md)                               | Cliente desktop con Vite + React + TypeScript                  | Accepted           |
+| [0009](0009-orbe-placeholder-avatar.md)                                  | Orbe SVG como placeholder visual del avatar                    | Accepted           |
+| [0010](0010-wiring-cliente-core-eventbus.md)                             | Wiring del cliente desktop con el EventBus                     | Accepted           |
+| [0011](0011-core-split-browser-node.md)                                  | Split del core en entries browser-safe / Node                  | Accepted           |
+| [0012](0012-split-cliente-server-core-host.md)                           | Split cliente/server — el core corre en `core-host`            | Accepted           |
+| [0013](0013-protocolo-websocket-eventbus.md)                             | Protocolo WebSocket para el EventBus                           | Accepted           |
+| [0014](0014-llm-structured-output-text-emotion.md)                       | Salida estructurada del LLM — `{ text, emotion }`              | Accepted           |
+| [0015](0015-hybrid-router-classifier-llm-based.md)                       | HybridRouter — clasificador LLM con fallback heurístico        | Accepted           |
+| [0016](0016-pipeline-conversational-wiring.md)                           | Wiring del pipeline conversacional en `core-host`              | Accepted           |
+| [0017](0017-memoria-persistente-local-y-letta.md)                        | Memoria persistente — LocalMemory + LettaMemory                | Accepted           |
+| [0018](0018-letta-sdk-oficial-embeddings-ollama.md)                      | Integración Letta — SDK oficial + embeddings Ollama            | Accepted           |
+| [0019](0019-stt-faster-whisper-microservicio-python.md)                  | STT — microservicio Python con faster-whisper                  | Accepted           |
+| [0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) | TTS — ElevenLabs + SystemTTS fallback, in-process en core-host | Accepted           |
+| [0021](0021-avatar-live2d-pixi-display-fallback-orbe.md)                 | Avatar Live2D — pixi-live2d-display, 30 fps, fallback al Orbe  | Accepted           |
+| [0022](0022-shiro-agentic-tools-fs-shell.md)                             | Shiro agentic — slot `tools:`, FS + shell, permisos mixtos     | Accepted           |
+| [0023](0023-shiro-self-improvement-propose-only.md)                      | Shiro self-improvement — propose only, worktree aislado        | Accepted           |
+| [0024](0024-packaging-tauri-windows-sidecar.md)                          | Packaging Tauri — Windows V1, sidecar core-host, modo dual     | Accepted           |
+| [0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)            | Modelo de confianza local y superficie de red                  | Superseded by 0027 |
+| [0026](0026-estacion-holografica-pepper-ghost-cliente-ligero.md)         | Estación holográfica — lámina única + cliente ligero           | Accepted           |
+| [0027](0027-autenticacion-token-bus-stt-multicliente.md)                 | Autenticación por token compartido en el bus y el STT          | Accepted           |
 
 ## Referencias externas
 

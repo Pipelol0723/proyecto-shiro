@@ -1,6 +1,6 @@
 # ADR 0025: Modelo de confianza local y superficie de red
 
-- **Status**: Proposed
+- **Status**: Superseded by [0027](0027-autenticacion-token-bus-stt-multicliente.md)
 - **Fecha**: 2026-07-15
 - **Decidido por**: Pipelol (pendiente de acuerdo con el compañero)
 
