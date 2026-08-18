@@ -62,10 +62,16 @@ Concretamente:
    guardan **embeddings, nunca imágenes**. Un frame sale hacia la nube
    únicamente cuando el usuario lo pide ("Shiro, mira esto"), y con **LED de
    cámara activa** encendido mientras ocurre.
-6. **Multi-cliente: la respuesta sale por donde entró.** Cada turno se marca con
-   el `clientId` de origen y el `tts:audio` y el avatar responden solo en ese
-   cliente. Esto **resuelve el diferido del ADR 0020** con la regla más simple
-   que funciona.
+6. **Multi-cliente: direccionamiento explícito, política simple.** Los eventos
+   de salida (`tts:audio`, `llm:responded`, lo que mueva el avatar) llevan un
+   **destinatario explícito y separado por modalidad** —el destino del audio y
+   el del vídeo pueden diferir—, resuelto en **un único punto del `core-host`**
+   (`OutputRouter`). Los clientes filtran por destinatario y **nunca** por
+   "¿originé yo este turno?". La política de V1 es la más simple que funciona:
+   `destino = origen`, o sea **la respuesta sale por donde entró**. Esto
+   **resuelve el diferido del ADR 0020** y, sobre todo, deja el cambio de
+   política futuro —responder donde el usuario realmente está— reducido a
+   sustituir una función, **sin tocar el protocolo ni los clientes**.
 7. **Sin movimiento mecánico en V1.** El seguimiento de mirada lo hace el avatar.
    La base se diseña con patrón de tornillos plano y paso de cable para poder
    añadir un módulo giratorio después.
@@ -117,6 +123,26 @@ El plan por fases, el BOM y la guía óptica viven en
   fallback sería una Shiro amnésica y sin manos. Reconsiderable si el "está
   apagada la PC" resulta molesto en uso real.
 
+**Del enrutado de salida:**
+
+- **Un "cliente activo" global** (el planteamiento con el que el ADR 0020 dejó
+  diferido el problema). Descartada **como concepto, no solo como política**: un
+  singleton no puede expresar el caso real de "le hablo a la estación con los
+  cascos del PC puestos", donde el avatar debería ir a la estación y el audio a
+  los cascos. Direccionar por evento y por modalidad cuesta lo mismo y es
+  estrictamente más expresivo.
+- **Enrutado por presencia desde V1** ("responde donde estoy"). Descartada por
+  falta de sensores, no por falta de ganas: saber dónde está el usuario exige la
+  cámara con reconocimiento facial de la Fase 6, más señales por cliente
+  (actividad de teclado, cascos conectados) que hoy nadie publica, más
+  histéresis para que una presencia parpadeante no parta la respuesta en dos
+  habitaciones. Se difiere a **después de la Fase 6**, que es cuando las señales
+  existen y la política se puede probar de verdad.
+- **Que cada cliente decida comparando si originó el turno.** Descartada
+  explícitamente: mete la semántica de enrutado dentro de cada cliente, así que
+  cambiar la política obligaría a tocar el wire y los tres clientes a la vez.
+  Es justo el retrofit caro que el direccionamiento explícito evita.
+
 **De la activación:** el push-to-talk actual por teclado se descarta como único
 modo por razones obvias (no hay teclado), pero se conserva como base física en
 Fase 2 porque cuesta cero y es el fallback cuando la wake word falla.
@@ -139,6 +165,10 @@ claramente inferior, pero queda como opción de configuración.
   existir y ser útil con Live2D, y mejora sola cuando llegue el 3D.
 - **Cierra dos diferidos que llevaban tiempo abiertos**: el modelo de confianza
   de red (0025) y el cliente activo multi-dispositivo (0020).
+- **El enrutado de salida queda con costura.** Pasar de "responde por donde
+  entró" a "responde donde estás" será sustituir el `OutputRouter`, no migrar el
+  protocolo ni los clientes. La deuda se paga hoy, que no cuesta casi nada, en
+  vez de cuando ya haya tres clientes desplegados.
 - **Escalado barato del riesgo**: la Fase 1 cuesta ~30 € y responde la pregunta
   más incierta del hito antes de comprometer dinero o código.
 - La impresión 3D gratuita mueve el coste dominante de la carcasa a la óptica y
@@ -157,6 +187,10 @@ claramente inferior, pero queda como opción de configuración.
 - La wake word siempre escuchando es una superficie de privacidad nueva aunque
   el audio no salga del dispositivo. Mitigada con el corte físico de micro, no
   eliminada.
+- **Se paga complejidad de protocolo por adelantado**: el destinatario por
+  modalidad es un campo que V1 no aprovecha, porque siempre resuelve al mismo
+  cliente. Es deuda deliberada a favor del futuro; si el enrutado por presencia
+  nunca llega a construirse, sobra.
 - Riesgo de que la Fase 1 salga mal y el hito muera ahí. Es intencionado: mejor
   30 € que 400 €.
 
@@ -179,13 +213,18 @@ claramente inferior, pero queda como opción de configuración.
   `transform: scaleY(-1)` en el contenedor, tras un flag de config (`mirror`).
   El eje correcto se ajusta empíricamente contra la maqueta.
 - `packages/core/src/types/events.ts` — eventos nuevos previstos:
-  `station:presence`, `station:wake`, `vision:frame-requested`,
-  `vision:described`. Y `clientId` en el envelope del wire
-  (`packages/core/src/core/transports/wire-schema.ts`).
+  `client:presence` (genérico, publicable por **cualquier** cliente y no solo
+  por la estación), `station:wake`, `vision:frame-requested`,
+  `vision:described`. Y en el envelope del wire
+  (`packages/core/src/core/transports/wire-schema.ts`): `clientId` de origen y
+  destinatario de salida separado por modalidad.
 - `packages/core/src/interfaces/IVisionModule.ts` — interfaz nueva, mismo patrón
   que `ISTTModule`.
-- `packages/core-host/src/pipeline` — propagar el `clientId` de origen del turno
-  hasta el `tts:audio` para el enrutado de respuesta.
+- `packages/core-host/src/pipeline` — `OutputRouter`: el **único** punto que
+  resuelve el destinatario de cada evento de salida. En V1 devuelve el origen
+  del turno (tres líneas); es la costura por la que entrará después el enrutado
+  por presencia. El destino se fija **al inicio del turno** y no se persigue si
+  el usuario se mueve a mitad de frase.
 - La auth del transporte va en
   [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md), que es
   **prerrequisito duro** de la Fase 3.

@@ -40,8 +40,16 @@ graph LR
 ```
 
 La respuesta **sale por donde entró**: si le hablas a la estación, responde la
-estación; si escribes en el desktop, responde el desktop. Se marca con el
-`clientId` de origen del turno.
+estación; si escribes en el desktop, responde el desktop.
+
+Esa es la _política_ de V1, no el _mecanismo_. El mecanismo es que cada evento
+de salida lleva un destinatario explícito y separado por modalidad (audio y
+vídeo pueden ir a clientes distintos), resuelto por un `OutputRouter` en el
+`core-host`. Los clientes solo preguntan "¿esto es para mí?". Así, el día que se
+quiera "responde donde el usuario **está**" —le hablas a la estación pero
+llevas los cascos del PC— se sustituye una función y no se toca ni el protocolo
+ni los clientes. Ver el punto 6 y las alternativas del
+[ADR 0026](adr/0026-estacion-holografica-pepper-ghost-cliente-ligero.md).
 
 ## Cómo funciona la óptica
 
@@ -122,7 +130,9 @@ cualquier portátil de la LAN, sin hardware de la estación.
   en Whisper.
 - `clientId` en el envelope del wire.
 - Propiedad de sesión en `tool:approval`.
-- Enrutado de la respuesta por `clientId` (cierra el diferido del ADR 0020).
+- `OutputRouter` con destinatario explícito por modalidad, política V1
+  `destino = origen` (cierra el diferido del ADR 0020). Los clientes filtran
+  por destinatario, **nunca** por "¿originé yo el turno?".
 
 ### Fase 3 — Cliente estación, sin carcasa · ~200-300 €
 
@@ -170,6 +180,12 @@ este orden de dificultad creciente:
 - **Avatar 3D (VRM) + head-tracking con proyección fuera de eje.** El paralaje
   de movimiento es el mayor salto de realismo disponible, y no cuesta hardware:
   la cámara ya está puesta. Sin tocar la carcasa.
+- **Enrutado por presencia** — "responde donde estoy" en vez de "por donde
+  entró". Va aquí y no antes porque necesita las señales de la Fase 6 (¿está
+  delante?, ¿eres tú?) más señales por cliente que hoy nadie publica (actividad
+  de teclado, cascos conectados). Es sustituir el `OutputRouter` y escribir la
+  política, con histéresis para que una presencia parpadeante no parta la
+  respuesta en dos habitaciones.
 - **Base giratoria** — primera implementación real de `IDeviceModule`.
 - **Segunda lámina trasera** — vista de espalda a tamaño completo, si alguna vez
   se quiere 360°.
