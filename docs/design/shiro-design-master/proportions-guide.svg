@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 760" width="920" height="760" font-family="Segoe UI, Arial, sans-serif">
+  <title>Shiro — guía de proporciones (esquema, no es un dibujo del personaje)</title>
+  <rect width="920" height="760" fill="#0E1117"/>
+
+  <!-- ===== Shiro normal: 1 cabeza = 95 px, coronilla en y=80 ===== -->
+  <text x="20" y="34" fill="#E9F7FF" font-size="17" font-weight="600">Shiro — ≈6,3 cabezas</text>
+  <text x="20" y="54" fill="#7FBEDD" font-size="12">Medido sobre «shiro proto2» (±0,2 cabezas). Esquema, no dibujo.</text>
+
+  <!-- bandas de una cabeza -->
+  <g fill="#1B2233" opacity="0.45">
+    <rect x="170" y="80" width="270" height="95"/>
+    <rect x="170" y="270" width="270" height="95"/>
+    <rect x="170" y="460" width="270" height="95"/>
+    <rect x="170" y="650" width="270" height="32"/>
+  </g>
+  <g stroke="#4F90C0" stroke-width="1" stroke-dasharray="4 4">
+    <line x1="170" y1="80" x2="440" y2="80"/><line x1="170" y1="175" x2="440" y2="175"/>
+    <line x1="170" y1="270" x2="440" y2="270"/><line x1="170" y1="365" x2="440" y2="365"/>
+    <line x1="170" y1="460" x2="440" y2="460"/><line x1="170" y1="555" x2="440" y2="555"/>
+    <line x1="170" y1="650" x2="440" y2="650"/>
+  </g>
+  <g fill="#4F90C0" font-size="11" text-anchor="end">
+    <text x="436" y="92">0</text><text x="436" y="187">1</text><text x="436" y="282">2</text>
+    <text x="436" y="377">3</text><text x="436" y="472">4</text><text x="436" y="567">5</text><text x="436" y="662">6</text>
+  </g>
+
+  <!-- maniquí esquemático -->
+  <g stroke="#CFF1FF" stroke-width="1">
+    <path d="M300,80 q-16,-20 8,-16" fill="none" stroke="#BBE2F2" stroke-width="3"/>
+    <ellipse cx="300" cy="124" rx="54" ry="46" fill="#BBE2F2" stroke="none"/>
+    <ellipse cx="300" cy="140" rx="34" ry="34" fill="#F6E2D4" stroke="none"/>
+    <path d="M250,128 a50,50 0 0 1 100,0" fill="none" stroke="#1B2233" stroke-width="7"/>
+    <circle cx="248" cy="136" r="12" fill="#1B2233" stroke="#FFFFFF" stroke-width="2"/>
+    <circle cx="352" cy="136" r="12" fill="#1B2233" stroke="#FFFFFF" stroke-width="2"/>
+    <rect x="292" y="170" width="16" height="24" fill="#F6E2D4" stroke="none"/>
+    <polygon points="258,196 242,200 228,330 244,332" fill="#1B2233"/>
+    <polygon points="342,196 358,200 372,330 356,332" fill="#1B2233"/>
+    <polygon points="258,194 342,194 336,313 264,313" fill="#1B2233"/>
+    <polygon points="290,198 310,198 300,232" fill="#FFFFFF" stroke="none"/>
+    <polygon points="264,313 336,313 356,403 244,403" fill="#1B2233"/>
+    <line x1="247" y1="398" x2="353" y2="398" stroke="#FFFFFF" stroke-width="3"/>
+    <rect x="272" y="403" width="22" height="24" fill="#F6E2D4" stroke="none"/>
+    <rect x="306" y="403" width="22" height="24" fill="#F6E2D4" stroke="none"/>
+    <rect x="272" y="427" width="22" height="236" fill="#1B2233"/>
+    <rect x="306" y="427" width="22" height="236" fill="#1B2233"/>
+    <rect x="272" y="427" width="22" height="6" fill="#FFFFFF" stroke="none"/>
+    <rect x="306" y="427" width="22" height="6" fill="#FFFFFF" stroke="none"/>
+    <rect x="268" y="663" width="28" height="19" fill="#010101"/>
+    <rect x="304" y="663" width="28" height="19" fill="#010101"/>
+    <line x1="268" y1="681" x2="296" y2="681" stroke="#FFFFFF" stroke-width="2"/>
+    <line x1="304" y1="681" x2="332" y2="681" stroke="#FFFFFF" stroke-width="2"/>
+  </g>
+
+  <!-- hitos -->
+  <g stroke="#E9F7FF" stroke-width="1"><line x1="150" y1="62" x2="170" y2="62"/><line x1="150" y1="80" x2="170" y2="80"/>
+    <line x1="150" y1="142" x2="170" y2="142"/><line x1="150" y1="175" x2="170" y2="175"/><line x1="150" y1="194" x2="170" y2="194"/>
+    <line x1="150" y1="313" x2="170" y2="313"/><line x1="150" y1="403" x2="170" y2="403"/><line x1="150" y1="427" x2="170" y2="427"/>
+    <line x1="150" y1="527" x2="170" y2="527"/><line x1="150" y1="682" x2="170" y2="682"/></g>
+  <g fill="#E9F7FF" font-size="12" text-anchor="end">
+    <text x="144" y="66">Punta del ahoge  −0,2</text>
+    <text x="144" y="84">Coronilla  0</text>
+    <text x="144" y="146">Ojos  0,65</text>
+    <text x="144" y="179">Barbilla  1,0</text>
+    <text x="144" y="198">Hombros  1,2</text>
+    <text x="144" y="317">Cintura  2,45</text>
+    <text x="144" y="407">Bajo de la falda*  3,4</text>
+    <text x="144" y="431">Banda de la media  3,65</text>
+    <text x="144" y="531">Rodilla  4,7</text>
+    <text x="144" y="686">Suelo  6,3</text>
+  </g>
+  <text x="20" y="722" fill="#7FBEDD" font-size="11">* Largo del borrador. El largo definitivo se decide con el modelo 3D.</text>
+
+  <!-- ===== Chibi: 1 cabeza = 185 px, coronilla en y=140 ===== -->
+  <line x1="480" y1="20" x2="480" y2="740" stroke="#1B2233" stroke-width="2"/>
+  <text x="500" y="34" fill="#E9F7FF" font-size="17" font-weight="600">Chibi — ≈2,7 cabezas de pie</text>
+  <text x="500" y="54" fill="#7FBEDD" font-size="12">Estimación: la chibi del borrador está sentada (≈2,3).</text>
+
+  <g fill="#1B2233" opacity="0.45"><rect x="610" y="140" width="290" height="185"/><rect x="610" y="510" width="290" height="130"/></g>
+  <g stroke="#4F90C0" stroke-width="1" stroke-dasharray="4 4">
+    <line x1="610" y1="140" x2="900" y2="140"/><line x1="610" y1="325" x2="900" y2="325"/><line x1="610" y1="510" x2="900" y2="510"/>
+  </g>
+  <g fill="#4F90C0" font-size="11" text-anchor="end"><text x="896" y="152">0</text><text x="896" y="337">1</text><text x="896" y="522">2</text></g>
+
+  <g stroke="#CFF1FF" stroke-width="1">
+    <path d="M745,142 q-26,-34 16,-28" fill="none" stroke="#BBE2F2" stroke-width="5"/>
+    <ellipse cx="745" cy="226" rx="104" ry="90" fill="#BBE2F2" stroke="none"/>
+    <ellipse cx="745" cy="252" rx="72" ry="66" fill="#F6E2D4" stroke="none"/>
+    <path d="M648,232 a97,97 0 0 1 194,0" fill="none" stroke="#1B2233" stroke-width="12"/>
+    <circle cx="645" cy="250" r="26" fill="#1B2233" stroke="#FFFFFF" stroke-width="4"/>
+    <circle cx="845" cy="250" r="26" fill="#1B2233" stroke="#FFFFFF" stroke-width="4"/>
+    <polygon points="708,325 782,325 800,455 690,455" fill="#1B2233"/>
+    <polygon points="733,330 757,330 745,372" fill="#FFFFFF" stroke="none"/>
+    <polygon points="690,440 800,440 820,505 670,505" fill="#1B2233"/>
+    <line x1="673" y1="499" x2="817" y2="499" stroke="#FFFFFF" stroke-width="4"/>
+    <rect x="704" y="505" width="32" height="118" fill="#1B2233"/>
+    <rect x="754" y="505" width="32" height="118" fill="#1B2233"/>
+    <rect x="704" y="505" width="32" height="8" fill="#FFFFFF" stroke="none"/>
+    <rect x="754" y="505" width="32" height="8" fill="#FFFFFF" stroke="none"/>
+    <rect x="698" y="623" width="42" height="17" fill="#010101"/>
+    <rect x="750" y="623" width="42" height="17" fill="#010101"/>
+  </g>
+
+  <g stroke="#E9F7FF" stroke-width="1"><line x1="590" y1="140" x2="610" y2="140"/><line x1="590" y1="270" x2="610" y2="270"/>
+    <line x1="590" y1="325" x2="610" y2="325"/><line x1="590" y1="640" x2="610" y2="640"/></g>
+  <g fill="#E9F7FF" font-size="12" text-anchor="end">
+    <text x="584" y="144">Coronilla  0</text>
+    <text x="584" y="274">Ojos  0,7</text>
+    <text x="584" y="329">Barbilla  1,0</text>
+    <text x="584" y="644">Suelo  2,7</text>
+  </g>
+  <text x="500" y="722" fill="#7FBEDD" font-size="11">La cabeza ocupa ≈43 % de la figura sentada del borrador.</text>
+</svg>

@@ -169,7 +169,9 @@ de IA.
 
 Decidido por Pipe (2026-11-11). Shiro es adulta.
 
-- **Nada NSFW:** sin desnudo ni nada explícito, en ningún formato.
+- **NSFW: no está planeado ahora.** Hoy no hay desnudo ni nada explícito en
+  ningún formato. **No se descarta añadirlo en el futuro**; si llega, será una
+  decisión aparte.
 - **Fan service leve:** el que ya trae el diseño (falda, medias altas,
   físicas naturales, cámara libre). No se añaden atuendos ni poses pensados
   para ello.
@@ -272,10 +274,15 @@ Pendiente de decidir:
   del character YAML para que lleguen al modelo sin alias).
 - Trazado exacto de las líneas de circuito por prenda.
 
+**Diseño maestro en datos:** la paleta, las expresiones por rasgos y las
+guías de proporción y de circuito están en
+[`shiro-design-master/`](shiro-design-master/README.md). Es el documento de
+trabajo que usa Claude para producir arte y código coherentes; recoge las
+mismas decisiones que esta biblia.
+
 **Material de diseño fuera del repo** (no se commitea): el borrador visual
-original, el diseño maestro en datos (paleta, expresiones y guías) y la
-investigación de formatos y herramientas viven en la carpeta de trabajo del
-autor del proyecto.
+original y la investigación de formatos y herramientas viven en la carpeta de
+trabajo del autor del proyecto.
 
 **Plan en curso:**
 

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 930 500" width="930" height="500" font-family="Segoe UI, Arial, sans-serif">
+  <title>Shiro — vocabulario de las líneas de circuito</title>
+  <defs>
+    <filter id="halo" x="-30%" y="-80%" width="160%" height="260%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+      <feColorMatrix in="b" type="matrix" values="0 0 0 0 0.81  0 0 0 0 0.945  0 0 0 0 1  0 0 0 0.75 0" result="c"/>
+      <feMerge><feMergeNode in="c"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="930" height="500" fill="#1B2233"/>
+  <text x="24" y="36" fill="#E9F7FF" font-size="17" font-weight="600">Líneas de circuito — elementos permitidos</text>
+  <text x="24" y="56" fill="#7FBEDD" font-size="12">Blanco puro con halo frío. Solo rectas y quiebros a 45°. Siempre en su propia capa.</text>
+
+  <g stroke="#FFFFFF" stroke-width="4" fill="none" stroke-linecap="square" stroke-linejoin="miter" filter="url(#halo)">
+    <!-- 1 línea simple -->
+    <path d="M50,130 H260"/>
+    <!-- 2 línea doble -->
+    <path d="M360,124 H570 M360,138 H570"/>
+    <!-- 3 quiebro a 45° -->
+    <path d="M670,150 H750 L790,110 H880"/>
+    <!-- 4 fila de tres cuadrados -->
+    <g stroke-width="3"><rect x="110" y="312" width="16" height="16"/><rect x="138" y="312" width="16" height="16"/><rect x="166" y="312" width="16" height="16"/></g>
+    <!-- 5 fila de puntos -->
+    <g stroke="none" fill="#FFFFFF"><rect x="410" y="317" width="6" height="6"/><rect x="426" y="317" width="6" height="6"/><rect x="442" y="317" width="6" height="6"/><rect x="458" y="317" width="6" height="6"/><rect x="474" y="317" width="6" height="6"/></g>
+    <!-- 6 combinación -->
+    <path d="M670,350 H730 L760,320 H800 M670,364 H736 L766,334 H800"/>
+    <g stroke-width="3"><rect x="812" y="312" width="14" height="14"/><rect x="834" y="312" width="14" height="14"/><rect x="856" y="312" width="14" height="14"/></g>
+  </g>
+
+  <g fill="#E9F7FF" font-size="13">
+    <text x="50" y="190">1 · Línea simple</text>
+    <text x="360" y="190">2 · Línea doble</text>
+    <text x="670" y="190">3 · Quiebro a 45°</text>
+    <text x="50" y="400">4 · Fila de tres cuadrados</text>
+    <text x="360" y="400">5 · Fila de puntos</text>
+    <text x="670" y="400">6 · Combinación (ejemplo)</text>
+  </g>
+  <g fill="#7FBEDD" font-size="11">
+    <text x="50" y="208">Recorre una pieza a lo largo.</text>
+    <text x="360" y="208">Dos paralelas; refuerza un borde.</text>
+    <text x="670" y="208">Único cambio de dirección permitido.</text>
+    <text x="50" y="418">La única marca. Siempre tres.</text>
+    <text x="360" y="418">Remate corto de una línea.</text>
+    <text x="670" y="418">Doble con quiebro que acaba en marcas.</text>
+  </g>
+  <text x="24" y="470" fill="#F4A9B0" font-size="12">No se usan: triángulos, curvas, otros ángulos, otros colores.</text>
+</svg>
