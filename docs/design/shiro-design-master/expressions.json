@@ -1,0 +1,113 @@
+{
+  "version": "0.1",
+  "fecha": "2026-11-11",
+  "nota": "Expresiones de Shiro definidas por rasgos, no por formato. Cada motor (capas, VRM, Live2D) las implementa a su manera. 'glow.level' es la intensidad de las líneas de circuito respecto al reposo (1.0).",
+  "reglas": [
+    "Shiro subexpresa: los cambios son pequeños.",
+    "Ninguna expresión toca la apertura de la boca ni el parpadeo.",
+    "idle y annoyed no deben confundirse: la comisura hacia abajo es solo de annoyed.",
+    "El rubor es timidez."
+  ],
+  "expressions": {
+    "idle": {
+      "emotion": "neutral",
+      "estado": "en uso",
+      "brows": "rectas",
+      "eyelids": "normales",
+      "mouth": "recta, pequeña",
+      "gaze": "al frente",
+      "blush": 0.0,
+      "glow": { "level": 1.0, "pattern": "fijo" }
+    },
+    "smirk": {
+      "emotion": "divertida",
+      "estado": "en uso",
+      "brows": "una apenas más alta",
+      "eyelids": "algo entornados",
+      "mouth": "una comisura arriba",
+      "gaze": "al frente",
+      "blush": 0.0,
+      "glow": { "level": 1.0, "pattern": "destello corto al entrar" }
+    },
+    "thinking": {
+      "emotion": "pensativa",
+      "estado": "en uso",
+      "brows": "levemente juntas",
+      "eyelids": "normales",
+      "mouth": "pequeña, cerrada",
+      "gaze": "desviada a un lado",
+      "blush": 0.0,
+      "glow": { "level": 0.9, "pattern": "pulso lento" }
+    },
+    "annoyed": {
+      "emotion": "molesta",
+      "estado": "en uso",
+      "brows": "hacia dentro y abajo",
+      "eyelids": "entornados",
+      "mouth": "comisuras abajo",
+      "gaze": "al frente",
+      "blush": 0.0,
+      "glow": { "level": 0.7, "pattern": "fijo" }
+    },
+    "soft": {
+      "emotion": "vulnerable",
+      "estado": "en uso",
+      "brows": "arriba y hacia dentro",
+      "eyelids": "abiertos",
+      "mouth": "pequeña, relajada",
+      "gaze": "algo baja",
+      "blush": 0.4,
+      "glow": { "level": 0.6, "pattern": "fijo" }
+    },
+    "surprise": {
+      "emotion": null,
+      "estado": "propuesta",
+      "brows": "arriba",
+      "eyelids": "muy abiertos",
+      "mouth": "pequeña, entreabierta",
+      "gaze": "al frente",
+      "blush": 0.0,
+      "glow": { "level": 1.3, "pattern": "pico breve y vuelta a 1.0" }
+    },
+    "happy": {
+      "emotion": null,
+      "estado": "propuesta",
+      "brows": "relajadas",
+      "eyelids": "entornados en arco",
+      "mouth": "sonrisa contenida",
+      "gaze": "al frente",
+      "blush": 0.3,
+      "glow": { "level": 1.1, "pattern": "fijo" }
+    },
+    "shy": {
+      "emotion": null,
+      "estado": "propuesta",
+      "brows": "arriba y hacia dentro",
+      "eyelids": "normales",
+      "mouth": "pequeña",
+      "gaze": "a un lado",
+      "blush": 0.9,
+      "glow": { "level": 0.8, "pattern": "fijo" }
+    },
+    "sleepy": {
+      "emotion": null,
+      "estado": "propuesta",
+      "brows": "relajadas, bajas",
+      "eyelids": "medio cerrados",
+      "mouth": "relajada",
+      "gaze": "baja",
+      "blush": 0.0,
+      "glow": { "level": 0.4, "pattern": "pulso muy lento" }
+    }
+  },
+  "mouth": {
+    "nota": "La boca que habla va aparte de la expresión, movida por la amplitud del audio.",
+    "levels": ["cerrada", "pequeña", "media", "abierta"],
+    "visemes": ["A", "I", "U", "E", "O"]
+  },
+  "blink": {
+    "estados": ["abierto", "medio", "cerrado"],
+    "intervalo_s": [2.5, 6.0],
+    "duracion_ms": 120
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "version": "0.1",
+  "fecha": "2026-11-11",
+  "nota": "Colores canónicos de Shiro. 'origen': biblia = docs/design/shiro-character-bible.md; medido = muestreado sobre los JPG del borrador el 2026-11-09.",
+  "colors": {
+    "background": {
+      "hex": "#0E1117",
+      "uso": "Fondo de referencia, casi negro azulado",
+      "origen": "biblia"
+    },
+    "uniform": {
+      "hex": "#1B2233",
+      "uso": "Uniforme, medias, diadema y copas de los auriculares",
+      "origen": "biblia"
+    },
+    "uniformShade": {
+      "hex": "#10141F",
+      "uso": "Sombra del uniforme, pliegues",
+      "origen": "biblia"
+    },
+    "hair": { "hex": "#BBE2F2", "uso": "Pelo, cejas", "origen": "biblia" },
+    "hairShade": { "hex": "#7FBEDD", "uso": "Puntas y volumen del pelo", "origen": "biblia" },
+    "hairLight": { "hex": "#E9F7FF", "uso": "Brillos en rombo del pelo", "origen": "biblia" },
+    "skin": { "hex": "#F6E2D4", "uso": "Piel", "origen": "biblia" },
+    "skinShade": { "hex": "#E7C3AE", "uso": "Sombra de la piel", "origen": "biblia" },
+    "iris": { "hex": "#9FE3FF", "uso": "Mitad inferior del iris", "origen": "biblia" },
+    "irisShade": { "hex": "#4F90C0", "uso": "Mitad superior del iris", "origen": "biblia" },
+    "glow": {
+      "hex": "#FFFFFF",
+      "uso": "Blanco firma: ribetes, pañuelo, aro, líneas de circuito",
+      "origen": "biblia"
+    },
+    "glowHalo": {
+      "hex": "#CFF1FF",
+      "uso": "Halo del brillo y contorno de luz",
+      "origen": "biblia"
+    },
+    "blush": { "hex": "#F4A9B0", "uso": "Rubor", "origen": "biblia" },
+    "line": {
+      "hex": "#010101",
+      "uso": "Línea de contorno del dibujo, zapatos",
+      "origen": "medido"
+    },
+    "metal": { "hex": "#787B85", "uso": "Pieza metálica de la diadema", "origen": "medido" },
+    "scleraShade": { "hex": "#C6C7C7", "uso": "Sombra del blanco del ojo", "origen": "medido" }
+  },
+  "contraste": {
+    "hair_sobre_background": 13.0,
+    "uniform_sobre_background": 1.2,
+    "line_sobre_background": 1.1,
+    "nota": "Relación de contraste WCAG 2.x, aproximada."
+  }
+}
