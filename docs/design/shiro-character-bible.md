@@ -1,12 +1,15 @@
 # Shiro — Character Bible
 
-> **Estado:** Draft v0.1 · todo sujeto a cambios.
+> **Estado:** v0.2 (2026-11-11) · identidad visual aprobada por Pipe. Los
+> puntos aún abiertos están en el §8.
 > **Propósito:** documento canónico de diseño del personaje Shiro (identidad
 > visual, personalidad, voz y sistema de expresiones). Sirve de referencia
-> para la producción del modelo 3D (VRM), el rigging y el cableado con el
+> para la producción de los modelos, el rigging y el cableado con el
 > `IAvatarModule`.
-> **Objetivo de modelo:** 3D / VRM (post-MVP). Pipeline previsto:
-> VRoid Studio (base) → Blender (refinamiento) → export VRM.
+> **Formatos previstos** (plan en curso, aún sin ADR): **chibi por capas**
+> (prototipo, primero), **3D / VRM** (objetivo final; maqueta con VRoid Studio
+> → Blender → export VRM) y **2D / Live2D** (aparcado hasta tener una
+> ilustración por capas).
 
 ---
 
@@ -18,7 +21,7 @@ No es una mascota decorativa ni una asistente neutra de voz robótica: es un
 personaje con carácter propio, callada y observadora, que se va abriendo con
 el uso.
 
-**Logline:** _Una compañera adolescente serena y de pocas palabras, con un
+**Logline:** _Una compañera adulta joven (18–20 años), serena y de pocas palabras, con un
 ingenio seco que solo asoma cuando hay confianza; su nombre es su estética —
 blanco que brilla en la oscuridad._
 
@@ -88,7 +91,7 @@ _ganarse_ sus expresiones más expresivas, no recibirlas de entrada.
 
 ### 4.1. Resumen
 
-Adolescente de presentación femenina, estilo **anime moe limpio** (formas
+Adulta joven (18–20 años) de presentación femenina, estilo **anime moe limpio** (formas
 suaves, ojos grandes, línea sencilla). Sobre **paleta oscura de alto
 contraste**, con el **blanco glow** como firma. Toque **tech** discreto
 (auriculares, líneas holográficas) que conecta su estética con su naturaleza
@@ -100,18 +103,28 @@ de IA.
   marcadas, mechones laterales enmarcando la cara) + un **ahoge** (mechón
   rebelde). Es el segundo foco de color tras el glow; aporta frescura y
   movimiento.
-- **Ojos:** grandes, iris azul claro luminoso con un punto de blanco;
-  refuerzan la firma de color. Mirada tranquila por defecto.
+- **Cara:** la del turnaround del borrador: redonda, ojos grandes y abiertos,
+  serena.
+- **Ojos:** grandes, iris azul claro luminoso en dos tonos con brillos
+  blancos; **sin heterocromía**. Mirada tranquila por defecto.
+- **Cejas:** finas, del color del pelo, **siempre visibles por encima del
+  flequillo** (son su principal canal de expresión).
 - **Piel:** pálida, cálida (estética anime).
-- **Vestuario:** **uniforme escolar estilizado** en tonos oscuros (azul
-  marino / casi negro), con **cuello marinero**, **lazo/corbata** y ribetes
-  que **brillan en blanco**. Falda plisada con líneas de pliegue luminosas.
-  **Thigh-highs** (medias altas) oscuras con banda superior glow.
+- **Vestuario:** **uniforme marinero estilizado** en azul muy oscuro, con
+  **cuello marinero** de un ribete blanco, **pañuelo marinero blanco
+  anudado**, puños con un ribete y falda plisada con ribete blanco en el bajo
+  (los pliegues van en línea oscura; lo luminoso son el ribete y el circuito).
+  **Medias altas** oscuras con una banda blanca arriba. Mocasines negros con
+  suela blanca.
 - **Accesorio firma:** **auriculares tech** sobre la cabeza, oscuros con aro
-  luminoso blanco. Es su marca de identidad "asistente".
-- **Motivo recurrente:** **detalles holográficos** en blanco (líneas finas en
-  torso, mangas, falda y medias) pensados para **reaccionar a su emoción** —
-  un gancho directo con el sistema emoción→avatar del código (ver §6).
+  luminoso blanco fino. Conviven con el ahoge, que nace detrás de la diadema.
+  Es su marca de identidad "asistente".
+- **Motivo recurrente:** **líneas de circuito** en blanco (mangas, costados
+  del torso, costados de la falda y medias) pensadas para **reaccionar a su
+  emoción** — un gancho directo con el sistema emoción→avatar del código (ver
+  §6). Vocabulario cerrado: línea simple, línea doble, quiebro a 45°, **fila
+  de tres cuadrados** (la única marca) y fila de puntos. Van siempre en una
+  capa o máscara independiente, nunca pintadas en la ropa.
 
 ### 4.3. Paleta
 
@@ -133,15 +146,41 @@ de IA.
 | **Glow firma**      | `#FFFFFF` | Blanco puro emisivo (la firma) |
 | Glow halo           | `#CFF1FF` | Halo frío alrededor del blanco |
 | Rubor               | `#F4A9B0` | Mejillas (dandere)             |
+| Línea               | `#010101` | Contorno del dibujo, zapatos   |
+| Metal               | `#787B85` | Pieza metálica de la diadema   |
+| Sombra del ojo      | `#C6C7C7` | Sombra del blanco del ojo      |
 
-### 4.4. Proporciones y silueta (para VRM)
+> Los tres últimos se midieron sobre el borrador (2026-11-09). El uniforme
+> tiene un contraste de ≈1,2:1 contra el fondo base: sobre fondos oscuros la
+> silueta se sostiene por ribetes y líneas (ver §8).
 
-- Cuerpo estilizado anime, **~6–6.5 cabezas** de alto (ni chibi ni realista).
+### 4.4. Proporciones y silueta
+
+- Cuerpo estilizado anime, **~6–6.5 cabezas** de alto (≈6,3 medido en el
+  turnaround; ni chibi ni realista). Complexión **natural, sin exagerar**.
+- La **chibi** tiene proporción propia: ≈2,7 cabezas de pie.
 - Silueta legible: el **wolfcut** y los **auriculares** definen la cabeza; el
   **uniforme + falda + thigh-highs** definen el cuerpo. Debe reconocerse en
   negro (test de silueta).
 - Punto de lectura: en miniatura, lo primero que se ve es **pelo azul claro +
   glow blanco** sobre oscuro.
+
+### 4.5. Tono y contenido
+
+Decidido por Pipe (2026-11-11). Shiro es adulta.
+
+- **Nada NSFW:** sin desnudo ni nada explícito, en ningún formato.
+- **Fan service leve:** el que ya trae el diseño (falda, medias altas,
+  físicas naturales, cámara libre). No se añaden atuendos ni poses pensados
+  para ello.
+- **Encuadre:** por defecto, cara y medio cuerpo. La cámara no se bloquea.
+- **Poses:** relajadas y algo recogidas; nada sugerente por defecto.
+- **Cuerpo:** natural. Las físicas del busto existen pero son discretas y
+  secundarias; se ajustan con el modelo 3D delante.
+- **Expresiones:** el rubor es timidez.
+- **Interacción** (función futura): reacciona como ella — cercanía en cabeza,
+  hombro o mano según la confianza; en otras zonas, molestia o vergüenza con
+  un comentario seco.
 
 ---
 
@@ -216,22 +255,37 @@ su diseño a uno solo).
 
 ## 8. Estado, decisiones abiertas y próximos pasos
 
-**Esto es un borrador (v0.1).** Pendiente de cerrar / decidir:
+**v0.2 (2026-11-11).** Cerrado en esta versión: edad (adulta joven, 18–20),
+cara canónica, ojos sin heterocromía, convivencia de ahoge y auriculares,
+vestuario, marcas del circuito (solo cuadrados) y tono.
 
-- Color de ojos definitivo (azul luminoso vs. heterocromía con blanco).
-- Si el ahoge y los auriculares conviven o uno domina la silueta.
+Pendiente de decidir:
+
+- **Largo de la falda:** el del borrador o algo más larga. Se decide con la
+  maqueta 3D, donde es un deslizador.
+- **Silueta sobre fondos oscuros:** con o sin un contorno de luz fino del
+  color del halo. Se decide comparando las dos versiones en la chibi.
+- **Físicas del busto:** ajuste a ojo con la maqueta 3D.
 - Vestuario alternativo (casual/hoodie) para variantes futuras.
-- Set final de emociones (ampliar `emotions.ts` al adoptar el modelo nuevo).
+- Set final de emociones (ampliar `emotions.ts` de 5 a 9).
 - Naming de las nuevas expresiones/blendshapes (alinear con `avatar_expression`
   del character YAML para que lleguen al modelo sin alias).
+- Trazado exacto de las líneas de circuito por prenda.
 
-**Próximos pasos sugeridos** (cuando se decidan):
+**Material de diseño fuera del repo** (no se commitea): el borrador visual
+original, el diseño maestro en datos (paleta, expresiones y guías) y la
+investigación de formatos y herramientas viven en la carpeta de trabajo del
+autor del proyecto.
 
-1. Cerrar este brief.
-2. Model sheet visual (turnaround + hoja de expresiones).
-3. Base en VRoid Studio → refinamiento en Blender.
-4. Export VRM + cableado con `IAvatarModule` (probable **ADR**: avatar 3D
-   cambia de patrón respecto al Live2D actual).
+**Plan en curso:**
+
+1. Prototipo: chibi por capas, primero en un banco de pruebas y después tras
+   el mismo `<Avatar>` del cliente.
+2. Maqueta 3D: base en VRoid Studio → Blender → export VRM, renderizada con
+   three.js y `@pixiv/three-vrm`.
+3. Integrar cualquiera de los dos en el cliente cambia el patrón del avatar
+   (selector de motores y manifiesto por modelo) y añade dependencias:
+   **requiere ADR** antes de implementarse.
 
 ---
 
