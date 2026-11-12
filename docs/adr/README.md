@@ -79,6 +79,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)            | Modelo de confianza local y superficie de red                  | Superseded by 0027 |
 | [0026](0026-estacion-holografica-pepper-ghost-cliente-ligero.md)         | Estación holográfica — lámina única + cliente ligero           | Accepted           |
 | [0027](0027-autenticacion-token-bus-stt-multicliente.md)                 | Autenticación por token compartido en el bus y el STT          | Accepted           |
+| [0028](0028-avatar-motores-y-manifiesto.md)                              | Avatar — motores intercambiables, manifiesto y motor de capas  | Accepted           |
 
 ## Referencias externas
 
