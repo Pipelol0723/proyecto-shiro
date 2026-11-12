@@ -1,0 +1,43 @@
+{
+  "_nota": "Geometria de la chibi de pie generada con Gemini, en pixeles de la imagen preparada (ampliada x1.52). Medida a ojo sobre un recorte de la cara.",
+  "Y_CLOTHES": 1880,
+  "Y_SHOES": 3600,
+  "EYES": {
+    "left": { "c": [956, 1349], "r": [205, 143] },
+    "right": { "c": [1575, 1344], "r": [205, 143] }
+  },
+  "CREASES": [
+    [994, 1184, 1108, 1235],
+    [1413, 1184, 1541, 1232]
+  ],
+  "MOUTH": [1218, 1599, 1308, 1637],
+  "BROWS": {
+    "left": [814, 1054, 1118, 1120],
+    "right": [1408, 1049, 1722, 1125]
+  },
+  "FACE_BOX": [714, 964, 1926, 1784],
+  "LINE_HALO_MIN": 0.0,
+  "TRIM_BOXES": [
+    [996, 1818, 1585, 2112],
+    [1163, 2092, 1418, 2465],
+    [672, 2564, 855, 2689],
+    [1738, 2564, 1921, 2689],
+    [816, 2795, 1777, 2968]
+  ],
+  "MIRROR_X": 1273,
+  "LASH_OPEN": [
+    [795, 1282],
+    [970, 1241],
+    [1118, 1282]
+  ],
+  "LASH_CLOSED": [
+    [799, 1411],
+    [970, 1444],
+    [1113, 1412]
+  ],
+  "BROW": { "outer": [828, 1101], "apex": [970, 1076], "inner": [1104, 1097] },
+  "MOUTH_C": [1263, 1618],
+  "BLUSH_C": [918, 1520],
+  "MODEL_NAME": "Shiro chibi de pie (prototipo)",
+  "CREDITS": "Pose generada con Gemini a partir del borrador original. Piezas de cara provisionales generadas por codigo."
+}
