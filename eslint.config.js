@@ -18,6 +18,10 @@ export default tseslint.config(
       '**/*.config.ts',
       // Bundle del diseño exportado por Claude Design — referencia, no codigo.
       'docs/design-mockup/**',
+      // Prototipo de la chibi por capas (ADR 0028): JS de navegador y un
+      // servidor estático en .mjs que no pertenecen a ningún tsconfig, así
+      // que el typed-linting no aplica. El motor real irá en packages/desktop.
+      'docs/design/chibi-prototype/**',
       // AudioWorklet processor: archivo .js servido directamente al browser
       // como módulo independiente (vía `?url` import de Vite). No participa
       // del proyecto TS, así que linting con type-info no aplica.

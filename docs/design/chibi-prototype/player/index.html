@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shiro chibi — banco de pruebas</title>
+    <style>
+      :root {
+        --bg: #0e1117;
+        --panel: #1b2233;
+        --text: #e9f7ff;
+        --muted: #7fbedd;
+        --accent: #cff1ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.4 'Segoe UI',
+          system-ui,
+          sans-serif;
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        min-height: 100vh;
+      }
+      #stage {
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        transition: background 0.2s;
+      }
+      canvas {
+        display: block;
+      }
+      aside {
+        background: var(--panel);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      fieldset {
+        border: 1px solid #2c3343;
+        border-radius: 6px;
+        padding: 10px;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+      legend {
+        color: var(--muted);
+        font-size: 12px;
+        padding: 0 4px;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      button,
+      select {
+        background: #10141f;
+        color: var(--text);
+        border: 1px solid #383e4d;
+        border-radius: 4px;
+        padding: 5px 9px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button[aria-pressed='true'] {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      input[type='range'] {
+        flex: 1;
+      }
+      #status {
+        font-variant-numeric: tabular-nums;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      @media (max-width: 760px) {
+        body {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="stage"><canvas id="view" width="420" height="808"></canvas></main>
+    <aside>
+      <h1>Shiro chibi — banco de pruebas</h1>
+      <p>
+        Prototipo. Ojos abiertos y cejas de reposo son del borrador; el resto de piezas de cara son
+        provisionales.
+      </p>
+
+      <fieldset>
+        <legend>Pose</legend>
+        <div class="row" id="models">
+          <button data-model="avatar.manifest.json">Silla (borrador)</button>
+          <button data-model="de-pie/avatar.manifest.json">De pie (Gemini)</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Expresión</legend>
+        <div class="row" id="expressions"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Boca</legend>
+        <label
+          >Apertura <input id="mouth" type="range" min="0" max="1" step="0.01" value="0"
+        /></label>
+        <div class="row">
+          <button id="talk-sim" aria-pressed="false">Hablar (simulado)</button>
+          <button id="talk-audio">Voz de prueba</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Vista</legend>
+        <label><input id="outline" type="checkbox" /> Contorno de luz</label>
+        <label
+          >Fondo
+          <select id="bg">
+            <option value="#0e1117">Oscuro (app)</option>
+            <option value="#000000">Negro (estación)</option>
+            <option value="#eceef2">Claro</option>
+            <option value="#787c84">Gris</option>
+          </select>
+        </label>
+        <label
+          >Alto
+          <select id="size">
+            <option value="808">808 px</option>
+            <option value="480">480 px</option>
+            <option value="280">280 px</option>
+            <option value="128">128 px</option>
+            <option value="64">64 px</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <div id="status">cargando…</div>
+      <audio id="voice" src="assets/voz-prueba.wav" preload="auto"></audio>
+    </aside>
+
+    <script type="module">
+      import { LayeredAvatar, computeMouthOpen } from './shiro-chibi.js';
+
+      const canvas = document.getElementById('view');
+      const ctx = canvas.getContext('2d');
+      const status = document.getElementById('status');
+      const stage = document.getElementById('stage');
+      const mouthSlider = document.getElementById('mouth');
+
+      // La pose se elige con ?model=...; cambiar de pose recarga la pagina.
+      const modelUrl = new URLSearchParams(location.search).get('model') ?? 'avatar.manifest.json';
+      for (const b of document.querySelectorAll('#models button')) {
+        b.setAttribute('aria-pressed', String(b.dataset.model === modelUrl));
+        b.onclick = () => {
+          location.search = `?model=${encodeURIComponent(b.dataset.model)}`;
+        };
+      }
+      const avatar = await LayeredAvatar.load(modelUrl);
+      window.__avatar = avatar; // para pruebas desde la consola
+
+      // ---- controles ----
+      const exprRow = document.getElementById('expressions');
+      for (const name of Object.keys(avatar.manifest.expressions)) {
+        const b = document.createElement('button');
+        b.textContent = name;
+        b.setAttribute('aria-pressed', String(name === 'idle'));
+        b.onclick = () => {
+          avatar.setExpression(name);
+          for (const other of exprRow.children)
+            other.setAttribute('aria-pressed', String(other === b));
+        };
+        exprRow.append(b);
+      }
+      document.getElementById('outline').onchange = (e) => avatar.setOutline(e.target.checked);
+      document.getElementById('bg').onchange = (e) => (stage.style.background = e.target.value);
+
+      function resize(height) {
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.round((height * avatar.width) / avatar.height);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+      }
+      document.getElementById('size').onchange = (e) => resize(Number(e.target.value));
+      resize(808);
+
+      // ---- boca: deslizador, habla simulada o audio real ----
+      let simulate = false;
+      const simButton = document.getElementById('talk-sim');
+      simButton.onclick = () => {
+        simulate = !simulate;
+        simButton.setAttribute('aria-pressed', String(simulate));
+      };
+
+      const voice = document.getElementById('voice');
+      let analyser = null;
+      let freq = null;
+      let smoothed = 0;
+      document.getElementById('talk-audio').onclick = async () => {
+        if (!analyser) {
+          const ac = new AudioContext();
+          const source = ac.createMediaElementSource(voice);
+          analyser = ac.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+          analyser.connect(ac.destination);
+          freq = new Uint8Array(analyser.frequencyBinCount);
+          await ac.resume();
+        }
+        voice.currentTime = 0;
+        try {
+          await voice.play();
+        } catch (err) {
+          status.textContent = `sin voz de prueba: ${err.message}`;
+        }
+      };
+
+      function mouthValue(now) {
+        if (analyser && !voice.paused) {
+          analyser.getByteFrequencyData(freq);
+          smoothed += (computeMouthOpen(freq) - smoothed) * 0.45;
+          return smoothed;
+        }
+        if (simulate) {
+          // Envolvente tipo silaba: dos senos de distinta frecuencia.
+          const s = Math.sin(now / 90) * 0.5 + 0.5;
+          const gate = Math.sin(now / 430) > -0.35 ? 1 : 0;
+          return s * gate * 0.9;
+        }
+        return Number(mouthSlider.value);
+      }
+
+      // ---- bucle ----
+      let last = performance.now();
+      let frames = 0;
+      let fpsClock = 0;
+      let fps = 0;
+      function frame(now) {
+        const dt = Math.min(100, now - last);
+        last = now;
+        avatar.setMouthOpen(mouthValue(now));
+        avatar.update(dt);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        avatar.draw(ctx, 0, 0, canvas.width, canvas.height);
+        frames += 1;
+        fpsClock += dt;
+        if (fpsClock >= 500) {
+          fps = Math.round((frames * 1000) / fpsClock);
+          frames = 0;
+          fpsClock = 0;
+          status.textContent = `${fps} fps · ${avatar.expression} · boca ${avatar.mouthOpen.toFixed(2)}`;
+        }
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    </script>
+  </body>
+</html>

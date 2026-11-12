@@ -106,3 +106,9 @@ __pycache__/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+# Prototipo de la chibi (ADR 0028): las capas e imágenes generadas son
+# recursos del modelo y no se commitean; solo el código y la geometría.
+docs/design/chibi-prototype/work/
+docs/design/chibi-prototype/player/**/assets/
+docs/design/chibi-prototype/player/**/avatar.manifest.json
+docs/design/chibi-prototype/player/**/hoja-de-contacto.png
