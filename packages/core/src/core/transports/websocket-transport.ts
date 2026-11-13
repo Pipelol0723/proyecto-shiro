@@ -106,7 +106,9 @@ export class WebSocketTransport implements IObservableTransport {
 
   private socket: WebSocketLike | null = null;
   private receiver: TransportReceiveHandler | undefined;
-  private state: TransportState = 'connecting';
+  // Con autoConnect:false aún no hay socket: arranca en 'closed' y connect()
+  // notifica 'connecting'. Con autoConnect (por defecto) el constructor conecta.
+  private state: TransportState = 'closed';
   private readonly stateListeners = new Set<TransportStateHandler>();
   private reconnectAttempts = 0;
   private reconnectHandle: unknown = null;
@@ -153,7 +155,9 @@ export class WebSocketTransport implements IObservableTransport {
 
   close(): Promise<void> {
     this.userClosed = true;
-    this.setState('closing');
+    // Si ya estaba cerrado (close() repetido o durante el backoff) no se
+    // pasa por 'closing': evita notificaciones espurias.
+    if (this.state !== 'closed') this.setState('closing');
     if (this.reconnectHandle !== null) {
       this.scheduler.clearTimeout(this.reconnectHandle);
       this.reconnectHandle = null;
@@ -193,6 +197,10 @@ export class WebSocketTransport implements IObservableTransport {
     if (this.state === next) return;
     this.state = next;
     for (const listener of [...this.stateListeners]) {
+      // Un listener anterior cambió el estado (reentrada): las notificaciones
+      // del cambio nuevo ya se enviaron anidadas; seguir con `next` dejaría a
+      // los demás con un estado desfasado.
+      if (this.state !== next) break;
       try {
         listener(next);
       } catch (err) {
