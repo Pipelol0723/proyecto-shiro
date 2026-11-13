@@ -101,4 +101,63 @@ describe('useSystemHealth', () => {
     unmount();
     expect(fake.healthHandlerCount()).toBe(0);
   });
+
+  describe('timeout', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('tras 8 s sin system:health deja de comprobar y marca timedOut', () => {
+      vi.useFakeTimers();
+      const fake = makeFakeBus();
+      const { result } = renderHook(() => useSystemHealth({ bus: fake.bus }));
+      expect(result.current.timedOut).toBe(false);
+      act(() => {
+        vi.advanceTimersByTime(7900);
+      });
+      expect(result.current.checking).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.checking).toBe(false);
+      expect(result.current.timedOut).toBe(true);
+    });
+
+    it('un reporte a tiempo cancela el timeout y deja timedOut en false', () => {
+      vi.useFakeTimers();
+      const fake = makeFakeBus();
+      const { result } = renderHook(() => useSystemHealth({ bus: fake.bus }));
+      act(() => {
+        fake.pushHealth(REPORT);
+      });
+      act(() => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(result.current.timedOut).toBe(false);
+      expect(result.current.report).toEqual(REPORT);
+    });
+
+    it('refresh reinicia el timeout', () => {
+      vi.useFakeTimers();
+      const fake = makeFakeBus();
+      const { result } = renderHook(() => useSystemHealth({ bus: fake.bus }));
+      act(() => {
+        vi.advanceTimersByTime(8100);
+      });
+      expect(result.current.timedOut).toBe(true);
+      act(() => {
+        result.current.refresh();
+      });
+      expect(result.current.checking).toBe(true);
+      expect(result.current.timedOut).toBe(false);
+      act(() => {
+        vi.advanceTimersByTime(7900);
+      });
+      expect(result.current.checking).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(result.current.timedOut).toBe(true);
+    });
+  });
 });

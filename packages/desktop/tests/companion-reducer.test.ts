@@ -317,3 +317,34 @@ describe('companionReducer', () => {
     });
   });
 });
+
+describe('companionReducer — conexión (P-07a)', () => {
+  it('CONNECTION_LOST resetea thinking, listening, speaking, sttLive y subtitle y conserva history', () => {
+    const busy: CompanionState = {
+      ...INITIAL_STATE,
+      thinking: true,
+      listening: true,
+      speaking: true,
+      sttLive: 'hola',
+      subtitle: 'respondiendo',
+      history: [{ role: 'user', text: 'hola', timestamp: '2026-11-13T00:00:00.000Z' }],
+    };
+    const next = companionReducer(busy, { type: 'CONNECTION_LOST' });
+    expect(next.thinking).toBe(false);
+    expect(next.listening).toBe(false);
+    expect(next.speaking).toBe(false);
+    expect(next.sttLive).toBe('');
+    expect(next.subtitle).toBe('');
+    expect(next.history).toEqual(busy.history);
+  });
+
+  it('LISTEN_END apaga listening y limpia sttLive sin tocar thinking', () => {
+    const next = companionReducer(
+      { ...INITIAL_STATE, listening: true, sttLive: 'a medias', thinking: true },
+      { type: 'LISTEN_END' },
+    );
+    expect(next.listening).toBe(false);
+    expect(next.sttLive).toBe('');
+    expect(next.thinking).toBe(true);
+  });
+});
