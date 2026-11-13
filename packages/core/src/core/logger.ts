@@ -120,9 +120,78 @@ function formatValue(v: unknown): string {
   return safeStringify(v);
 }
 
+/** Máximo de líneas del stack que se vuelcan al log. */
+const MAX_STACK_LINES = 10;
+/** Profundidad máxima de la cadena `cause` (y de `AggregateError.errors`). */
+const MAX_CAUSE_DEPTH = 3;
+/** Longitud máxima de las cadenas copiadas de un error (propiedades propias). */
+const MAX_PROP_LENGTH = 500;
+
+/**
+ * Convierte un Error en un objeto plano serializable: `{ name, message, stack,
+ * ...propias, cause?, errors? }`. `JSON.stringify` convierte cualquier Error
+ * en `{}` porque sus propiedades no son enumerables.
+ *
+ * - `stack` se recorta a `MAX_STACK_LINES` líneas.
+ * - `cause` y `errors` (AggregateError) recursan hasta `MAX_CAUSE_DEPTH`; `seen`
+ *   guarda la ruta actual para cortar ciclos con '[circular]'.
+ * - De las propiedades propias enumerables (`code`, `status`, `errno`…) solo se
+ *   copian las primitivas: un objeto (cabeceras, cuerpos) podría llevar secretos.
+ */
+function serializeError(err: Error, depth: number, seen: WeakSet<object>): unknown {
+  if (seen.has(err)) return '[circular]';
+  if (depth > MAX_CAUSE_DEPTH) return '[truncated]';
+  seen.add(err);
+  try {
+    const out: Record<string, unknown> = {
+      name: err.name,
+      message: err.message,
+    };
+    if (typeof err.stack === 'string') {
+      out.stack = err.stack.split('\n').slice(0, MAX_STACK_LINES).join('\n');
+    }
+    for (const [key, value] of Object.entries(err)) {
+      if (Object.hasOwn(out, key) || key === 'cause' || key === 'errors') continue;
+      if (typeof value === 'string') {
+        out[key] = clipString(value);
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
+        out[key] = value;
+      }
+    }
+    if (err.cause !== undefined) {
+      out.cause = summarizeNested(err.cause, depth + 1, seen);
+    }
+    if (err instanceof AggregateError) {
+      out.errors = (err.errors as unknown[]).map((e) => summarizeNested(e, depth + 1, seen));
+    }
+    return out;
+  } finally {
+    seen.delete(err);
+  }
+}
+
+/** Recorta una cadena a `MAX_PROP_LENGTH` caracteres. */
+function clipString(s: string): string {
+  return s.length > MAX_PROP_LENGTH ? `${s.slice(0, MAX_PROP_LENGTH)}…` : s;
+}
+
+/**
+ * Resume una `cause` o un elemento de `errors`: los Error se serializan; las
+ * primitivas y null pasan tal cual; cualquier objeto se sustituye por un
+ * marcador para no volcar cabeceras o cuerpos (y evitar ciclos fuera de Error).
+ */
+function summarizeNested(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+  if (value instanceof Error) return serializeError(value, depth, seen);
+  if (typeof value === 'string') return clipString(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) return value;
+  return '[object]';
+}
+
 function safeStringify(v: unknown): string {
   try {
-    return JSON.stringify(v);
+    return JSON.stringify(v, (_key, value: unknown) =>
+      value instanceof Error ? serializeError(value, 0, new WeakSet()) : value,
+    );
   } catch {
     return '[unserializable]';
   }
