@@ -5,6 +5,12 @@ Documento vivo. La **decisión** y su porqué están en
 vive el **cómo**: plan por fases, lista de materiales y guía óptica.
 
 > **Estado**: Fase 1 sin empezar. Nada comprado, nada implementado.
+> El transporte autenticado de la Fase 2
+> ([ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md)) también
+> está sin implementar. El [plan de mejora](plan-mejora-2026-11.md), pendiente
+> de aprobación, adelanta la parte local (bind a loopback, Origin y topes de
+> Whisper) a su Fase 1 y deja token, `clientId` y `OutputRouter` para su
+> Fase 5. Estado del hito en la tabla [Roadmap](../README.md#roadmap).
 
 ## Qué es
 
@@ -207,7 +213,7 @@ Fase 1.
 | Cámara              | 3    | 25-40 €      | Pi Camera Module 3 o webcam USB.                                          |
 | Altavoz + amp       | 3    | 20-60 €      |                                                                           |
 | Botón + interruptor | 3/5  | ~5 €         | PTT por GPIO y corte físico de micro.                                     |
-| Filamento           | 4    | 15-25 €      | Impresión gratuita en la universidad.                                     |
+| Filamento           | 4    | 15-25 €      | Si no hay impresora propia, se puede buscar impresión externa.            |
 
 **Fase 1: ~30 €. Fases 1-4 completas: ~250-400 €.**
 
@@ -222,15 +228,17 @@ Fase 1.
 - **Calor** de pantalla y Pi dentro de una caja cerrada y sin ventilador (el
   ventilador está descartado por ruido junto al micro). Ventilación pasiva por
   convección en el diseño de la Fase 4.
-- **La PC apagada deja la estación muerta.** Asumido en el ADR 0026. Si molesta
-  en uso real, se reabre la opción híbrida con fallback a la nube.
+- **No hay una PC siempre encendida.** Hoy todo el stack corre en un portátil
+  que se suspende y sale de casa, y la estación muere con él (asumido en el
+  ADR 0026). Antes de la Fase 3 hay que decidir el host. Si molesta en uso
+  real, se reabre la opción híbrida con fallback a la nube.
 
 ## Referencias
 
 - [ADR 0026](adr/0026-estacion-holografica-pepper-ghost-cliente-ligero.md) — la
   decisión y las alternativas descartadas.
 - [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) — auth del
-  bus y del STT (prerrequisito de la Fase 3).
+  bus y del STT (prerrequisito de la Fase 3; Accepted, sin implementar).
 - [ADR 0021](adr/0021-avatar-live2d-pixi-display-fallback-orbe.md) — avatar
   Live2D, que la estación reutiliza tal cual.
 - [`architecture.md`](architecture.md) — arquitectura general.

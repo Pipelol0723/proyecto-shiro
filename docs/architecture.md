@@ -3,24 +3,16 @@
 Documento vivo. Se actualiza cuando cambia algo estructural. Para el
 detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 
-> **Última actualización**: 2026-07-15 — hitos **Agentic tools** ✅ y
-> **Self-improvement** ✅ completos (sobre Setup, Core, Cliente desktop, LLM,
-> Memoria, STT, TTS, Avatar Live2D, Packaging Tauri). Shiro pasó de
-> interlocutora a **agente** (lee/escribe archivos y ejecuta comandos
-> allowlisted en un loop tool-use con modal de aprobación —
-> [ADR 0022](adr/0022-shiro-agentic-tools-fs-shell.md)) y de agente a
-> **contribuidora de su propio repo** (propone PRs desde un worktree aislado,
-> propose-only — [ADR 0023](adr/0023-shiro-self-improvement-propose-only.md)).
-> Antes, el hito **Packaging Tauri** empaquetó todo como binario Tauri 2.0
-> (Windows) con sidecar `core-host`, tray, auto-updater firmado y setup wizard
-> ([ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md)). Ver las secciones
-> [Tools agénticas](#tools-agénticas-loop-tool-use--aprobación) y
-> [Self-improvement](#self-improvement-worktree-aislado--propose-only) abajo.
+> **Última actualización**: 2026-11-12. El estado de los hitos y la hoja de
+> ruta viven solo en la tabla [Roadmap del README](../README.md#roadmap). Este
+> documento describe lo que hay construido (hitos 1 a 11); lo planificado
+> (estación holográfica, multi-cliente) se marca como tal.
 >
-> **Seguridad**: revisión transversal en
-> [`security-review-2026-07.md`](security-review-2026-07.md) +
-> [ADR 0025](adr/0025-modelo-de-confianza-local-y-superficie-de-red.md) (modelo
-> de confianza local, `Proposed`). Ver
+> **Seguridad**: hoy el bus, `/audio`, Whisper y Letta escuchan en todas las
+> interfaces, sin token ni Origin. La decisión vigente es
+> [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md), Accepted y
+> sin implementar. Estado de cada hallazgo en la tabla SEC-xx de
+> [`security-review-2026-07.md`](security-review-2026-07.md). Ver
 > [Seguridad y modelo de confianza](#seguridad-y-modelo-de-confianza).
 
 ## Visión a vista de pájaro
@@ -46,22 +38,29 @@ graph TB
 
         subgraph "packages/"
             Core["core<br>cerebro headless<br>@proyecto-shiro/core<br>✅ Core + LLM + Memoria + STT + TTS + Avatar + Tools"]
+            CoreHost["core-host<br>servidor Node: EventBus + módulos<br>@proyecto-shiro/core-host<br>✅ WebSocket :9876"]
             Desktop["desktop<br>cliente Vite+React (Tauri)<br>@proyecto-shiro/desktop<br>✅ orbe/Live2D + 5 pantallas + 3 temas + PTT + TTS + aprobación tools"]
             Mobile["mobile<br>cliente futuro<br>@proyecto-shiro/mobile"]
             Arduino["arduino-bridge<br>puente Serial<br>@proyecto-shiro/arduino-bridge"]
             IoT["iot-bridge<br>MQTT/Home Assistant<br>@proyecto-shiro/iot-bridge"]
+            Station["station<br>cliente de la estación holográfica<br>@proyecto-shiro/station (planificado)"]
         end
 
         Root --> Core
+        Root --> CoreHost
         Root --> Desktop
         Root -.-> Mobile
         Root -.-> Arduino
         Root -.-> IoT
+        Root -.-> Station
 
+        CoreHost --> Core
         Desktop --> Core
+        Desktop -.WebSocket.-> CoreHost
         Mobile -.-> Core
         Arduino -.-> Core
         IoT -.-> Core
+        Station -.-> Core
     end
 
     style Core fill:#4a9eff,stroke:#333,color:#fff
@@ -69,9 +68,10 @@ graph TB
     style Mobile stroke-dasharray: 5 5
     style Arduino stroke-dasharray: 5 5
     style IoT stroke-dasharray: 5 5
+    style Station stroke-dasharray: 5 5
 ```
 
-Las líneas punteadas son paquetes futuros. Los flujos van **del cliente
+Las líneas punteadas son paquetes futuros o planificados. Los flujos van **del cliente
 al core** (los clientes consumen el cerebro vía interfaces y eventos).
 
 ## Composición del core
@@ -172,7 +172,9 @@ packages/desktop/src/
 ├── main.tsx                     ← Entry: monta React + el BusProvider
 ├── App.tsx                      ← Switch de pantallas + CompanionProvider
 ├── bus-context.tsx              ← BusProvider (InProcess + WebSocket al core-host)
-├── companion-context.tsx        ← CompanionProvider: reducer del estado del chat
+├── use-bus.ts                   ← useBus / useBusEvent
+├── layout/                      ← Sidebar, Header y tipos de pantalla (SCREENS)
+├── state/                       ← companion-context, companion-reducer, useCompanionState
 ├── screens/
 │   ├── Conversation/            ← ConversationScreen + ChatPanel
 │   ├── Modules/                 ← UI sobre modules.config.yaml
@@ -190,6 +192,7 @@ packages/desktop/src/
 ├── audio/                       ← captura PTT (AudioWorklet) + useTtsPlayback
 ├── updater/                     ← useAppUpdater + UpdateBanner (auto-updater)
 ├── health/                      ← wizard de salud + useSecretsSave
+├── styles/
 └── themes/                      ← kawaii / cyber / editorial (CSS vars)
 ```
 
@@ -339,11 +342,11 @@ graph LR
 ```
 
 - **Cadena `TtsWithFallback`**: el pipeline ve un solo `ITTSModule`. Por dentro, intenta `ElevenLabsTTS` (primary); si lanza (sin internet, cuota, 401, 5xx), prueba `SystemTTS` (voz del SO). Solo cuando los dos fallan, el server emite `tts:audio-ended` directo para desbloquear al cliente.
-- **In-process en core-host**, no microservicio aparte. ElevenLabs es API REST trivial — encapsularlo en Docker es overkill. La asimetría con Whisper (que sí es microservicio) refleja la realidad: **cloud APIs in-process, motores locales pesados en microservicio**. Cuando llegue UTAU/voz sintética post-5080, ese SÍ será microservicio.
+- **In-process en core-host**, no microservicio aparte. ElevenLabs es API REST trivial — encapsularlo en Docker es overkill. La asimetría con Whisper (que sí es microservicio) refleja la realidad: **cloud APIs in-process, motores locales pesados en microservicio**. Si llega una voz sintética local (UTAU), cuando haya una GPU con más VRAM, esa sí será microservicio.
 - **Audio HTTP efímero**: el server cachea el buffer con un `audioId` único (TTL 60s) y expone `GET /audio/<audioId>.<ext>`. El bus solo lleva la URL (`tts:audio { url, audioId, mimeType }`) — bytes binarios no caben naturalmente en el wire-schema JSON, y servir por HTTP permite que solo los clientes que reproducen hagan el fetch.
 - **Reproducción en el cliente**: `useTtsPlayback(bus)` crea un `HTMLAudioElement`, hace `fetch(url)`, reproduce, y emite `tts:audio-ended` al `ended` (o al `error`). El **`speaking: true`** del reducer se mantiene hasta entonces.
 - **Cancelable mid-speech**: el cliente emite `tts:cancel { audioId }` cuando el usuario interrumpe (PTT o tipeo durante speaking). El server invalida el `audioId` en el cache (cualquier fetch posterior recibe 410). El cliente que estaba reproduciendo hace `audio.pause(); audio.src = ''`.
-- **Mute por cliente**: `useTtsPlayback` persiste la preferencia en `localStorage` (`shiro:tts:muted`). Cuando `muted=true`, el cliente sigue emitiendo `tts:audio-ended` (para desbloquear el reducer) pero no reproduce. Preparación para multi-device — la lógica de "elegir dispositivo activo" queda para ADR futuro cuando aparezca el segundo cliente.
+- **Mute por cliente**: `useTtsPlayback` persiste la preferencia en `localStorage` (`shiro:tts:muted`). Cuando `muted=true`, el cliente sigue emitiendo `tts:audio-ended` (para desbloquear el reducer) pero no reproduce. Hoy todos los clientes conectados reproducen `tts:audio` salvo los que tengan el mute; el enrutado al cliente de origen lo decide el `OutputRouter` de ADR 0026 §6, sin implementar.
 
 ### Mapeo emoción → `stability`
 
@@ -360,7 +363,7 @@ graph LR
 
 ## Packaging Tauri: binario, sidecar y updater
 
-El último hito del MVP (ver [ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md)) envuelve todo en un binario nativo que el usuario instala y abre con doble click. La pieza clave es que **el `core-host` no desaparece** al empaquetar: viaja como **sidecar** que el shell de Tauri lanza y mata.
+El hito de packaging (ver [ADR 0024](adr/0024-packaging-tauri-windows-sidecar.md)) envuelve todo en un binario nativo que el usuario instala y abre con doble click. La pieza clave es que **el `core-host` no desaparece** al empaquetar: viaja como **sidecar** que el shell de Tauri lanza y mata.
 
 ```mermaid
 graph TD
@@ -394,14 +397,14 @@ graph TD
     style Host fill:#f4b400,stroke:#333,color:#fff
 ```
 
-- **Solo Windows x64 en V1** (ADR 0024 §1): el equipo no tiene Mac (firma/notarización de Apple) y Linux queda sin testing. El código es OS-agnóstico; el _build oficial_ es Windows. Targets `.msi` + `.nsis`.
+- **Solo Windows x64 en V1** (ADR 0024 §1): no hay Mac para desarrollar (firma/notarización de Apple) y Linux queda sin testing. El código es OS-agnóstico; el _build oficial_ es Windows. Targets `.msi` + `.nsis`.
 - **Sidecar `core-host`** (§2): `@vercel/ncc` bundlea el JS a uno solo, `@yao-pkg/pkg` lo vuelve `.exe`, y el `better_sqlite3.node` se copia al lado (módulo nativo, cargado por `nativeBinding`). Tauri lo declara en `externalBin` y lo spawnea desde Rust en `setup` (no desde el webview, así no hace falta conceder `shell:allow-execute` en la ACL). Al salir de verdad (`RunEvent::Exit`) lo mata para no dejar el `:9876` huérfano.
   - **cwd = `app_local_data_dir`**: el config usa `db_path: ./data/memory.db` _relativo_; fijando el cwd a `%LOCALAPPDATA%\com.pipelol.proyecto-shiro`, el WAL (y con él el `agent_id` de Letta) cae siempre en el mismo sitio escribible. Sin esto, cada arranque resolvía un `memory.db` distinto y provisionaba un agente nuevo → la memoria no continuaba.
   - **Best-effort**: si faltan los recursos del sidecar (modo dev sin `build:sidecar`), Rust loguea y sigue — el dev corre el `core-host` a mano. Y si el `:9876` ya está ocupado, el sidecar que llega tarde se aparta con código 0 en vez de crashear.
 - **Setup wizard + healthcheck** (§6): el `core-host` chequea **server-side** Ollama/Letta/Whisper (evita CORS del webview) y la _presencia_ (nunca el valor) de las API keys, y emite `system:health`; el cliente lo renderiza. Las **keys se introducen desde la app** → el wizard emite `secrets:save` → el `core-host` escribe `secrets.env` (`mode 0600`) en su cwd; al arrancar, `loadSecretsEnv` las mete en `process.env` **sin pisar** un `.env` o env vars reales. Aplican en el siguiente arranque (los módulos LLM/TTS leen las keys al construirse).
-- **Auto-updater** (§4): `tauri-plugin-updater` consulta un `latest.json` firmado con **ed25519** servido por **GitHub Releases**; el cliente (`useAppUpdater`) chequea al montar y, si hay versión nueva, ofrece descargar+reiniciar (`tauri-plugin-process`). Un check fallido (404 sin release aún, sin red) resuelve en silencio — el banner de error queda solo para fallos de instalación. La clave privada vive únicamente como secret de CI (`TAURI_SIGNING_PRIVATE_KEY`); el workflow `release.yml` (disparado por tag `v*.*.*`) construye, firma y publica el release con sus artefactos.
+- **Auto-updater** (§4): `tauri-plugin-updater` consulta un `latest.json` firmado con **ed25519** servido por **GitHub Releases**; el cliente (`useAppUpdater`) chequea al montar y, si hay versión nueva, ofrece descargar+reiniciar (`tauri-plugin-process`). Un check fallido (404 sin release aún, sin red) resuelve en silencio — el banner de error queda solo para fallos de instalación. La clave privada vive únicamente como secret de CI (`TAURI_SIGNING_PRIVATE_KEY`); el workflow `release.yml` (disparado por tag `v*.*.*`) construye, firma y publica el release con sus artefactos. Hasta hoy nunca ha servido una actualización: el único release (v0.1.0) sigue en borrador.
 - **State del chat en el root**: el `CompanionProvider` monta el reducer del companion **una vez** por encima del switch de pantallas, así la conversación sobrevive a cambiar de pantalla y la suscripción a `memory:snapshot` está siempre viva para rehidratar al reconectar/recargar.
-- **Diferido a post-MVP**: el **modo overlay** (ventana flotante always-on-top transparente estilo VTuber, §3) y los iconos de branding definitivos.
+- **Aplazado**: el **modo overlay** (ventana flotante always-on-top transparente estilo VTuber, §3), por decisión del dueño, y los iconos de branding definitivos.
 
 ## Avatar Live2D: render en cliente + lip-sync
 
@@ -437,6 +440,7 @@ graph LR
 - **Lip-sync** (ADR 0021 §5): `useTtsPlayback` expone el `HTMLAudioElement` (con `crossOrigin="anonymous"`); `useLipSync` lo conecta a un `AnalyserNode` y mapea la amplitud RMS a `ParamMouthOpenY` cada frame vía un callback `setMouthOpen` que `Live2DCanvas` implementa sobre el modelo. Cero coste de red, sincronización exacta. En mute no hay análisis (boca cerrada).
 - **Idle off por default**: las motions idle de Hiyori tocan `ParamMouthOpenY` y compiten con el lip-sync. `autoUpdate` es siempre `true` (para aplicar el parámetro al mesh) y la idle se desactiva apuntando `idleMotionGroup` a un grupo inexistente. El modelo igual respira y parpadea.
 - **Expresiones por emoción** ✅: la cara interpola parámetros faciales Cubism (`ParamMouthForm`, cejas, mejillas, ojos sonrientes) hacia la emoción de `llm:responded` (`useAvatarExpression` + `expression-map.ts`). Hiyori no trae `.exp3.json`, así que se usan parámetros directos; el seam para `model.expression()` con un modelo que sí los traiga queda listo. La _precisión_ de la emoción la pone el LLM (Qwen 3b clasifica mal; Claude/un modelo mayor mejor) — el avatar refleja fielmente la que recibe.
+- **Formato definitivo**: [ADR 0028](adr/0028-avatar-motores-y-manifiesto.md) decide motores intercambiables con manifiesto por modelo y un motor de capas (chibi). Accepted y sin implementar; la integración en el cliente está aplazada. Prototipo en [`design/chibi-prototype/`](design/chibi-prototype/README.md).
 
 ## STT: microservicio Whisper + push-to-talk
 
@@ -618,7 +622,10 @@ código):
    reintenta la generación (máx `max_fix_iterations`).
 4. **PR** — si el eval está verde: commit + push a `shiro/<topic>` + segundo
    modal de aprobación (con el `git diff`) → `gh:pr-create` (allowlist
-   **hardcodeado** a `gh pr create` — no puede mergear ni hacer releases).
+   **hardcodeado** a `gh pr create` — no puede mergear ni hacer releases)
+   (hoy el push ocurre antes del modal y el modal solo muestra
+   `git diff --stat`, que omite los archivos nuevos: ver SEC-14 en la tabla de
+   seguridad).
 5. **cleanup** — quita el worktree (solo en éxito; en fallo lo deja para
    inspección — el `remove` en Windows borra el dir con `fs.rm` junction-safe,
    porque `git worktree remove` deja el `node_modules` enlazado).
@@ -633,9 +640,11 @@ de self-dev (`self-dev`, `PR`, `pull request`).
 reusan el `ToolApprovalModal` del hito Agentic. Al terminar, Shiro lo anuncia
 por voz (`llm:responded` + TTS).
 
-**Diferido** (Fase 2): persistencia de la sesión en Letta (qué propuso y por
-qué), una tool de edición por parche (hoy reescribe el archivo entero) y
-orquestación multi-agente (planear/ejecutar/revisar con modelos distintos).
+**Memoria**: el resultado de cada sesión se guarda como turno `role:'tool'` y
+el anuncio como turno del asistente (`selfdev-memory.ts`, PR #94). **Sin
+implementar**: retomar una sesión (qué propuso y por qué), una tool de edición
+por parche (hoy reescribe el archivo entero) y orquestación multi-agente; ver
+la tabla [Roadmap](../README.md#roadmap).
 
 ## Seguridad y modelo de confianza
 
@@ -651,17 +660,20 @@ esencial:
   inmutables hardcodeada** y `gh` acotado a `gh pr create` en self-dev;
   `ApprovalGate` con timeout para las tools `confirm`; cota de vueltas del
   tool-loop; CSP sin `unsafe-eval` y chat que renderiza texto plano.
-- **Fronteras abiertas por el modelo local** (deuda si Shiro sale a red): el
-  WebSocket `/bus` y el HTTP de audio del `core-host`, y el WS `/stt` de
-  Whisper, escuchan sin autenticación (y hoy en `0.0.0.0`). El
-  [ADR 0025](adr/0025-modelo-de-confianza-local-y-superficie-de-red.md)
-  (`Proposed`) formaliza esta postura, propone cerrar la superficie a
-  `localhost` + validar `Origin`, y fija el **trigger de reversión**: al
-  añadir el primer cliente que no sea el desktop local, se introduce
-  autenticación por token en el bus y el STT.
+- **Fronteras abiertas** (deuda): el WebSocket `/bus` y el HTTP de audio del
+  `core-host`, el WS `/stt` de Whisper y Letta escuchan en todas las
+  interfaces, sin autenticación ni comprobación de `Origin`, y el bus entrega
+  el historial (`memory:snapshot`) al conectar.
+  [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted,
+  **sin implementar**) decide token compartido en el handshake,
+  `SHIRO_BIND_HOST` con default `127.0.0.1`, allowlist de `Origin` y
+  aprobaciones ligadas al cliente; sustituyó al
+  [ADR 0025](adr/0025-modelo-de-confianza-local-y-superficie-de-red.md), que
+  nunca se implementó.
 
 Cualquier cambio en las fronteras de confianza (auth, bind, permisos de tools,
-ACL de Tauri) debe pasar por —o superseder— el ADR 0025.
+ACL de Tauri) debe cumplir —o superseder— el ADR 0027 y actualizar su fila en
+la tabla SEC-xx de [`security-review-2026-07.md`](security-review-2026-07.md).
 
 ## Evolución de transportes
 
@@ -708,6 +720,16 @@ cuando se añade un transporte nuevo. Solo se inyecta el transport
 adicional al EventBus en el arranque. Ver
 [ADR 0003](adr/0003-transport-abstraction-device-registry.md).
 
+### Multi-cliente (planificado)
+
+Con un segundo cliente (la [estación holográfica](estacion-holografica.md),
+[ADR 0026](adr/0026-estacion-holografica-pepper-ghost-cliente-ligero.md)) el
+bus necesita `clientId` de origen, destino explícito por modalidad resuelto por
+un `OutputRouter` (ADR 0026 §6) y el token de
+[ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md). Nada de esto
+está implementado: hoy `emit()` hace broadcast a todos los clientes. El plan de
+mejora lo programa en su Fase 5.
+
 ## Configuración
 
 Dos archivos YAML en `config/`:
@@ -749,8 +771,9 @@ CSS vars del tema activo. Ver
    Si no encaja, considera si necesitas una nueva interfaz (escribe un ADR).
 2. Crea la clase en `packages/core/src/modules/<categoría>/MiModulo.ts`.
 3. Implementa los métodos de la interfaz. Comunica vía EventBus.
-4. Registra el módulo en `config/modules.config.yaml` (campo `active`
-   del slot correspondiente) y en `ModuleLoader` (registry).
+4. Registra su factory con `loader.register('<Nombre>', …)` en
+   `packages/core-host/src/bootstrap.ts` y actívalo en
+   `config/modules.config.yaml` (campo `active` del slot).
 5. Añade tests en `packages/core/tests/unit/` y opcionalmente
    integración en `packages/core/tests/integration/`.
 
@@ -758,17 +781,30 @@ Tiempo objetivo: menos de 2 horas para un módulo simple.
 
 ## Cómo añadir una pantalla nueva al cliente
 
-1. Crea `packages/desktop/src/screens/MiScreen.tsx`.
+1. Crea `packages/desktop/src/screens/MiScreen/` con `MiScreen.tsx` e
+   `index.ts`.
 2. Suscríbete a eventos del bus con `useBusEvent` y/o lee state del
    reducer con `useCompanionState`.
 3. Si necesitas state UI local, usa `useState` en el propio componente.
-4. Añade entrada en el sidebar (`packages/desktop/src/components/Sidebar`).
+4. Añade su `ScreenId` y su entrada en `SCREENS`
+   (`packages/desktop/src/layout/types.ts`), su icono en
+   `packages/desktop/src/layout/Sidebar.tsx` y su render en `App.tsx`.
 5. Tests con Vitest + React Testing Library en
    `packages/desktop/tests/`.
 
 ## Referencias internas
 
 - [`adr/`](adr/) — historial completo de decisiones arquitectónicas.
+- Tabla [Roadmap del README](../README.md#roadmap) — estado de los hitos y
+  hoja de ruta (fuente única).
+- [`estacion-holografica.md`](estacion-holografica.md) — plan del hito 12
+  (planificado, sin empezar).
+- [`security-review-2026-07.md`](security-review-2026-07.md) — revisión de
+  seguridad con la tabla viva SEC-xx.
+- [`plan-mejora-2026-11.md`](plan-mejora-2026-11.md) — plan de mejora
+  (propuesta pendiente de aprobación ítem a ítem).
+- [`revision-estado-2026-11.md`](revision-estado-2026-11.md) — revisión del
+  estado que sostiene el plan.
 - [`design-mockup/`](design-mockup/) — bundle del prototipo de Claude
   Design (referencia visual, no código de producción).
 - [`../plan-modular-ai-companion.md`](../plan-modular-ai-companion.md) —

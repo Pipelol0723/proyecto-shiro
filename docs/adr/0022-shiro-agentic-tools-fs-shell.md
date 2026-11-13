@@ -201,3 +201,9 @@ Sin fechas. Status `Proposed`. La implementación entera depende de que el hito 
 - [ADR 0023](0023-shiro-self-improvement-propose-only.md) — self-improvement. **Depende de este ADR** (reusa `shell:exec` + `fs:*` + `gh` allowlisted).
 - [Anthropic — Tool use](https://docs.anthropic.com/claude/docs/tool-use) — referencia del formato `tool_use` / `tool_result`.
 - [Tauri 2.0 — Capabilities](https://tauri.app/v2/security/capabilities/) — permisos runtime-configurables.
+
+## Nota 2026-11-12
+
+- «Status `Proposed`» en las Notas de implementación es un resto del borrador: vale la cabecera (Accepted, implementado en el hito Agentic tools).
+- Errata conocida (revisión 2026-11): el allowlist de shell valida los args unidos por espacio y sin anclar al final, y con el patrón por defecto ya permite `git diff --no-index` y `--output` (SEC-05); el modal muestra los args truncados a 200 caracteres (BUG-02); el `ApprovalGate` acepta la aprobación de cualquier cliente (SEC-16). Enmiendas planificadas, sin implementar: P-26a y P-27 del plan de mejora.
+- La RTX 5080 del Contexto no existe: un modelo local con tool-use fiable queda para cuando haya una GPU con más VRAM.

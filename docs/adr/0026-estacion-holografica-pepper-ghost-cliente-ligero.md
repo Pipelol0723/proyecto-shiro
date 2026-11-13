@@ -1,6 +1,6 @@
 # ADR 0026: Estación holográfica — pepper's ghost de lámina única y cliente ligero
 
-- **Status**: Accepted
+- **Status**: Accepted (sin implementar)
 - **Fecha**: 2026-08-18
 - **Decidido por**: Pipelol
 
@@ -244,3 +244,9 @@ claramente inferior, pero queda como opción de configuración.
   confianza previo; este hito dispara su trigger.
 - [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md) — autenticación
   del bus y del STT.
+
+## Nota 2026-11-12
+
+- Hito planificado, sin empezar.
+- No existe una PC siempre encendida: hoy todo el stack corre en un portátil que se suspende y sale de casa. Elegir el host es un riesgo abierto antes de la Fase 3 (ver [`estacion-holografica.md`](../estacion-holografica.md)).
+- Prerrequisitos sin implementar: [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md) y el `OutputRouter` de §6. El plan de mejora los programa en su Fase 5 (P-37 a P-41b), pendiente de aprobación.

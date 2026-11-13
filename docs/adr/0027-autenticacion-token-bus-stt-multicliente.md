@@ -1,6 +1,6 @@
 # ADR 0027: Autenticación por token compartido en el bus y el STT
 
-- **Status**: Accepted
+- **Status**: Accepted (sin implementar)
 - **Fecha**: 2026-08-18
 - **Decidido por**: Pipelol
 - **Supersede a**: [ADR 0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)
@@ -168,3 +168,10 @@ cualquiera de estas:
   wizard.
 - [`docs/security-review-2026-07.md`](../security-review-2026-07.md) — hallazgos
   SEC-01, SEC-02, SEC-08, SEC-09.
+
+## Nota 2026-11-12
+
+- Accepted y **sin implementar**. Hoy el bus y `/audio` (`listen(options.port)` sin host), Whisper (`0.0.0.0` en el `CMD` del Dockerfile) y Letta (`8283:8283` en compose) escuchan en todas las interfaces, sin token ni Origin; no existen `SHIRO_BIND_HOST` ni `SHIRO_BUS_TOKEN`.
+- Errata conocida, que se corrige en la enmienda que viaja con el código (P-05 del plan de mejora): §4, en Tauri 2 sobre Windows el origen del webview es `http://tauri.localhost` (a confirmar con el binario), no `tauri://localhost`; en las Notas, el `ApprovalGate` está en `packages/core-host/src/pipeline/approval-gate.ts`, no en `.../tools/approval-gate.ts`; §1, `secrets.env` solo gestiona `MANAGED_KEYS` (las dos API keys, en `packages/core-host/src/secrets/secrets-file.ts`), así que guardar ahí el token exige ampliar esa lista sin que `secrets:save` lo acepte desde el bus; §6, `WHISPER_HOST` no tiene efecto en Docker: el cierre allí es publicar `127.0.0.1:8765:8765` en compose.
+- No define cómo recibe el token un cliente o servicio en otra máquina que no sea la estación: lo cubrirá la enmienda para remotos (P-38/P-40).
+- Secuencia propuesta por el plan, pendiente de aprobación: la parte local (bind, Origin, topes de Whisper, `approved` estrictamente booleano) en su Fase 1; token, `clientId` y aprobaciones por cliente en su Fase 5.

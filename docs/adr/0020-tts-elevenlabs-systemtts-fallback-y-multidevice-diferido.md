@@ -227,3 +227,9 @@ Sustituir el bloque actual del slot `tts` por la versión post-decisión (quitar
 - [ADR 0019](0019-stt-faster-whisper-microservicio-python.md) — patrón "microservicio aparte" del STT (que aquí NO seguimos para ElevenLabs, pero SÍ seguiremos para UTAU post-5080).
 - ElevenLabs Voice Design: https://elevenlabs.io/voice-lab
 - `default.yaml` del personaje Shiro: [packages/core/src/character/characters/default.yaml](../../packages/core/src/character/characters/default.yaml)
+
+## Nota 2026-11-12
+
+- §7: el diferido de multi-device lo resuelve [ADR 0026 §6](0026-estacion-holografica-pepper-ghost-cliente-ligero.md) (`OutputRouter`, destino = cliente de origen), sin implementar. Hoy todos los clientes reproducen `tts:audio` salvo los que tengan el mute; no existe la lógica de «primer cliente con audio».
+- La RTX 5080 que el ADR esperaba no existe: «post-5080» significa «cuando haya una GPU con más VRAM».
+- Enmienda planificada, sin implementar: URL de audio relativa al origen del cliente y CORS acotado (P-14 del plan de mejora).

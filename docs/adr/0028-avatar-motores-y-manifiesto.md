@@ -1,6 +1,6 @@
 # ADR 0028: Avatar — motores intercambiables, manifiesto por modelo y motor de capas
 
-- **Status**: Accepted
+- **Status**: Accepted (sin implementar; integración en el cliente aplazada por el dueño)
 - **Fecha**: 2026-11-12
 - **Decidido por**: Pipelol
 
@@ -182,3 +182,9 @@ Las capas de la chibi salen del borrador original del personaje y van en
 - Revisión independiente con Gemini 3.8 Flash (2026-11-12): de ahí salen el
   tiempo límite de las comprobaciones, el rango de `setLookAt` y la
   aclaración sobre quién parpadea.
+
+## Nota 2026-11-12
+
+- Accepted y **sin implementar**. Su integración en el cliente está aplazada
+  por el dueño, sin fecha. Prototipo en
+  [`docs/design/chibi-prototype/`](../design/chibi-prototype/README.md).
