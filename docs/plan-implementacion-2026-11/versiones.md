@@ -247,6 +247,7 @@ Va dentro del PR de P-06a (`chore: compose en loopback y Letta fijada`), que sol
 
 - `docker-compose.yml:26`: `letta/letta:latest` → `letta/letta:<tag>@sha256:<digest>`. **No se hace `pull`**: el agente obtiene el digest de la imagen que ya tiene y funciona (`docker image inspect letta/letta:latest --format '{{index .RepoDigests 0}}'`) y se anota con la fecha. Última release en GitHub: v0.16.8 (la página no muestra el año); la v0.16.7 dejó de imponer límites de bloque y la v0.16.6 cambió defaults (contexto 32k → 128k, bloque 20k → 100k caracteres). Por eso no se sube de versión en este lote: fijar lo que funciona y subir después en un PR propio con backup previo (P-11a).
 - La base CUDA (`services/whisper/Dockerfile:9`, misma etiqueta + `@sha256:`) **va en P-06b**, que reescribe ese Dockerfile; el agente saca el digest en el paso 4 de P-06b. No se cambia la versión de CUDA: la GTX 1650 (Turing) con int8 funciona hoy.
+- **Estado (2026-11-13).** Base CUDA fijada en el PR #136 con el digest de la imagen con la que se construyó la que ya funcionaba; la imagen reconstruida arranca con GPU.
 - Reversión: quitar el digest. Riesgo de datos: ninguno mientras no cambie la versión de Letta (el volumen `letta_pgdata` no se toca).
 - **Estado (2026-11-13).** Hecho en el PR #134: `letta/letta@sha256:…`, solo digest y sin etiqueta, porque la imagen local solo tenía `latest`; es Letta 0.16.8.
 

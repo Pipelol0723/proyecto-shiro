@@ -46,7 +46,7 @@ def test_defaults_when_no_env() -> None:
     assert cfg.device == "auto"
     assert cfg.compute_type == "auto"
     assert cfg.language == "es"
-    assert cfg.host == "0.0.0.0"
+    assert cfg.host == "127.0.0.1"
     assert cfg.port == 8765
     assert cfg.partial_interval_ms == 1500
     assert cfg.sample_rate == 16000
@@ -83,3 +83,22 @@ def test_invalid_int_falls_back_to_default() -> None:
         cfg = Config.from_env()
     assert cfg.port == 8765  # vuelve al default
     assert cfg.partial_interval_ms == 1500
+
+
+def test_non_positive_limits_fall_back_to_default() -> None:
+    with env(
+        WHISPER_IDLE_TIMEOUT_S="0",
+        WHISPER_MAX_AUDIO_SECONDS="-5",
+        WHISPER_SAMPLE_RATE="0",
+    ):
+        cfg = Config.from_env()
+    assert cfg.idle_timeout_s == 15
+    assert cfg.max_audio_seconds == 90
+    assert cfg.sample_rate == 16000
+    assert cfg.max_audio_bytes > 0
+
+
+def test_allowed_origins_are_normalized() -> None:
+    with env(WHISPER_ALLOWED_ORIGINS="HTTP://Localhost:5173/, http://tauri.localhost/"):
+        cfg = Config.from_env()
+    assert cfg.allowed_origins == ("http://localhost:5173", "http://tauri.localhost")

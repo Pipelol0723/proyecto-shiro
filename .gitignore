@@ -96,6 +96,7 @@ data/
 # Python caches del microservicio Whisper. Lo importamos puntualmente
 # desde checks locales y deja bytecode; nunca debe entrar al repo.
 __pycache__/
+.pytest_cache/
 *.pyc
 
 # design-sync (claude.ai/design): scripts staged + output del conversor +

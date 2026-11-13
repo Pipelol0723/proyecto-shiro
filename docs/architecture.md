@@ -9,9 +9,9 @@ detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 > (estación holográfica, multi-cliente) se marca como tal.
 >
 > **Seguridad**: el bus y `/audio` escuchan solo en `127.0.0.1` y validan el
-> `Origin`, y compose publica Letta y Whisper solo en `127.0.0.1`; todo sigue
-> sin token, y Whisper sin topes ni validación de `Origin`. La decisión vigente
-> es [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md), Accepted
+> `Origin`, compose publica Letta y Whisper solo en `127.0.0.1`, y Whisper
+> tiene topes de audio y valida el `Origin`; todo sigue sin token. La decisión
+> vigente es [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md), Accepted
 > y en curso. Estado de cada hallazgo en la tabla SEC-xx de
 > [`security-review-2026-07.md`](security-review-2026-07.md). Ver
 > [Seguridad y modelo de confianza](#seguridad-y-modelo-de-confianza).
@@ -665,8 +665,9 @@ esencial:
   `core-host` escuchan solo en `127.0.0.1` salvo `SHIRO_BIND_HOST` y rechazan
   un `Origin` ajeno, pero sin autenticación: un proceso local todavía se
   conecta y recibe el historial (`memory:snapshot`). Compose publica Letta y
-  Whisper solo en `127.0.0.1` salvo `LETTA_BIND` y `WHISPER_BIND`, pero el WS
-  `/stt` de Whisper sigue sin autenticación, sin topes y sin validar `Origin`.
+  Whisper solo en `127.0.0.1` salvo `LETTA_BIND` y `WHISPER_BIND`, y el WS
+  `/stt` de Whisper corta por tope de audio y por inactividad y rechaza un
+  `Origin` ajeno, pero sigue sin autenticación.
   [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted,
   **en curso**: ver su enmienda del 2026-11-13) decide token compartido en el handshake,
   `SHIRO_BIND_HOST` con default `127.0.0.1`, allowlist de `Origin` y
