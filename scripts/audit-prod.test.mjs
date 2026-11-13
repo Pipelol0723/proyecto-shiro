@@ -11,7 +11,7 @@ import { evaluateAudit } from './audit-prod.mjs';
 
 /** @param {string} name */
 const fixture = (name) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
-const SCRIPT = fileURLToPath(new URL('./audit-prod.mjs', import.meta.url));
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const TODAY = '2026-11-13';
 const ZOD_ADVISORY = 'GHSA-mrhx-c7xc-m3w5';
 
@@ -28,8 +28,13 @@ const exception = (over = {}) => ({
   item: 'P-99',
   ...over,
 });
-/** @param {string[]} args */
-const cli = (...args) => spawnSync(process.execPath, [SCRIPT, ...args], { encoding: 'utf8' });
+/** La CLI tal como la llama el CI: ruta relativa desde la raíz, con excepciones vacías. */
+const cli = (/** @type {string[]} */ ...args) =>
+  spawnSync(
+    process.execPath,
+    ['scripts/audit-prod.mjs', '--exceptions', fixture('excepciones-vacias.json'), ...args],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
 
 test('pasa con un informe sin vulnerabilidades', () => {
   assert.deepEqual(evaluateAudit(report(), [], TODAY), { ok: true, failures: [], expired: [] });
@@ -55,6 +60,16 @@ test('ignora moderate y low', () => {
   const low = report('qs');
   low.vulnerabilities.qs.severity = 'low';
   assert.equal(evaluateAudit(low, [], TODAY).ok, true);
+});
+
+test('bloquea aunque la severidad venga en mayúsculas o solo en el aviso', () => {
+  const upper = report('zod');
+  upper.vulnerabilities.zod.severity = 'HIGH';
+  assert.equal(evaluateAudit(upper, [], TODAY).ok, false);
+  const onlyInAdvisory = report('zod');
+  onlyInAdvisory.vulnerabilities.zod.severity = 'moderate';
+  onlyInAdvisory.vulnerabilities.zod.via[0].severity = 'critical';
+  assert.equal(evaluateAudit(onlyInAdvisory, [], TODAY).failures[0].severity, 'critical');
 });
 
 test('una excepción vigente tapa su paquete y solo el suyo', () => {
@@ -89,26 +104,73 @@ test('una excepción con advisory solo tapa ese aviso', () => {
   assert.equal(evaluateAudit(report('zod'), otherAdvisory, TODAY).ok, false);
 });
 
-test('rechaza un informe sin vulnerabilities y una excepción mal escrita', () => {
+test('con dos avisos bloqueantes hay que tapar los dos', () => {
+  const two = report('zod');
+  const second = {
+    ...two.vulnerabilities.zod.via[0],
+    url: 'https://github.com/advisories/GHSA-otro',
+  };
+  two.vulnerabilities.zod.via.push(second);
+  const one = [exception({ advisory: ZOD_ADVISORY })];
+  assert.equal(evaluateAudit(two, one, TODAY).ok, false);
+  const both = [...one, exception({ advisory: 'GHSA-otro' })];
+  assert.equal(evaluateAudit(two, both, TODAY).ok, true);
+});
+
+test('un aviso heredado de otro paquete bloquea y solo se tapa por paquete', () => {
+  const inherited = report();
+  inherited.vulnerabilities.padre = { name: 'padre', severity: 'high', via: ['zod'] };
+  assert.equal(
+    evaluateAudit(inherited, [exception()], TODAY).ok,
+    false,
+    'tapar zod no tapa a padre',
+  );
+  const byAdvisory = [exception({ package: 'padre', advisory: ZOD_ADVISORY })];
+  assert.equal(evaluateAudit(inherited, byAdvisory, TODAY).ok, false);
+  assert.equal(evaluateAudit(inherited, [exception({ package: 'padre' })], TODAY).ok, true);
+});
+
+test('rechaza un informe sin vulnerabilities', () => {
   assert.throws(
     () => evaluateAudit({ error: { code: 'ENOTFOUND' } }, [], TODAY),
     /vulnerabilities/,
   );
-  assert.throws(() => evaluateAudit(report(), [{ package: 'zod' }], TODAY), /mal escrita/);
-  assert.throws(
-    () => evaluateAudit(report(), [exception({ expires: 'pronto' })], TODAY),
-    /mal escrita/,
-  );
+  assert.throws(() => evaluateAudit(null, [], TODAY), /vulnerabilities/);
 });
 
-test('la CLI devuelve código 2 si la salida no es JSON', () => {
-  const result = cli('--input', fixture('audit-no-json.txt'));
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /no se pudo evaluar/);
+test('rechaza una excepción mal escrita', () => {
+  /** @param {object} bad */
+  const rejects = (bad, pattern = /mal escrita/) =>
+    assert.throws(() => evaluateAudit(report(), [bad], TODAY), pattern);
+  rejects({ package: 'zod' });
+  rejects(exception({ expires: 'pronto' }));
+  rejects(exception({ expires: '2026-02-30' }), /fecha AAAA-MM-DD que exista/);
+  rejects(exception({ expires: '9999-12-31' }), /pasa de 180 días/);
+  // Una errata en `advisory` la convertiría en excepción de paquete entero.
+  rejects(exception({ advisorie: ZOD_ADVISORY }), /clave desconocida: advisorie/);
+});
+
+test('la CLI devuelve código 0 con un informe limpio', () => {
+  const result = cli('--input', fixture('audit-limpio.json'));
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /sin avisos high ni critical/);
 });
 
 test('la CLI devuelve código 1 y nombra el paquete cuando hay un aviso high', () => {
   const result = cli('--input', fixture('audit-antes-p04.json'));
   assert.equal(result.status, 1);
   assert.match(result.stdout, /high\s+zod\s+GHSA-mrhx-c7xc-m3w5/);
+});
+
+test('la CLI devuelve código 2 si no puede evaluar', () => {
+  /** @param {string[]} args */
+  const fails = (...args) => {
+    const result = cli(...args);
+    assert.equal(result.status, 2, args.join(' '));
+    assert.match(result.stderr, /no se pudo evaluar/);
+  };
+  fails('--input', fixture('audit-no-json.txt')); // salida que no es JSON
+  fails('--input', fixture('audit-error-npm.json')); // error de npm en JSON, sin «vulnerabilities»
+  fails('--input'); // opción sin valor: no debe lanzar el audit real
+  fails('--imput', fixture('audit-limpio.json')); // opción desconocida
 });
