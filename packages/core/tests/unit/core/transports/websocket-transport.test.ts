@@ -308,7 +308,56 @@ describe('WebSocketTransport.onStateChange', () => {
     return { t, fake, ws: MockWebSocket.instances[0]! };
   }
 
-  it('onStateChange notifica connecting → open al abrir', () => {
+  it('con autoConnect:false arranca en closed y connect() notifica connecting → open', () => {
+    const t = new WebSocketTransport({
+      url: 'ws://x',
+      logger: makeLogger(),
+      webSocketCtor: MockWebSocket,
+      autoConnect: false,
+    });
+    expect(t.getState()).toBe('closed');
+    const seen: string[] = [];
+    t.onStateChange((s) => seen.push(s));
+    t.connect();
+    MockWebSocket.instances[0]!.simulateOpen();
+    expect(seen).toEqual(['connecting', 'open']);
+  });
+
+  it('un close() repetido es idempotente y no vuelve a notificar', () => {
+    const { t, ws } = make(true);
+    ws.simulateOpen();
+    void t.close();
+    const seen: string[] = [];
+    t.onStateChange((s) => seen.push(s));
+    void t.close();
+    expect(seen).toEqual([]);
+  });
+
+  it('close() durante el backoff no notifica nada (ya estaba en closed)', () => {
+    const { t, ws } = make(true);
+    ws.simulateOpen();
+    ws.simulateUnexpectedClose();
+    const seen: string[] = [];
+    t.onStateChange((s) => seen.push(s));
+    void t.close();
+    expect(seen).toEqual([]);
+    expect(t.getState()).toBe('closed');
+  });
+
+  it('un listener que cierra el transport al recibir open no deja a otros con un estado falso', () => {
+    const { t, ws } = make();
+    const seenByB: string[] = [];
+    t.onStateChange((s) => {
+      if (s === 'open') void t.close();
+    });
+    t.onStateChange((s) => seenByB.push(s));
+    ws.simulateOpen();
+    expect(t.getState()).toBe('closed');
+    expect(seenByB.at(-1)).toBe('closed');
+    expect(seenByB).not.toContain('open');
+  });
+
+  it('onStateChange notifica open cuando el socket abre', () => {
     const { t, ws } = make();
     const seen: string[] = [];
     t.onStateChange((s) => seen.push(s));
