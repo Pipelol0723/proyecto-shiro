@@ -358,6 +358,7 @@ PR1 no lleva test nuevo: su verificación es que los tests de `wire-schema` y de
 
 ### 3.8 P-05 — Bus y `/audio` en loopback con Origin validado (incluye enmienda ADR 0027)
 
+- **Estado (2026-11-13).** PR 1 (bind y enmienda del ADR 0027) en el PR #116. Queda el PR 2 (`Origin` y `approved` estricto), con la prueba del binario compilado. Medido en Windows: un cliente que usa `localhost` conecta en 2 ms aunque el servidor solo escuche en `127.0.0.1`, así que el riesgo de `localhost` → `::1` no se nota.
 - **Objetivo.** El core-host escucha solo en `127.0.0.1` salvo `SHIRO_BIND_HOST`. Rechaza `Origin` ajenos en el WebSocket y en `/audio`, y el gate de aprobación solo acepta `approved === true`. Es la secuencia 2a del ADR 0027.
 - **Qué cierra.** L-SEG-01, L-PROD-01 y L-DOC-01 (la parte del ADR). Hallazgos R-002, R-003 (parte 2a), R-004 (parte de bind y Origin; token en P-40), R-277, R-153, R-250, R-251 y R-271 (en el ADR). Adelanta `approved === true` de L-SEG-14.
 - **PRs.** 2.

@@ -651,11 +651,13 @@ nunca hardcodeada en el código ni commiteada. Plantilla en `.env.example`.
 
 ### Seguridad
 
-Modelo de amenaza actual: **local, un solo usuario**, pero hoy el bus,
-`/audio`, Whisper y Letta escuchan en todas las interfaces, sin token ni
-comprobación de `Origin`. La decisión vigente es
+Modelo de amenaza actual: **local, un solo usuario**. El bus y `/audio`
+escuchan solo en `127.0.0.1` salvo `SHIRO_BIND_HOST`, pero todavía sin token
+ni comprobación de `Origin`; Whisper y Letta siguen escuchando en todas las
+interfaces. La decisión vigente es
 [ADR 0027](docs/adr/0027-autenticacion-token-bus-stt-multicliente.md) (token,
-bind a `127.0.0.1` y Origin), Accepted y **sin implementar**; sustituyó al
+bind a `127.0.0.1` y Origin), Accepted y **en curso** (ver su enmienda del
+2026-11-13); sustituyó al
 [ADR 0025](docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md),
 que nunca se implementó. El estado de cada hallazgo vive en la tabla SEC-xx de
 [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md).
