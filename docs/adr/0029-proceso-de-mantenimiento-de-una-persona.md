@@ -198,3 +198,26 @@ delegar en agentes.**
 - [ADR 0025](0025-modelo-de-confianza-local-y-superficie-de-red.md) y
   [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md) — ejemplos de
   ADR aceptados sin implementar que motivan la regla única.
+
+## Nota 2026-11-13
+
+El dueño aprobó la Fase 1 del plan de mejora y fijó tres reglas de proceso:
+
+- **Fusión delegada durante la Fase 1.** Los PRs de la Fase 1 los fusiona el
+  agente, sin revisión previa del dueño, siempre que se cumplan dos
+  condiciones: el CI está en verde y un segundo agente ha revisado el diff.
+  La delegación es expresa y solo vale para la Fase 1; en las demás fases el
+  dueño aprueba cada fase antes de empezarla. El dueño la dio de palabra y
+  la puede retirar cuando quiera: el agente le informa de cada fusión, y una
+  sesión nueva la confirma con él antes de fusionar. No se ha llevado a
+  CLAUDE.md ni a AGENTS.md: las instrucciones para agentes siguen diciendo
+  solo que todo entra por PR.
+- **Tareas manuales.** Las tareas manuales que el plan asignaba al dueño en
+  la Fase 1 (borrar ramas remotas muertas, ajustes de GitHub como las alertas
+  de Dependabot y el check obligatorio, arrancar Docker y sacar digests,
+  pruebas manuales de red, del modal y del log) las hace el agente. Al dueño
+  solo se le pide lo que solo él puede hacer: pagar o cambiar de plan,
+  iniciar sesión, crear y pegar claves, escuchar la voz y elegir, y grabar su
+  voz.
+- **`main` por fast-forward.** Al publicar un tag, `main` avanza por
+  fast-forward hasta ese tag.

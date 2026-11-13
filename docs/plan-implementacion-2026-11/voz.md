@@ -1,10 +1,25 @@
 # Plan de implementación (2026-11) — Voz nueva en ElevenLabs
 
-> Parte del [plan de implementación](README.md) (estado: propuesta, pendiente de aprobación). Los IDs R-xxx, L-xxx y P-xx son los de la [revisión](../revision-estado-2026-11.md) y del [plan de mejora](../plan-mejora-2026-11.md). Las referencias a otras secciones (§1, §2, §7 en el índice; §3 a §6 en los archivos hermanos) están resueltas en la tabla del [índice](README.md).
+> Parte del [plan de implementación](README.md) (estado: propuesta; decisiones del dueño del 2026-11-13 en §5.0 y en §2.0 del índice). Los IDs R-xxx, L-xxx y P-xx son los de la [revisión](../revision-estado-2026-11.md) y del [plan de mejora](../plan-mejora-2026-11.md). Las referencias a otras secciones (§1, §2, §7 en el índice; §3 a §6 en los archivos hermanos) están resueltas en la tabla del [índice](README.md).
 
 ## 5. Voz nueva en ElevenLabs
 
 Pipe quiere diseñar una voz nueva para Shiro y pregunta si se puede crear una voz con el mismo tono y rango que una voz real sin copiarla con IA. La respuesta corta: **sí en categoría (describiendo sus rasgos), no en identidad**; el detalle está en §5.2. Documentación oficial de ElevenLabs consultada el **2026-11-12** (elevenlabs.io/docs, /pricing, /pricing/api, /use-policy, /v4); lo que no dice va como **sin verificar**. Ningún paso que gaste créditos o toque el repo se ejecuta sin que Pipe lo apruebe; las preguntas y permisos de este frente están en §2.4.
+
+### 5.0 Decisiones del dueño (2026-11-13)
+
+- **Variedad:** español latinoamericano.
+- **Referencia de estilo, solo con rasgos:** mujer joven adulta, registro medio-grave, serena, contenida, algo seca, nunca chillona. No se nombra a ninguna persona ni se usa audio de nadie: el resultado es una voz de ese tipo, no una copia.
+- **Orden de pruebas, sin pagar por ahora:**
+  1. La voz de Gemini por API, en su nivel gratuito y **solo con frases de guion** (§5.5): sin memoria ni conversaciones reales, porque en ese nivel Google usa el contenido para mejorar sus productos. La key de la API de Gemini la crea Pipe.
+  2. El ejercicio reducido de ElevenLabs que cabe en su plan gratuito (§4 de [voz-alternativas.md](voz-alternativas.md) y §5.9).
+  3. Si ninguna opción gratuita convence, se planea un plan de pago.
+- **ElevenLabs no se abandona:** sigue siendo candidata y la voz actual se conserva hasta elegir.
+- **Modelos rápidos:** se prueban también (`eleven_flash_v2_5` y `eleven_v4_turbo`, §5.7).
+- **Cómo se opera:** el agente usa la API o el navegador de Pipe, lo que le resulte más fácil.
+- **Proveedor nuevo:** adoptar Gemini u otro exigiría un ADR nuevo y un módulo nuevo; eso no está decidido.
+
+La comparativa de opciones (gratis, pago y local) está en [voz-alternativas.md](voz-alternativas.md).
 
 ### 5.1 Punto de partida en el repo
 
@@ -63,9 +78,10 @@ Ojo con un atajo: Voice Design con `eleven_ttv_v3` admite **audio de referencia*
 (`reference_audio_base64`, con `prompt_strength`). Subir ahí audio de otra persona **ya no es diseñar
 por descripción**: es usar su voz y necesita su consentimiento. No usarlo con audio de terceros.
 
-**Vía legítima si de verdad quieres ESA voz:** tu propia voz, o la de alguien que consienta **por escrito**
-(qué uso, en qué proyecto, que puede retirarlo), con **Professional Voice Cloning** (plan Creator o superior,
-verificación de voz). Para Shiro no lo recomiendo: la biblia pide una voz propia del personaje y el repo es público.
+**Clonar queda fuera** (decisión del 2026-11-13, §5.0): no se usa audio de nadie. Como referencia, la única vía
+legítima de clonar sería con la voz propia o con consentimiento **por escrito** de la persona, con **Professional
+Voice Cloning** (plan Creator o superior, verificación de voz); para Shiro no se hace: la biblia pide una voz propia
+del personaje y el repo es público.
 
 ### 5.3 Retrato vocal de Shiro (deducido de la biblia y del personaje)
 
@@ -82,7 +98,7 @@ español neutro, frases cortas y calmadas, ligeramente seca); `expressions.json:
 - Ritmo **pausado**, frases cortas, pausas breves antes de la ironía.
 - Energía **baja y estable**; volumen contenido; nunca grita.
 - Entonación **descendente y poco ondulada**; el humor se oye en la sequedad, no en la risa.
-- Español neutro (variedad a decidir por Pipe, ver §2.4).
+- Español latinoamericano neutro (decidido, §5.0).
 
 **No es**
 
@@ -115,8 +131,6 @@ sirve para entender y para probar si sale distinto.
 
 - EN: `Neutral Latin American Spanish. A young adult woman, about 19 to 21. Studio-quality recording. Cool, analytical and precise, deadpan delivery with faint sarcasm, but never cold or rude. Clear mid register, smooth timbre with little breath, crisp articulation. Steady, measured pacing, flat-to-falling intonation, minimal emotional peaks.`
 - ES: `Español latinoamericano neutro. Mujer adulta joven, de 19 a 21 años. Calidad de estudio. Fría, analítica y precisa; entrega impasible con un sarcasmo leve, pero nunca borde. Registro medio y claro, timbre liso con poco aire, articulación nítida. Ritmo medido y constante, entonación plana o descendente, sin picos emocionales.`
-
-(Si Pipe elige español peninsular, cambiar la primera frase por `Castilian Spanish from Spain.` / `Español de España.`)
 
 #### Texto de muestra (fijo para las tres, 100–1000 caracteres; ~390)
 
@@ -159,17 +173,17 @@ cansancio tras 2 minutos de escucha.
 
 ### 5.6 Procedimiento paso a paso
 
-| #   | Pipe                                                                                                              | Agente                                                                                                                                                                                                                                                                                                                                       |
-| --- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Decide variedad de español, plan y tope de créditos (§2.4)                                                        | —                                                                                                                                                                                                                                                                                                                                            |
-| 2   | Inicia sesión en elevenlabs.io (el agente nunca teclea contraseñas)                                               | Prepara la carpeta de trabajo **fuera del repo** (p. ej. `%LOCALAPPDATA%\shiro-voice-lab\`) y una hoja de puntuación                                                                                                                                                                                                                         |
-| 3   | Aprueba la tanda: «3 prompts × 1 tanda, ~1,2 k créditos»                                                          | **Vía web:** opera Voice Design en el navegador de Pipe con su sesión (pega prompt, texto, ajusta guidance, pulsa Generate). **Vía API:** script que lee `ELEVENLABS_API_KEY` del entorno sin imprimirla ni volcarla a disco, llama a `/v1/text-to-voice/design` y guarda las 3 vistas previas como MP3 con su `seed` y `generated_voice_id` |
-| 4   | Escucha las 9 vistas previas y marca 2–3 favoritas                                                                | Hace una tabla con id, prompt, seed y notas                                                                                                                                                                                                                                                                                                  |
-| 5   | Aprueba guardar las favoritas (ocupan huecos de voz)                                                              | `POST /v1/text-to-voice` con `voice_name` (`shiro-A1`…), `voice_description` y `generated_voice_id` (o «Save» en la web) y apunta los `voice_id`                                                                                                                                                                                             |
-| 6   | Aprueba el gasto del guion: ~1 k caracteres por candidata y modelo                                                | Sintetiza el guion (§5.5) con cada candidata en `eleven_multilingual_v2` y en el modelo rápido elegido (§5.7), un MP3 por frase, nombres `A1_v2_neutral.mp3`                                                                                                                                                                                 |
-| 7   | Escucha a ciegas (el agente baraja los nombres) y elige una voz                                                   | Propone los ajustes finos (tabla §5.7) y repite solo las frases dudosas                                                                                                                                                                                                                                                                      |
-| 8   | Confirma la voz y los ajustes. Si hace falta una key nueva, la pega él en su `.env` (raíz del repo, no trackeado) | Abre el PR del §5.8                                                                                                                                                                                                                                                                                                                          |
-| 9   | Prueba Shiro en local, 10 minutos de conversación real, y da el visto bueno                                       | —                                                                                                                                                                                                                                                                                                                                            |
+| #   | Pipe                                                                                                                                    | Agente                                                                                                                                                                                                                                                                                                                                       |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Ya decidido (§5.0): latinoamericano, sin pagar por ahora; la prueba de Gemini va antes (ver [voz-alternativas.md](voz-alternativas.md)) | —                                                                                                                                                                                                                                                                                                                                            |
+| 2   | Inicia sesión en elevenlabs.io (el agente nunca teclea contraseñas)                                                                     | Prepara la carpeta de trabajo **fuera del repo** (p. ej. `%LOCALAPPDATA%\shiro-voice-lab\`) y una hoja de puntuación                                                                                                                                                                                                                         |
+| 3   | Aprueba la tanda: «3 prompts × 1 tanda, ~1,2 k créditos»                                                                                | **Vía web:** opera Voice Design en el navegador de Pipe con su sesión (pega prompt, texto, ajusta guidance, pulsa Generate). **Vía API:** script que lee `ELEVENLABS_API_KEY` del entorno sin imprimirla ni volcarla a disco, llama a `/v1/text-to-voice/design` y guarda las 3 vistas previas como MP3 con su `seed` y `generated_voice_id` |
+| 4   | Escucha las 9 vistas previas y marca 2–3 favoritas                                                                                      | Hace una tabla con id, prompt, seed y notas                                                                                                                                                                                                                                                                                                  |
+| 5   | Aprueba guardar las favoritas (ocupan huecos de voz)                                                                                    | `POST /v1/text-to-voice` con `voice_name` (`shiro-A1`…), `voice_description` y `generated_voice_id` (o «Save» en la web) y apunta los `voice_id`                                                                                                                                                                                             |
+| 6   | Aprueba el gasto del guion: ~1 k caracteres por candidata y modelo                                                                      | Sintetiza el guion (§5.5) con cada candidata en `eleven_multilingual_v2` y en el modelo rápido elegido (§5.7), un MP3 por frase, nombres `A1_v2_neutral.mp3`                                                                                                                                                                                 |
+| 7   | Escucha a ciegas (el agente baraja los nombres) y elige una voz                                                                         | Propone los ajustes finos (tabla §5.7) y repite solo las frases dudosas                                                                                                                                                                                                                                                                      |
+| 8   | Confirma la voz y los ajustes. Si hace falta una key nueva, la pega él en su `.env` (raíz del repo, no trackeado)                       | Abre el PR del §5.8                                                                                                                                                                                                                                                                                                                          |
+| 9   | Prueba Shiro en local, 10 minutos de conversación real, y da el visto bueno                                                             | —                                                                                                                                                                                                                                                                                                                                            |
 
 Reglas para el agente: nunca leer ni mostrar la API key (ni abrir `.env`); si el script necesita la key,
 Pipe la exporta en la sesión o la carga el propio proceso desde el entorno. Nada de audio dentro del repo.
@@ -261,8 +275,11 @@ Checks antes de pushear: `format:check`, `lint`, `typecheck`, `test`, `build` (l
 - **Free** (10.000 créditos/mes, 3 huecos de voz, Voice Design incluido, **sin licencia comercial**): **no alcanza
   sin recortar tandas** (el total previsto es 10.000-12.000 y no deja nada para usar Shiro ese mes); si la voz actual
   ocupa un hueco, quedan 2. Acceso a la API en Free: **sin verificar**.
-- **Starter** (6 USD/mes, 1 USD el primer mes; 30.000 créditos; 10 huecos; licencia comercial): **recomendado;
-  la decisión y el pago son de Pipe**. Cubre el diseño y deja ~18.000 para hablar con Shiro el resto del mes.
+- **Decisión del 2026-11-13: por ahora no se paga.** Se hace el diseño reducido que cabe en Free (§4 de
+  [voz-alternativas.md](voz-alternativas.md)), después de probar la voz de Gemini (§5.0).
+- **Starter** (6 USD/mes, 1 USD el primer mes; 30.000 créditos; 10 huecos; licencia comercial): queda como opción
+  si ninguna prueba gratuita convence; la decisión y el pago son de Pipe. Cubre el diseño y deja ~18.000 para hablar
+  con Shiro el resto del mes.
 - Uso posterior: 30.000 caracteres/mes son ~25–30 min de voz con multilingual v2; con Flash o v4 Turbo, el doble.
 - Aviso: la página de API dice que la API se factura en USD (0,08 / 0,04 por 1k car.) y la de planes en
   créditos. Cuál aplica a una key de un plan Starter: **sin verificar**; mirar el panel de uso tras la primera tanda.

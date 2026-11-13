@@ -11,8 +11,9 @@ del README.
 - `develop` es la única rama de integración. Todo entra por PR pequeño con
   base `develop`; la rama se borra al fusionar.
 - Las versiones son tags `vX.Y.Z` sobre `develop`. `main` no es una rama
-  "estable": solo avanza al publicar un tag. Hoy va unos 260 commits por
-  detrás porque aún no se ha publicado ninguna versión.
+  "estable": solo avanza al publicar un tag, por fast-forward hasta ese tag.
+  Hoy va unos 260 commits por detrás porque aún no se ha publicado ninguna
+  versión.
 - Sin issue tracker: el seguimiento son las casillas del
   [plan de mejora](docs/plan-mejora-2026-11.md), la tabla
   [Roadmap](README.md#roadmap) y la tabla SEC-xx de

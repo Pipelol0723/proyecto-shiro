@@ -1,6 +1,6 @@
 # Plan de implementación (2026-11) — Actualización de versiones por lotes
 
-> Parte del [plan de implementación](README.md) (estado: propuesta, pendiente de aprobación). Los IDs R-xxx, L-xxx y P-xx son los de la [revisión](../revision-estado-2026-11.md) y del [plan de mejora](../plan-mejora-2026-11.md). Las referencias a otras secciones (§1, §2, §7 en el índice; §3 a §6 en los archivos hermanos) están resueltas en la tabla del [índice](README.md).
+> Parte del [plan de implementación](README.md) (estado: propuesta; V2 aprobada y escalonada el 2026-11-13, ver §2.0 del índice). Los IDs R-xxx, L-xxx y P-xx son los de la [revisión](../revision-estado-2026-11.md) y del [plan de mejora](../plan-mejora-2026-11.md). Las referencias a otras secciones (§1, §2, §7 en el índice; §3 a §6 en los archivos hermanos) están resueltas en la tabla del [índice](README.md).
 
 ## 4. Actualización de versiones por lotes
 
@@ -12,8 +12,8 @@ Fuentes de partida: `npm outdated` y `npm audit` del 2026-11-12 (31 avisos: 5 cr
 
 - **Seguridad primero (P-04, en la Fase 1):** zod 4.6.7, form-data 4.0.6 y el override de shell-quote los sube **P-04 PR1** (fuente única, §3.7). Aquí no se repiten.
 - **Parches dentro de rango (V1, después de P-04 PR1):** `@yao-pkg/pkg`, `concurrently`, `ws`, `yaml`, `@letta-ai/letta-client` y las transitivas que `npm audit fix` resuelve sin `--force`, en dos PR pequeños. Lo que queda después es **solo de desarrollo** (vitest 2, vite 5, esbuild y compañía).
-- **Herramientas de desarrollo (V2):** V2a (menores) entra sin más. **V2b-V2d (TypeScript 6, vite 8 + vitest 5, ESLint 10) son una propuesta pendiente de aprobación de Pipe**: contradicen §12 del plan de mejora («Saltos mayores» descartados), la fila P-31b y la nota de P-28 sobre `test.projects`, y solo se editan esos puntos del plan si Pipe lo aprueba. V2c va obligatoriamente en dos PR. TypeScript 7 y React 19 siguen fuera.
-- **SDK de Anthropic y modelo (V3):** orden P-30 → V3a (= P-31a) → P-32 → V3b. V3a sube el SDK de 0.39 a 1.x **sin cambiar de modelo** y solo quita `temperature` (la API `2026-10-21` que envía el SDK 1.0 lo rechaza) y ajusta tipos. El manejo de `refusal` y `max_tokens` es de P-32. V3b cambia `claude-sonnet-4-6` → `claude-sonnet-5-5`: el `tool_choice` forzado devuelve 400, así que `{text, emotion}` pasa a `output_config.format` (enmienda de ADR 0014 y la **única** enmienda de ADR 0022). Effort propuesto: **`low`** en conversación.
+- **Herramientas de desarrollo (V2):** **aprobada por Pipe el 2026-11-13 y escalonada**: V2a (menores, P-44) ya; V2b (TypeScript 6, P-45) al acabar la Fase 1; V2c (vite 8 y después vitest 5, P-46 y P-47) tras P-28; V2d (ESLint 10, P-48) al final. El plan de mejora ya recoge estos ítems y corrige §12, la fila P-31b y la nota de P-28. V2c va obligatoriamente en dos PR. TypeScript 7 y React 19 siguen fuera.
+- **SDK de Anthropic y modelo (V3):** esperan a los tests del loop de tools, en la Fase 4 (decidido el 2026-11-13). Orden P-30 → V3a (= P-31a) → P-32 → V3b (= P-31c; Pipe autoriza el cambio a `claude-sonnet-5-5` cuando toque). V3a sube el SDK de 0.39 a 1.x **sin cambiar de modelo** y solo quita `temperature` (la API `2026-10-21` que envía el SDK 1.0 lo rechaza) y ajusta tipos. El manejo de `refusal` y `max_tokens` es de P-32. V3b cambia `claude-sonnet-4-6` → `claude-sonnet-5-5`: el `tool_choice` forzado devuelve 400, así que `{text, emotion}` pasa a `output_config.format` (enmienda de ADR 0014 y la **única** enmienda de ADR 0022). Effort propuesto: **`low`** en conversación.
 - **Tauri y Rust (V4 = parte de P-31b):** Tauri 2.11 → 2.12 en bloque (crates + `@tauri-apps/*`) y Rust fijado con `rust-toolchain.toml` en vez de `stable` flotante.
 - **Servicios, imágenes y Actions (V5 = P-06a, P-06b, P-18, P-09, P-28):** Letta por digest (P-06a), base CUDA por digest (P-06b), `ctranslate2` fijado, Actions por SHA y Node 22 fijado.
 - **No se toca:** pixi 7 / lipsyncpatch / Cubism 4.2.2 (ADR 0021), React 18, TypeScript 7, `@types/node` > 22, la base CUDA (salvo fijarla), better-sqlite3 13 (queda como opción, ver §4.4).
@@ -39,10 +39,10 @@ Riesgo: B = bajo, M = medio, A = alto. «Salto»: parche, menor o mayor (en 0.x,
 | @types/node                                                                                                                               | 22.19.19                                         | 22.20.5 (se queda en la línea 22)                     | parche       | B      | V2a                                             |
 | @types/react, @testing-library/\* (react, user-event)                                                                                     | 18.3.29 / 16.3.2 / 14.6.1                        | 18.3.31 / 16.3.3 / 14.6.10                            | parche       | B      | V2a                                             |
 | @fontsource/\* (5)                                                                                                                        | 5.2.x                                            | 5.3.0                                                 | menor        | B      | V2a                                             |
-| typescript                                                                                                                                | 5.9.3                                            | 6.0.x                                                 | mayor        | M      | V2b (pendiente de Pipe)                         |
-| vite + @vitejs/plugin-react                                                                                                               | 5.4.21 + 4.7.0                                   | 8.3.x + 6.3.x                                         | mayor ×3     | A      | V2c-1 (pendiente de Pipe)                       |
-| vitest + @vitest/coverage-v8                                                                                                              | 2.1.9                                            | 5.1.0                                                 | mayor ×3     | A      | V2c-2 (pendiente de Pipe)                       |
-| eslint + eslint-config-prettier + eslint-plugin-react-hooks + eslint-plugin-react-refresh                                                 | 9 / 9 / 5 / 0.4                                  | 10.14 / 10.1 / 7.1 / 0.5                              | mayor        | M      | V2d (pendiente de Pipe)                         |
+| typescript                                                                                                                                | 5.9.3                                            | 6.0.x                                                 | mayor        | M      | V2b (P-45)                                      |
+| vite + @vitejs/plugin-react                                                                                                               | 5.4.21 + 4.7.0                                   | 8.3.x + 6.3.x                                         | mayor ×3     | A      | V2c-1 (P-46)                                    |
+| vitest + @vitest/coverage-v8                                                                                                              | 2.1.9                                            | 5.1.0                                                 | mayor ×3     | A      | V2c-2 (P-47)                                    |
+| eslint + eslint-config-prettier + eslint-plugin-react-hooks + eslint-plugin-react-refresh                                                 | 9 / 9 / 5 / 0.4                                  | 10.14 / 10.1 / 7.1 / 0.5                              | mayor        | M      | V2d (P-48)                                      |
 | @testing-library/jest-dom                                                                                                                 | 6.9.1                                            | 7.0.1                                                 | mayor        | M      | V2d (o cola)                                    |
 | @vercel/ncc                                                                                                                               | 0.38.4                                           | 0.45.0                                                | mayor (0.x)  | M      | V4 (toca el sidecar)                            |
 | @anthropic-ai/sdk                                                                                                                         | 0.39.0                                           | 1.x (1.8.0 el 12-nov)                                 | mayor        | A      | V3a                                             |
@@ -82,19 +82,23 @@ Las subidas de seguridad (zod `^4.6.7` en `packages/core/package.json:29`, form-
 
 Notas:
 
-- Tras P-04 PR1, `npm audit --omit=dev` ya debería quedar sin high ni critical. Lo que siga en el audit completo es dev (vitest, coverage-v8, vite-node, @vitest/mocker, tinypool, vite, esbuild, minimatch, test-exclude): solo lo cierra V2c, si Pipe lo aprueba.
+- Tras P-04 PR1, `npm audit --omit=dev` ya debería quedar sin high ni critical. Lo que siga en el audit completo es dev (vitest, coverage-v8, vite-node, @vitest/mocker, tinypool, vite, esbuild, minimatch, test-exclude): solo lo cierra V2c (P-46 y P-47).
 - Cambios incompatibles: ninguno esperado. `@letta-ai/letta-client` 1.12.1 es parche, pero toca la memoria: prueba manual de un turno con memoria.
 
 Tests y prueba manual: suite completa (`npm run verify`). Pipe arranca `npm run dev` una vez, manda un turno y comprueba que se recuerda al recargar.
 
-#### V2 — Herramientas de desarrollo (V2a sí; V2b-V2d, propuesta pendiente de aprobación)
+#### V2 — Herramientas de desarrollo (aprobada el 2026-11-13, escalonada)
 
-§12 del plan de mejora descarta hoy «vitest 2→5, vite 5→8, typescript 6/7, eslint 10…» porque la exposición es solo de dev; la fila P-31b dice «vitest con vite dentro de su major» y P-28 prohíbe `test.projects` mientras vitest siga en 2.x. La decisión de Pipe de hoy es actualizar «por lotes pequeños con tests», pero no pide majors de tooling. Por eso:
+Pipe aprobó el 2026-11-13 los saltos mayores de tooling, escalonados. El plan de mejora los recoge como ítems con su fase y ya no los contradice: §12 deja de descartar vitest, vite, TypeScript 6 y ESLint 10 (sigue descartando React 19, pixi 8, TypeScript 7 y better-sqlite3 13), la fila P-31b deja de decir «vitest con vite dentro de su major» y la nota de P-28 limita `test.projects` hasta V2c.
 
-- **V2a** entra sin más: todo dentro de su major.
-- **V2b, V2c y V2d son una propuesta pendiente de aprobación de Pipe.** Si las aprueba, en el mismo PR que abra la primera se editan explícitamente §12, la fila P-31b y la nota de P-28 de `docs/plan-mejora-2026-11.md`. Si no, se quedan en la cola y el plan no cambia.
+| Orden | Lote          | Ítem        | Cuándo                                                           |
+| ----- | ------------- | ----------- | ---------------------------------------------------------------- |
+| 1     | V2a           | P-44        | Ya (Fase 1, recortable), tras P-04 PR2                           |
+| 2     | V2b           | P-45        | Al acabar la Fase 1                                              |
+| 3     | V2c-1 y V2c-2 | P-46 y P-47 | Después de P-28 (Windows en CI, Fase 2); en dos PR, vite primero |
+| 4     | V2d           | P-48        | Al final                                                         |
 
-Orden si se aprueban: V2a → V2b → V2c-1 → V2c-2 → V2d, y **V2c después de P-28** (job Windows en CI), por el mismo motivo que da el plan: sin Windows en CI, un salto de vitest/vite es a ciegas para el sidecar y el binario.
+**V2c va después de P-28** (job Windows en CI), por el mismo motivo que da el plan: sin Windows en CI, un salto de vitest/vite es a ciegas para el sidecar y el binario.
 
 ##### V2a — Menores de tooling
 
@@ -114,7 +118,7 @@ Cambios que afectan al repo (guía oficial de 6.0):
 | `esModuleInterop: false` prohibido                                    | ya es `true` en la base                                                                                                                                 | Nada                                                                                                                                |
 | `dom.iterable` dentro de `dom`                                        | `packages/desktop/tsconfig.json` lista `DOM.Iterable`                                                                                                   | Se puede dejar; quitarlo es cosmético                                                                                               |
 
-Requisito: `typescript-eslint` 8.72 debe aceptar TS 6 (sin verificar el rango exacto de su `peerDependencies`; se ve en el `npm install`). Tests: typecheck de los tres paquetes, build de core y core-host, `build:sidecar` en local si Pipe tiene el entorno.
+Requisito: `typescript-eslint` 8.72 debe aceptar TS 6 (sin verificar el rango exacto de su `peerDependencies`; se ve en el `npm install`). Tests: typecheck de los tres paquetes, build de core y core-host, `build:sidecar` en local.
 
 ##### V2c — vite 8 + plugin-react 6, y después vitest 5 + coverage-v8 5 (cierra R-035)
 
@@ -131,7 +135,7 @@ Cambios que afectan al repo:
 - **jsdom:** las asignaciones a `window`/`globalThis` se propagan al DOM (vitest 5); afecta a tests que stubbean `matchMedia` o `Audio` en el desktop.
 - **vite 8:** Rolldown y Oxc sustituyen a esbuild y Rollup; `build.rollupOptions` pasa a `rolldownOptions` (el `vite.config.ts` del desktop no lo usa, sin verificar el resto del archivo), y el target mínimo sube a Chrome 111, sin impacto en WebView2. El import `?url` del AudioWorklet (`pcm-capture-processor.js`) y la carga de Live2D/pixi son los dos puntos a probar a mano.
 
-Tests y prueba manual: suite completa, `npm run test:coverage`, `npm run build`; Pipe arranca `npm run dev`, habla una frase (AudioWorklet), ve el avatar cargar y `npm run tauri:build` si tiene el entorno Rust.
+Tests y prueba manual: suite completa, `npm run test:coverage`, `npm run build`; Pipe arranca `npm run dev`, habla una frase (AudioWorklet), ve el avatar cargar y `npm run tauri:build` (Rust ya está instalado en el portátil).
 
 Reversión: revert del PR; ningún dato afectado.
 
@@ -163,7 +167,7 @@ Qué rompe en este código:
 | Licencia                               | —                                                                                               | El SDK 1.x es Apache 2.0 (antes MIT)                                                                                                                                                                         | Anotarlo en NOTICE/LICENSE de terceros si P-20 lo lleva                                                                                                                                                  |
 | form-data sale de producción           | `package-lock.json:5334`                                                                        | La traía el SDK 0.x                                                                                                                                                                                          | Nada que borrar: P-04 PR1 la parchea a 4.0.6 sin excepción                                                                                                                                               |
 
-Tests: los de `anthropic-llm.test.ts` actualizados (sin `temperature`). Prueba manual de Pipe (la de P-31a): un turno normal, `fs:read`, `fs:write` con aprobación y una propuesta de self-dev. Coste de la prueba: unos céntimos.
+Tests: los de `anthropic-llm.test.ts` actualizados (sin `temperature`). Prueba manual (la de P-31a): un turno normal, `fs:read`, `fs:write` con aprobación y una propuesta de self-dev. Coste de la prueba: unos céntimos, con la key de Anthropic para pruebas, que ya está disponible (los créditos de API están enlazados a una organización de Console).
 
 Reversión: revert; el lockfile vuelve a 0.39.
 
@@ -174,11 +178,11 @@ Estos dos arreglos son independientes del SDK y del modelo (Sonnet 4.6 también 
 - **`stop_reason: "refusal"`:** hoy no se trata. En `generate` (`anthropic-llm.ts:181`) acaba en `extractToolUse` → texto vacío y `neutral` (Shiro «responde» en silencio). En el loop (`:247-261`) devuelve `''`. Rama explícita antes de leer `content`: log con `stop_details.category`, respuesta en personaje («Eso no puedo hacerlo») y emoción neutral. Ramificar por `stop_reason`, nunca por `stop_details` (puede ser `null`).
 - **No ejecutar tools de una respuesta truncada o rechazada:** el loop solo avisa con `max_tokens` (`:241-245`) y después ejecuta los `tool_use` igualmente (`:263-275`). Con `fs:write` eso puede escribir un archivo a medias tras la aprobación. Si `stop_reason` es `max_tokens` o `refusal`, no se ejecuta ninguna tool de esa vuelta.
 - Tests en P-32: refusal en `generate`, refusal y `max_tokens` en el loop sin llamar a `executeTool`.
-- La regla se documenta en la **única enmienda de ADR 0022**, que va en V3b. Si V3b no se aprueba, esa enmienda viaja con P-32.
+- La regla se documenta en la **única enmienda de ADR 0022**, que va en V3b (P-31c). Si P-31c se recorta, esa enmienda viaja con P-32.
 
-##### V3b — `claude-sonnet-4-6` → `claude-sonnet-5-5` (ítem nuevo, propuesto P-31c)
+##### V3b — `claude-sonnet-4-6` → `claude-sonnet-5-5` (= P-31c, Fase 4)
 
-PR `feat: migra el LLM cloud a Claude Sonnet 5.5 (incluye enmiendas ADR 0014 y 0022)`. Va después de V3a y de P-32, con P-30 en verde. Se pasa por Sonnet 5 en papel: de 4.6 a 5.5 se aplican los cambios de Sonnet 5 y los de 5.5 encima.
+PR `feat: migra el LLM cloud a Claude Sonnet 5.5 (incluye enmiendas ADR 0014 y 0022)`. Va después de V3a y de P-32, con P-30 en verde. Pipe autorizó el 2026-11-13 el cambio de modelo a `claude-sonnet-5-5` cuando toque; el ítem P-31c ya está en la Fase 4 del plan de mejora. Se pasa por Sonnet 5 en papel: de 4.6 a 5.5 se aplican los cambios de Sonnet 5 y los de 5.5 encima.
 
 Qué rompe exactamente en este código:
 
@@ -227,7 +231,7 @@ Qué sube:
 
 Cambios incompatibles que afectan: `tauri@2.10.0` cambió `with_webview`; `lib.rs` no lo usa (`src/lib.rs:45-59` solo registra plugins). El resto de notas 2.11–2.12 vistas son de Android/Kotlin. La pubkey del updater (`tauri.conf.json:34-39`) no cambia aquí: la rotación es P-09.
 
-Tests y prueba manual: CI no compila Rust en PR (solo `release.yml`, por tag). Hace falta **o** un job de build de Tauri en CI (lo pide la checklist pre-release de ADR 0029) **o** que Pipe compile en local; hoy `rustc` no está en el PATH del portátil, así que esto exige instalar rustup (permiso). Prueba: `npm run build:sidecar -w @proyecto-shiro/desktop`, `npm run tauri:build`, abrir el binario, ver el tray, cerrar a tray y comprobar que el sidecar arranca y muere con la app.
+Tests y prueba manual: CI no compila Rust en PR (solo `release.yml`, por tag). Para probar se compila en local: Rust 1.96 ya está instalado en el portátil, con las herramientas de C++ y WebView2 (solo falta en el PATH del usuario), así que no hace falta instalar rustup ni un job de Tauri en CI para esta prueba; el job sigue siendo lo que pide la checklist pre-release de ADR 0029. Prueba: `npm run build:sidecar -w @proyecto-shiro/desktop`, `npm run tauri:build`, abrir el binario, ver el tray, cerrar a tray y comprobar que el sidecar arranca y muere con la app.
 
 Reversión: revert; `Cargo.lock` y `package-lock.json` vuelven solos.
 
@@ -237,8 +241,8 @@ Reversión: revert; `Cargo.lock` y `package-lock.json` vuelven solos.
 
 Va dentro del PR de P-06a (`chore: compose en loopback y Letta fijada`), que solo toca `docker-compose.yml`.
 
-- `docker-compose.yml:26`: `letta/letta:latest` → `letta/letta:<tag>@sha256:<digest>`. **No se hace `pull`**: Pipe obtiene el digest de la imagen que ya tiene y funciona (`docker image inspect letta/letta:latest --format '{{index .RepoDigests 0}}'`) y se anota con la fecha. Última release en GitHub: v0.16.8 (la página no muestra el año); la v0.16.7 dejó de imponer límites de bloque y la v0.16.6 cambió defaults (contexto 32k → 128k, bloque 20k → 100k caracteres). Por eso no se sube de versión en este lote: fijar lo que funciona y subir después en un PR propio con backup previo (P-11a).
-- La base CUDA (`services/whisper/Dockerfile:9`, misma etiqueta + `@sha256:`) **va en P-06b**, que reescribe ese Dockerfile; Pipe da el digest en el paso 4 de P-06b. No se cambia la versión de CUDA: la GTX 1650 (Turing) con int8 funciona hoy.
+- `docker-compose.yml:26`: `letta/letta:latest` → `letta/letta:<tag>@sha256:<digest>`. **No se hace `pull`**: el agente obtiene el digest de la imagen que ya tiene y funciona (`docker image inspect letta/letta:latest --format '{{index .RepoDigests 0}}'`) y se anota con la fecha. Última release en GitHub: v0.16.8 (la página no muestra el año); la v0.16.7 dejó de imponer límites de bloque y la v0.16.6 cambió defaults (contexto 32k → 128k, bloque 20k → 100k caracteres). Por eso no se sube de versión en este lote: fijar lo que funciona y subir después en un PR propio con backup previo (P-11a).
+- La base CUDA (`services/whisper/Dockerfile:9`, misma etiqueta + `@sha256:`) **va en P-06b**, que reescribe ese Dockerfile; el agente saca el digest en el paso 4 de P-06b. No se cambia la versión de CUDA: la GTX 1650 (Turing) con int8 funciona hoy.
 - Reversión: quitar el digest. Riesgo de datos: ninguno mientras no cambie la versión de Letta (el volumen `letta_pgdata` no se toca).
 
 ##### V5b — Whisper: requirements fijados (= P-18)
@@ -270,19 +274,19 @@ En el PR de P-18 (`test: suite Whisper completa en CI`):
 
 ### 4.5 ADR que hay que enmendar
 
-| ADR                                              | Por qué                                                                                                                                                                                                          | Lote                                                                                  |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **0014** (salida estructurada `{text, emotion}`) | Anthropic deja de usar tool `respond` forzada: pasa a `output_config.format` (y, con la opción B, también en el loop). La sección «Anthropic: tool use forzado» (`:51-66`) queda superada                        | V3b                                                                                   |
-| **0022** (agentic tools)                         | §5 describe el loop con `tool_choice: any` y la tool terminal `respond`; cambia a `auto` + `strict` + formato estructurado, y se añade la regla «no ejecutar tools si `stop_reason` es `max_tokens` o `refusal`» | Una sola enmienda en V3b (recoge la regla de P-32); si V3b no se aprueba, va con P-32 |
-| **0016** o una nota en 0012                      | Modelo cloud por defecto y el nuevo parámetro `effort` por ruta (voz `low`, self-dev `medium`), con su efecto en latencia                                                                                        | V3b                                                                                   |
-| **0015** (router)                                | Solo si Pipe decide usar Haiku 5.5 como clasificador o como tercer nivel                                                                                                                                         | fuera de lote                                                                         |
-| **0018** (Letta)                                 | Imagen fijada por digest y política de subida con backup previo                                                                                                                                                  | V5a                                                                                   |
-| **0019** (Whisper)                               | `ctranslate2` fijado y versión de faster-whisper; P-06b ya enmienda topes y bind                                                                                                                                 | V5b                                                                                   |
-| **0021** (avatar)                                | Nota de que pixi y lipsyncpatch quedan fijados exactos a propósito (sin cambio de decisión)                                                                                                                      | P-31b                                                                                 |
-| **0024** (Tauri)                                 | Toolchain de Rust fijada y versión de Tauri; el párrafo de rotación de clave ya lo pone P-09                                                                                                                     | V4                                                                                    |
-| **0029** (proceso de una persona)                | La política de §4.6 (dependabot agrupado, cadencia) encaja aquí; si 0029 ya está escrito, como enmienda                                                                                                          | P-04 PR2                                                                              |
+| ADR                                              | Por qué                                                                                                                                                                                                          | Lote                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **0014** (salida estructurada `{text, emotion}`) | Anthropic deja de usar tool `respond` forzada: pasa a `output_config.format` (y, con la opción B, también en el loop). La sección «Anthropic: tool use forzado» (`:51-66`) queda superada                        | V3b                                                                                  |
+| **0022** (agentic tools)                         | §5 describe el loop con `tool_choice: any` y la tool terminal `respond`; cambia a `auto` + `strict` + formato estructurado, y se añade la regla «no ejecutar tools si `stop_reason` es `max_tokens` o `refusal`» | Una sola enmienda en V3b (recoge la regla de P-32); si P-31c se recorta, va con P-32 |
+| **0016** o una nota en 0012                      | Modelo cloud por defecto y el nuevo parámetro `effort` por ruta (voz `low`, self-dev `medium`), con su efecto en latencia                                                                                        | V3b                                                                                  |
+| **0015** (router)                                | Solo si Pipe decide usar Haiku 5.5 como clasificador o como tercer nivel                                                                                                                                         | fuera de lote                                                                        |
+| **0018** (Letta)                                 | Imagen fijada por digest y política de subida con backup previo                                                                                                                                                  | V5a                                                                                  |
+| **0019** (Whisper)                               | `ctranslate2` fijado y versión de faster-whisper; P-06b ya enmienda topes y bind                                                                                                                                 | V5b                                                                                  |
+| **0021** (avatar)                                | Nota de que pixi y lipsyncpatch quedan fijados exactos a propósito (sin cambio de decisión)                                                                                                                      | P-31b                                                                                |
+| **0024** (Tauri)                                 | Toolchain de Rust fijada y versión de Tauri; el párrafo de rotación de clave ya lo pone P-09                                                                                                                     | V4                                                                                   |
+| **0029** (proceso de una persona)                | La política de §4.6 (dependabot agrupado, cadencia) encaja aquí; si 0029 ya está escrito, como enmienda                                                                                                          | P-04 PR2                                                                             |
 
-Además, solo si Pipe aprueba V2b-V2d: editar §12 («Saltos mayores» descartados), la fila P-31b y la nota de P-28 en `docs/plan-mejora-2026-11.md`.
+§12 («Saltos mayores» descartados), la fila P-31b y la nota de P-28 de `docs/plan-mejora-2026-11.md` ya están corregidos, porque Pipe aprobó V2b-V2d el 2026-11-13.
 
 ### 4.6 Política para adelante
 

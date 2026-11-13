@@ -6,6 +6,8 @@
 
 Pipe quiere las tres cosas: ajustar y medir lo que hay (Parte 1, sin descargas), probar modelos nuevos (Parte 2) y planear un ajuste fino de la personalidad de Shiro (Parte 3, solo plan; el entrenamiento espera a la GPU de 16 GB). Encaja con el plan de mejora: P-16 (L-PERF-01/02), P-36 (atajo de R-142), L-PERF-03 (VRAM, R-131, hoy aparcado), L-PERF-07 (Whisper, aparcado) y P-11a/L-ARQ-08 (reindexado, R-162). Fuentes externas consultadas el **2026-11-12**; lo que no se pudo comprobar va como «sin verificar». Los permisos de este frente están en §2.5.
 
+> **Aprobado por Pipe el 2026-11-13** (§2.0, E): arrancar y parar Ollama y Docker para medir; cambiar las variables de entorno (reversibles); actualizar Ollama después de medir la línea base; descargar los 5 candidatos (unos 12,7 GB); que Pipe grabe un clip de su voz; usar sus conversaciones guardadas, anonimizadas y fuera del repo, para el conjunto de datos; y usar Claude como juez de fidelidad. Sigue pendiente lo que esa lista no cubre: las descargas opcionales, borrar modelos con `ollama rm` y las decisiones de §2.5 #45 y #46.
+
 ### 6.1 Cómo se usan hoy los modelos locales
 
 | Pieza               | Qué hace hoy                                                                                                                                                                                                       | Dónde                                                                                                                                  |
@@ -208,7 +210,7 @@ Mismo `scripts/bench-local.mjs` con un subcomando `--eval`, en el escenario C (o
 
 Si dos modelos pasan, gana el de mayor fidelidad. Cambiar el modelo por defecto es un cambio de YAML (reversible en minutos, sin ADR), pero **también hay que cambiar `classifier_model` y el `model` de Letta** (`modules.config.yaml:36` y `:91`). El de Letta tiene el mismo problema que R-162 (solo se aplica al provisionar).
 
-#### 6.3.6 Lo que habría que descargar (pedir permiso antes)
+#### 6.3.6 Lo que habría que descargar (Ollama y los 5 candidatos, aprobados; los opcionales, pedir permiso antes)
 
 | Descarga                                                                                               | Tamaño                           | Para qué                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -308,15 +310,15 @@ Se mide con el banco de la Parte 2 (fidelidad y JSON).
 
 ### 6.5 Orden recomendado y horas
 
-| Orden | Bloque                                                          | Horas (agente + revisión de Pipe) | Notas                                          |
-| ----- | --------------------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
-| 1     | Parte 1: `bench-local.mjs` + línea base en Ollama 0.31.2        | 4-5 h                             | PR propio antes de P-16; depende de P-04 PR2.  |
-| 2     | Parte 1: ajustes de máquina uno por uno y documentación de VRAM | 2-3 h                             | Cierra L-PERF-03 y R-131.                      |
-| 3     | Actualizar Ollama y repetir la línea base                       | 1 h                               | Solo con permiso.                              |
-| 4     | Parte 2: banco `--eval` + descargas + 5 candidatos              | 6-8 h                             | Las corridas son en su mayoría desatendidas.   |
-| 5     | Parte 3a: Modelfile y su medición                               | 1-2 h                             | —                                              |
-| 6     | Parte 3b: conjunto de datos y evaluación                        | 8-12 h                            | Casi todo es tiempo de Pipe: escribir y curar. |
-| 7     | Parte 3c: entrenamiento y evaluación en el PC nuevo + ADR       | 6-8 h                             | Cuando exista el PC.                           |
+| Orden | Bloque                                                          | Horas (agente + revisión de Pipe) | Notas                                            |
+| ----- | --------------------------------------------------------------- | --------------------------------- | ------------------------------------------------ |
+| 1     | Parte 1: `bench-local.mjs` + línea base en Ollama 0.31.2        | 4-5 h                             | PR propio antes de P-16; depende de P-04 PR2.    |
+| 2     | Parte 1: ajustes de máquina uno por uno y documentación de VRAM | 2-3 h                             | Cierra L-PERF-03 y R-131.                        |
+| 3     | Actualizar Ollama y repetir la línea base                       | 1 h                               | Aprobado (2026-11-13), después de la línea base. |
+| 4     | Parte 2: banco `--eval` + descargas + 5 candidatos              | 6-8 h                             | Las corridas son en su mayoría desatendidas.     |
+| 5     | Parte 3a: Modelfile y su medición                               | 1-2 h                             | —                                                |
+| 6     | Parte 3b: conjunto de datos y evaluación                        | 8-12 h                            | Casi todo es tiempo de Pipe: escribir y curar.   |
+| 7     | Parte 3c: entrenamiento y evaluación en el PC nuevo + ADR       | 6-8 h                             | Cuando exista el PC.                             |
 
 Total: unas 28-39 h. A 4-6 h por semana, las partes 1 y 2 caben en 3-4 semanas y la 3 queda en segundo plano hasta el PC nuevo.
 

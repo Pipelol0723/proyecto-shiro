@@ -14,7 +14,7 @@ GTX 1650 de 4 GB, donde corre todo el stack.
 **Lectura obligatoria antes de tomar decisiones arquitectónicas:**
 
 - [`README.md` → Roadmap](README.md#roadmap) — **única fuente** del estado de los hitos y de la hoja de ruta (ADR 0029).
-- [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md) — lo que toca ahora (propuesta pendiente de aprobación ítem a ítem), con la [revisión](docs/revision-estado-2026-11.md) y su [anexo](docs/revision-estado-2026-11-anexo.md). Ningún ítem P-xx se ejecuta sin aprobación del dueño.
+- [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md) — lo que toca ahora (la Fase 1 está aprobada desde el 2026-11-13 y en ejecución; las demás fases, pendientes de aprobación), con la [revisión](docs/revision-estado-2026-11.md) y su [anexo](docs/revision-estado-2026-11-anexo.md). Ningún ítem P-xx se ejecuta sin que el dueño apruebe su fase.
 - [`docs/architecture.md`](docs/architecture.md) — vista actual de la arquitectura, con diagramas mermaid.
 - [`docs/adr/`](docs/adr/) — historial de decisiones con su porqué. Léelo cuando algo te haga dudar de "por qué se hizo así".
 - [`docs/design/shiro-character-bible.md`](docs/design/shiro-character-bible.md) — biblia del personaje (v0.2): identidad visual aprobada, tono y sistema de expresiones. Léela antes de tocar el avatar o producir arte de Shiro. El formato del avatar está en [ADR 0028](docs/adr/0028-avatar-motores-y-manifiesto.md) (Accepted, sin implementar; integración aplazada).
@@ -85,7 +85,7 @@ de cada hito, lee [`docs/architecture.md`](docs/architecture.md) y su ADR.
 ### Ramas
 
 - `develop` → única rama de integración (rama por defecto).
-- Versiones: tags `vX.Y.Z` sobre `develop`. `main` no es una rama «estable»: solo avanza al publicar un tag (hoy va unos 260 commits por detrás de `develop`).
+- Versiones: tags `vX.Y.Z` sobre `develop`. `main` no es una rama «estable»: solo avanza al publicar un tag, por fast-forward hasta ese tag (hoy va unos 260 commits por detrás de `develop`).
 - `feat/<nombre>/<tarea>` → trabajo individual; la rama se borra al fusionar.
 - `claude/<tarea>` → sesiones de agentes; `shiro/<tema>` → propuestas de self-dev. También se borran al fusionar.
 
