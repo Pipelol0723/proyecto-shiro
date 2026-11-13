@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@proyecto-shiro/core": "*",
-    "ws": "^8.18.0"
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@types/ws": "^8.5.13",
