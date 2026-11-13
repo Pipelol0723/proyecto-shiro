@@ -25,6 +25,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { parseEnvelope, serializeEnvelope } from '@proyecto-shiro/core';
 import type { ITransport, Logger, TransportReceiveHandler } from '@proyecto-shiro/core';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
+import { DEFAULT_BIND_HOST } from './bind-host.js';
 
 /**
  * Handler de un request HTTP no-upgrade. Devuelve `true` si el handler
@@ -49,6 +50,11 @@ function rawDataToString(data: RawData): string {
 export interface WebSocketServerTransportOptions {
   /** Puerto a vincular. `0` para que el SO asigne uno libre (útil en tests). */
   port: number;
+  /**
+   * Host en el que escuchar. Default `127.0.0.1` (solo esta máquina): el bus
+   * no tiene auth, así que abrirlo a la red es un opt-in. Ver ADR 0027, 2a.
+   */
+  host?: string;
   /** Path del endpoint WS. Default `/bus`. */
   path?: string;
   /** Logger padre. El transport crea un child con `module: 'WebSocketServerTransport'`. */
@@ -88,14 +94,17 @@ export class WebSocketServerTransport implements ITransport {
     this.readyPromise = new Promise<void>((resolve, reject) => {
       this.httpServer.once('listening', () => {
         const addr = this.httpServer.address();
-        const where = typeof addr === 'string' ? addr : `puerto ${addr?.port ?? '?'}`;
+        const where =
+          typeof addr === 'string' || addr === null
+            ? String(addr)
+            : `${addr.family === 'IPv6' ? `[${addr.address}]` : addr.address}:${String(addr.port)}`;
         this.logger.info(`escuchando en ${where} (path ${options.path ?? '/bus'})`);
         resolve();
       });
       this.httpServer.once('error', (err) => {
         reject(err);
       });
-      this.httpServer.listen(options.port);
+      this.httpServer.listen(options.port, options.host ?? DEFAULT_BIND_HOST);
     });
 
     // `ws` re-emite los errores del httpServer (incluido el EADDRINUSE al
@@ -157,6 +166,18 @@ export class WebSocketServerTransport implements ITransport {
       throw new Error('WebSocketServerTransport: server no vinculado todavía');
     }
     return addr.port;
+  }
+
+  /**
+   * IP realmente vinculada (p. ej. `127.0.0.1`). Solo válida después de
+   * que `ready()` resuelva, igual que `port`.
+   */
+  get address(): string {
+    const addr = this.httpServer.address();
+    if (!addr || typeof addr === 'string') {
+      throw new Error('WebSocketServerTransport: server no vinculado todavía');
+    }
+    return addr.address;
   }
 
   /** Snapshot del número de clientes conectados actualmente. */

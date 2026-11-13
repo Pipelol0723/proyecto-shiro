@@ -17,6 +17,7 @@ import { Logger } from '@proyecto-shiro/core';
 import { CharacterLoader, ConfigLoader } from '@proyecto-shiro/core/node';
 import { bootstrap } from './bootstrap.js';
 import { loadSecretsEnv } from './secrets/secrets-file.js';
+import { resolveBindHost } from './transports/bind-host.js';
 
 const DEFAULT_PORT = 9876;
 /**
@@ -56,7 +57,13 @@ async function main(): Promise<void> {
   const characterPath = process.env.SHIRO_CHARACTER ?? DEFAULT_CHARACTER_PATH;
   const config = new ConfigLoader({ logger }).loadModulesConfig(configPath);
   const character = new CharacterLoader({ logger }).loadFromFile(characterPath);
-  const result = await bootstrap({ port, config, character, logger });
+  const bind = resolveBindHost(process.env);
+  if (!bind.isLoopback) {
+    logger.warn(
+      `SHIRO_BIND_HOST=${bind.host} no es loopback: el bus queda sin auth en la red hasta P-40 (ADR 0027 2b)`,
+    );
+  }
+  const result = await bootstrap({ port, host: bind.host, config, character, logger });
 
   const shutdown = (signal: string): void => {
     console.log(`\nrecibido ${signal}, apagando…`);
@@ -77,13 +84,24 @@ async function main(): Promise<void> {
   });
 }
 
+/** `code` del error (p. ej. `EADDRINUSE`), si lo tiene. */
+function errorCode(err: unknown): unknown {
+  return typeof err === 'object' && err !== null && 'code' in err
+    ? (err as { code?: unknown }).code
+    : undefined;
+}
+
 /** `true` si el error es un EADDRINUSE (puerto ya ocupado). */
 function isAddrInUse(err: unknown): boolean {
+  return errorCode(err) === 'EADDRINUSE';
+}
+
+/** `listen()` no pudo usar el host pedido: no resuelve o no es de esta máquina. */
+function isBindHostUnusable(err: unknown): boolean {
+  const code = errorCode(err);
   return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code?: unknown }).code === 'EADDRINUSE'
+    (code === 'ENOTFOUND' || code === 'EADDRNOTAVAIL') &&
+    (process.env.SHIRO_BIND_HOST ?? '').trim() !== ''
   );
 }
 
@@ -99,6 +117,13 @@ main().catch((err: unknown) => {
         'ya hay otro core-host corriendo. Este proceso se cierra limpiamente.',
     );
     process.exit(0);
+  }
+  if (isBindHostUnusable(err)) {
+    console.error(
+      `core-host: no se puede escuchar en SHIRO_BIND_HOST=${String(process.env.SHIRO_BIND_HOST)} ` +
+        `(${String(errorCode(err))}). Debe ser una IP de esta máquina, 0.0.0.0 o localhost.`,
+    );
+    process.exit(1);
   }
   console.error('fallo al arrancar core-host:', err);
   process.exit(1);

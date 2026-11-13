@@ -105,6 +105,17 @@ describe('core-host bootstrap end-to-end', () => {
     }
   });
 
+  it('escucha en 127.0.0.1 por defecto', async () => {
+    result = await bootstrap({
+      port: 0,
+      config: loadFixtureConfig(),
+      character: FIXTURE_CHARACTER,
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+    expect(result.transport.address).toBe('127.0.0.1');
+  });
+
   it('arranca, registra mocks, emite bus:ready', async () => {
     const readyEvents: { startedAt: string }[] = [];
 

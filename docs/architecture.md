@@ -661,11 +661,12 @@ esencial:
   `ApprovalGate` con timeout para las tools `confirm`; cota de vueltas del
   tool-loop; CSP sin `unsafe-eval` y chat que renderiza texto plano.
 - **Fronteras abiertas** (deuda): el WebSocket `/bus` y el HTTP de audio del
-  `core-host`, el WS `/stt` de Whisper y Letta escuchan en todas las
-  interfaces, sin autenticación ni comprobación de `Origin`, y el bus entrega
-  el historial (`memory:snapshot`) al conectar.
+  `core-host` escuchan solo en `127.0.0.1` salvo `SHIRO_BIND_HOST`, pero sin
+  autenticación ni comprobación de `Origin`, y el bus entrega el historial
+  (`memory:snapshot`) al conectar; el WS `/stt` de Whisper y Letta escuchan
+  en todas las interfaces.
   [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted,
-  **sin implementar**) decide token compartido en el handshake,
+  **en curso**: ver su enmienda del 2026-11-13) decide token compartido en el handshake,
   `SHIRO_BIND_HOST` con default `127.0.0.1`, allowlist de `Origin` y
   aprobaciones ligadas al cliente; sustituyó al
   [ADR 0025](adr/0025-modelo-de-confianza-local-y-superficie-de-red.md), que
