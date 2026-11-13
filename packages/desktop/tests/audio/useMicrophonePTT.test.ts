@@ -67,8 +67,12 @@ describe('useMicrophonePTT.cancel()', () => {
     vi.clearAllMocks();
   });
 
-  function stubCaptureApis(): void {
+  function stubCaptureApis(): {
+    track: { stop: ReturnType<typeof vi.fn> };
+    closeContext: ReturnType<typeof vi.fn>;
+  } {
     const track = { stop: vi.fn() };
+    const closeContext = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia: vi.fn(() => Promise.resolve({ getTracks: () => [track] })) },
@@ -79,7 +83,7 @@ describe('useMicrophonePTT.cancel()', () => {
         sampleRate = 16_000;
         audioWorklet = { addModule: vi.fn(() => Promise.resolve()) };
         createMediaStreamSource = () => ({ connect: vi.fn(), disconnect: vi.fn() });
-        close = vi.fn(() => Promise.resolve());
+        close = closeContext;
       },
     );
     vi.stubGlobal(
@@ -89,10 +93,11 @@ describe('useMicrophonePTT.cancel()', () => {
         disconnect = vi.fn();
       },
     );
+    return { track, closeContext };
   }
 
   it('a mitad de grabación corta sin pedir transcripción: no emite stt:transcribed, aborta y queda idle', async () => {
-    stubCaptureApis();
+    const { track, closeContext } = stubCaptureApis();
     const bus = makeBus();
     const emitSpy = vi.spyOn(bus, 'emit');
     const { result } = renderHook(() => useMicrophonePTT({ bus, userId: 'me', enabled: false }));
@@ -109,6 +114,9 @@ describe('useMicrophonePTT.cancel()', () => {
     expect(whisperMock.stop).not.toHaveBeenCalled();
     expect(result.current.state).toBe('idle');
     expect(emitSpy.mock.calls.map((c) => c[0])).not.toContain('stt:transcribed');
+    // Suelta el micro de verdad: sin esto el indicador del sistema seguiría encendido.
+    expect(track.stop).toHaveBeenCalled();
+    expect(closeContext).toHaveBeenCalled();
   });
 
   it('es no-op si no se está grabando', () => {

@@ -24,13 +24,14 @@ import { SetupScreen } from '../../src/screens/Setup/SetupScreen';
 import { useSecretsSave } from '../../src/health/useSecretsSave';
 
 const pttMock = vi.hoisted(() => ({
+  state: 'recording' as 'recording' | 'requesting',
   stop: vi.fn(() => Promise.resolve()),
   cancel: vi.fn(),
 }));
 
 vi.mock('../../src/audio/useMicrophonePTT', () => ({
   useMicrophonePTT: () => ({
-    state: 'recording',
+    state: pttMock.state,
     error: null,
     start: vi.fn(() => Promise.resolve()),
     stop: pttMock.stop,
@@ -65,11 +66,22 @@ function makeSource(initial: TransportState): FakeSource {
   };
 }
 
-function Tree({ source, children }: { source: FakeSource; children: ReactNode }): JSX.Element {
-  const bus = new EventBus<EventMap>({
+function makeBus(): IEventBus<EventMap> {
+  return new EventBus<EventMap>({
     logger: new Logger('error', { module: 'test' }),
     transports: [new InProcessTransport()],
   });
+}
+
+function Tree({
+  source,
+  children,
+  bus = makeBus(),
+}: {
+  source: FakeSource;
+  children: ReactNode;
+  bus?: IEventBus<EventMap>;
+}): JSX.Element {
   return (
     <BusProvider bus={bus}>
       <ConnectionProvider source={source}>
@@ -82,6 +94,7 @@ function Tree({ source, children }: { source: FakeSource; children: ReactNode })
 }
 
 afterEach(() => {
+  pttMock.state = 'recording';
   vi.useRealTimers();
   vi.unstubAllGlobals();
   pttMock.stop.mockClear();
@@ -116,6 +129,31 @@ describe('micro y conexión', () => {
     expect(pttMock.cancel).toHaveBeenCalled();
     // stop() pediría la transcripción final y se emitiría un mensaje fantasma.
     expect(pttMock.stop).not.toHaveBeenCalled();
+  });
+
+  it('si la conexión se cae mientras el micro arranca, al cancelar no deja «Escuchando…» fijo', async () => {
+    stubBrowser();
+    pttMock.state = 'requesting';
+    const bus = makeBus();
+    const source = makeSource('open');
+    const tree = (): JSX.Element => (
+      <Tree source={source} bus={bus}>
+        <ConversationScreen />
+      </Tree>
+    );
+    const { rerender } = render(tree());
+    act(() => {
+      source.set('closed');
+    });
+    // El arranque del micro sigue su curso: avisa de que escucha y pasa a grabar.
+    await act(async () => {
+      await bus.emit('stt:listening', { userId: 'me' });
+    });
+    expect(screen.queryByText('Escuchando…')).not.toBeNull();
+    pttMock.state = 'recording';
+    rerender(tree());
+    expect(pttMock.cancel).toHaveBeenCalled();
+    expect(screen.queryByText('Escuchando…')).toBeNull();
   });
 });
 
