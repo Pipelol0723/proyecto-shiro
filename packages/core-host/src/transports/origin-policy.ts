@@ -10,6 +10,10 @@
  * Mientras no haya token (2b), su ausencia se acepta porque el servidor solo
  * escucha en loopback. Sin variable de entorno: los orígenes configurables
  * llegarán con el protocolo multicliente.
+ *
+ * Quedan fuera a propósito otros orígenes de desarrollo, como `vite preview`
+ * (puerto 4173) o Vite abierto por `http://[::1]:5173`: recibirían un 403 y
+ * el cliente se quedaría reconectando.
  */
 
 /** Orígenes de los clientes propios. Comparación exacta, sin comodines. */
