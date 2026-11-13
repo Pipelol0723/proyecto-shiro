@@ -225,3 +225,5 @@ El dueño aprobó la Fase 1 del plan de mejora y fijó tres reglas de proceso:
 El 2026-11-13 se creó `npm run verify` (P-02), así que el pendiente de
 «Consecuencias» queda cumplido: «checks en verde» significa `npm run verify`
 en verde.
+
+Nota del 2026-11-13: el extracto AGENTS.md ya no se mantiene a mano. Lo genera `scripts/sync-agents-md.mjs` desde los bloques marcados de CLAUDE.md (`<!-- agents-md:start -->` … `<!-- agents-md:end -->`), y `npm run verify` (y por tanto el CI) falla si AGENTS.md no coincide con lo generado. Qué secciones van en el extracto lo marca CLAUDE.md.

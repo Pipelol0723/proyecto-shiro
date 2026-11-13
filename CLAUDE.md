@@ -22,6 +22,8 @@ GTX 1650 de 4 GB, donde corre todo el stack.
 - [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md) — cómo se mantiene el proyecto: ramas, PRs de agentes, regla de ADR y checklist pre-release.
 - [`plan-modular-ai-companion.md`](plan-modular-ai-companion.md) — plan y visión original (histórico).
 
+<!-- agents-md:start -->
+
 ## ⚠️ Cuándo escribir un ADR (no te lo saltes)
 
 Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
@@ -54,6 +56,8 @@ Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
 - Tareas operativas (CI tweaks, bumps de dependencias menores, formato).
 - Decisiones reversibles en menos de 30 minutos sin tocar otros módulos.
 
+<!-- agents-md:end -->
+
 ## Estructura del monorepo
 
 ```
@@ -80,12 +84,14 @@ El estado de los hitos y la hoja de ruta (Ahora / Siguiente / Ideas) viven
 copies aquí ni en otro documento: enlaza a esa tabla. Para el detalle técnico
 de cada hito, lee [`docs/architecture.md`](docs/architecture.md) y su ADR.
 
+<!-- agents-md:start -->
+
 ## Convenciones de Git
 
 ### Ramas
 
 - `develop` → única rama de integración (rama por defecto).
-- Versiones: tags `vX.Y.Z` sobre `develop`. `main` no es una rama «estable»: solo avanza al publicar un tag, por fast-forward hasta ese tag (hoy va unos 260 commits por detrás de `develop`).
+- Versiones: tags `vX.Y.Z` sobre `develop`. `main` no es una rama «estable»: solo avanza al publicar un tag, por fast-forward hasta ese tag.
 - `feat/<nombre>/<tarea>` → trabajo individual; la rama se borra al fusionar.
 - `claude/<tarea>` → sesiones de agentes; `shiro/<tema>` → propuestas de self-dev. También se borran al fusionar.
 
@@ -94,11 +100,11 @@ de cada hito, lee [`docs/architecture.md`](docs/architecture.md) y su ADR.
 - **Nadie pushea directo a `main` ni `develop`**. Todo entra por PR.
 - PR base = `develop`, no `main`.
 - PRs pequeños a `develop` y commits pequeños y frecuentes (~30-60 min de trabajo).
-- Sin issue tracker: el seguimiento son las casillas del plan de mejora, la tabla Roadmap del README y la tabla SEC-xx de la revisión de seguridad.
+- Sin issue tracker: el seguimiento son las casillas del [plan de mejora](docs/plan-mejora-2026-11.md), la tabla [Roadmap del README](README.md#roadmap) y la tabla SEC-xx de la [revisión de seguridad](docs/security-review-2026-07.md).
 
 ### PRs de agentes y de self-dev (ADR 0029)
 
-- Citan el lote `L-xxx` y los hallazgos `R-xxx` que cierran (ver el plan de mejora y la revisión).
+- Citan el lote `L-xxx` y los hallazgos `R-xxx` que cierran (ver el [plan de mejora](docs/plan-mejora-2026-11.md) y la [revisión](docs/revision-estado-2026-11.md)).
 - Diff de 300 líneas como máximo, salvo excepción justificada en el PR.
 - Test rojo→verde, o verificación manual descrita.
 - Checks en verde (ver «Antes de pushear»).
@@ -127,11 +133,13 @@ npm run verify
 
 Hace los mismos pasos que el CI, en el mismo orden, y se detiene en el primero
 que falla: compila core (`npm run build -w @proyecto-shiro/core`) y luego
-ejecuta `format:check`, `lint`, `typecheck`, `test`, `build` y `test:scripts`.
-Compilar core primero es obligatorio: los demás paquetes leen sus tipos de
-`packages/core/dist`, que no se versiona. El CI ejecuta además
-`npm run audit:prod` (avisos `high` o `critical` en dependencias de
-producción), que necesita red.
+ejecuta `format:check`, `lint`, `typecheck`, `test`, `build`, `test:scripts` y
+`agents:check` (que comprueba que AGENTS.md coincide con lo que genera
+CLAUDE.md: si tocas un bloque marcado con `agents-md`, ejecuta
+`npm run agents:sync`). Compilar core primero es obligatorio: los demás
+paquetes leen sus tipos de `packages/core/dist`, que no se versiona. El CI
+ejecuta además `npm run audit:prod` (avisos `high` o `critical` en
+dependencias de producción), que necesita red.
 
 ## Calidad de código
 
@@ -166,6 +174,8 @@ class LLMModule {
   }
 }
 ```
+
+<!-- agents-md:end -->
 
 ## Si tienes dudas
 
