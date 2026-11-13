@@ -4,7 +4,7 @@
  * (el binario de node, absoluto) para ser determinista cross-platform.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import { Logger } from '../../../../../src/core/logger.js';
 import type { ToolContext } from '../../../../../src/interfaces/IToolModule.js';
@@ -65,7 +65,18 @@ describe('ShellToolConfigSchema', () => {
 
 // ─── ShellExecTool (ejecución real) ───────────────────────────────────
 
+// Los tests que resuelven un comando en el PATH o lanzan un `.cmd` tardan
+// segundos en Windows con la máquina cargada: superaban los 5 s por defecto
+// de Vitest y fallaban de forma intermitente (R-192). Se les da un tope
+// explícito en vez de subir el `testTimeout` global, que escondería tests
+// lentos de verdad.
+const SPAWN_TEST_TIMEOUT_MS = 30_000;
+
 describe('ShellExecTool', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   function tool(timeoutMs = 5000): ShellExecTool {
     const allow = new ShellAllowlist([{ cmd: NODE, allowed_args_pattern: '.*' }]);
     return new ShellExecTool(allow, tmpdir(), timeoutMs);
@@ -111,29 +122,40 @@ describe('ShellExecTool', () => {
     expect(res.error).toContain('timeout');
   });
 
-  it('falla si el comando no existe en PATH', async () => {
-    const allow = new ShellAllowlist([
-      { cmd: 'definitely_not_a_cmd_xyz', allowed_args_pattern: '.*' },
-    ]);
-    const res = await new ShellExecTool(allow, tmpdir(), 5000).execute(
-      { command: 'definitely_not_a_cmd_xyz', args: [] },
-      ctx(),
-    );
-    expect(res.ok).toBe(false);
-    expect(res.error).toContain('no encontrado');
-  });
+  it(
+    'falla si el comando no existe en PATH',
+    async () => {
+      // PATH de un solo directorio: `resolveCommand` no recorre el PATH real
+      // (decenas de directorios × extensiones de PATHEXT en Windows).
+      vi.stubEnv('PATH', tmpdir());
+      const allow = new ShellAllowlist([
+        { cmd: 'definitely_not_a_cmd_xyz', allowed_args_pattern: '.*' },
+      ]);
+      const res = await new ShellExecTool(allow, tmpdir(), 5000).execute(
+        { command: 'definitely_not_a_cmd_xyz', args: [] },
+        ctx(),
+      );
+      expect(res.ok).toBe(false);
+      expect(res.error).toContain('no encontrado');
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
 
-  it('spawnea un .cmd/.bat en Windows sin EINVAL (npm --version)', async () => {
-    // Regresión: en Windows `npm` es `npm.cmd`; spawnearlo con shell:false
-    // lanza EINVAL (Node, mitigación de CVE-2024-27980) y rompía el eval de
-    // self-dev. El ShellExecTool usa shell:true para batch files. Cross-platform:
-    // en POSIX `npm` no es batch y va por el mismo camino sin problema.
-    const allow = new ShellAllowlist([{ cmd: 'npm', allowed_args_pattern: '^--version' }]);
-    const res = await new ShellExecTool(allow, tmpdir(), 30_000).execute(
-      { command: 'npm', args: ['--version'] },
-      ctx(),
-    );
-    expect(res.ok).toBe(true);
-    expect(res.output).toMatch(/\d+\.\d+\.\d+/);
-  });
+  it(
+    'spawnea un .cmd/.bat en Windows sin EINVAL (npm --version)',
+    async () => {
+      // Regresión: en Windows `npm` es `npm.cmd`; spawnearlo con shell:false
+      // lanza EINVAL (Node, mitigación de CVE-2024-27980) y rompía el eval de
+      // self-dev. El ShellExecTool usa shell:true para batch files. Cross-platform:
+      // en POSIX `npm` no es batch y va por el mismo camino sin problema.
+      const allow = new ShellAllowlist([{ cmd: 'npm', allowed_args_pattern: '^--version' }]);
+      const res = await new ShellExecTool(allow, tmpdir(), 30_000).execute(
+        { command: 'npm', args: ['--version'] },
+        ctx(),
+      );
+      expect(res.ok).toBe(true);
+      expect(res.output).toMatch(/\d+\.\d+\.\d+/);
+    },
+    SPAWN_TEST_TIMEOUT_MS,
+  );
 });
