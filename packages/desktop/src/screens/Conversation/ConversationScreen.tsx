@@ -93,10 +93,16 @@ export function ConversationScreen(): JSX.Element {
   // (se pierde el pointerup): hay que parar el micro explícitamente.
   // Se cancela (no `stop`): parar pediría la transcripción a Whisper y se
   // emitiría un `stt:transcribed` local que el servidor nunca recibiría.
+  // Además se apaga `listening`: si la conexión se cayó mientras el micro
+  // arrancaba, su `stt:listening` llega después de CONNECTION_LOST y nadie más
+  // lo apagaría («Escuchando…» fijo).
   const { state: pttState, cancel: pttCancel } = ptt;
   useEffect(() => {
-    if (!connected && pttState === 'recording') pttCancel();
-  }, [connected, pttState, pttCancel]);
+    if (!connected && pttState === 'recording') {
+      pttCancel();
+      dispatch({ type: 'LISTEN_END' });
+    }
+  }, [connected, pttState, pttCancel, dispatch]);
 
   // Tras una pérdida de conexión `speaking` se apaga, pero un audio ya recibido
   // puede seguir sonando: se corta también si el elemento suena de verdad.
