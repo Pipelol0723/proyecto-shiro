@@ -66,6 +66,8 @@ export type CompanionAction =
   | { type: 'THINK_START'; tier: LLMTier }
   | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
   | { type: 'SPEAK_END' }
+  | { type: 'LISTEN_END' }
+  | { type: 'CONNECTION_LOST' }
   | { type: 'SET_EMOTION'; emotion: Emotion }
   | { type: 'HYDRATE_FROM_MEMORY'; entries: MemoryEntry[] }
   | { type: 'RESET' };
@@ -150,6 +152,23 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
 
     case 'SPEAK_END':
       return { ...state, speaking: false, subtitle: '' };
+
+    case 'LISTEN_END':
+      // El micro falló (p. ej. permiso denegado) tras `stt:listening`: sin
+      // esto `listening` se quedaba a true para siempre (R-118).
+      return { ...state, listening: false, sttLive: '' };
+
+    case 'CONNECTION_LOST':
+      // Se cayó el bus: la respuesta en curso no va a llegar (R-068, R-082).
+      // Se apagan los indicadores de turno pero se conserva el historial.
+      return {
+        ...state,
+        thinking: false,
+        listening: false,
+        speaking: false,
+        sttLive: '',
+        subtitle: '',
+      };
 
     case 'SET_EMOTION':
       return { ...state, emotion: action.emotion };

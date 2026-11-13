@@ -1,7 +1,8 @@
 /**
  * App — layout final del cliente desktop.
  *
- * `BusProvider` envuelve todo; dentro, `CompanionProvider` monta el state
+ * `BusProvider` envuelve todo; dentro, `ConnectionProvider` expone el estado
+ * de conexión del transport (P-07a) y `CompanionProvider` monta el state
  * del companion **una sola vez**, por encima del switch de pantallas, y
  * `AudioProvider` el reproductor TTS (fuera del `ErrorBoundary`: un fallo de
  * render no corta la voz, y esta no se corta al cambiar de pantalla). Eso
@@ -20,6 +21,8 @@
 import { useState } from 'react';
 import type { EventMap, IEventBus } from '@proyecto-shiro/core';
 import { BusProvider } from './bus-context';
+import { ConnectionProvider, type ConnectionSource } from './connection/connection-context';
+import { ConnectionBanner } from './connection/ConnectionBanner';
 import { CompanionProvider } from './state/companion-context';
 import { AudioProvider } from './audio/audio-context';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -40,22 +43,26 @@ import styles from './App.module.css';
 export interface AppProps {
   /** Bus de producción inyectado desde `main.tsx`. Omitir en tests. */
   bus?: IEventBus<EventMap>;
+  /** Transport observable del bus de producción. Omitir => siempre conectado. */
+  connection?: ConnectionSource;
 }
 
-export function App({ bus }: AppProps = {}): JSX.Element {
+export function App({ bus, connection }: AppProps = {}): JSX.Element {
   return (
     <BusProvider bus={bus}>
-      <CompanionProvider>
-        {/* Red de seguridad: si algo en el árbol lanza al renderizar, antes
+      <ConnectionProvider source={connection}>
+        <CompanionProvider>
+          {/* Red de seguridad: si algo en el árbol lanza al renderizar, antes
             se llevaba TODA la app a blanco. Ahora el boundary muestra el
             error (diagnosticable) en vez de una pantalla muerta. El Avatar
             tiene además su propio boundary que cae al Orbe sin molestar. */}
-        <AudioProvider>
-          <ErrorBoundary fallback={(error) => <AppCrashFallback error={error} />}>
-            <AppShell />
-          </ErrorBoundary>
-        </AudioProvider>
-      </CompanionProvider>
+          <AudioProvider>
+            <ErrorBoundary fallback={(error) => <AppCrashFallback error={error} />}>
+              <AppShell />
+            </ErrorBoundary>
+          </AudioProvider>
+        </CompanionProvider>
+      </ConnectionProvider>
     </BusProvider>
   );
 }
@@ -121,6 +128,8 @@ function AppShell(): JSX.Element {
       {/* Aviso de auto-update (ADR 0024 §4). Invisible fuera de Tauri
           y cuando la app está al día. */}
       <UpdateBanner />
+      {/* Aviso de conexión perdida con el core-host (P-07a). */}
+      <ConnectionBanner />
       {/* Modal de aprobación de tools agénticas confirm (ADR 0022 §4).
           Invisible salvo cuando Shiro pide permiso para una acción. */}
       <ToolApprovalModal />

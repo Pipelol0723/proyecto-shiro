@@ -194,19 +194,17 @@ describe('ConversationScreen sin conexión', () => {
       if (el === null) throw new Error('micro no encontrado');
       return el as HTMLButtonElement;
     };
-    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
+    expect(screen.getByRole('textbox')).toHaveProperty('disabled', false);
     expect(mic().disabled).toBe(false);
 
     act(() => {
       source.set('closed');
     });
 
-    const input = screen.getByRole('textbox') as HTMLInputElement;
-    expect(input.disabled).toBe(true);
-    expect(input.placeholder).toMatch(/Sin conexión con Shiro/);
-    expect((screen.getByRole('button', { name: 'Enviar' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    const input = screen.getByRole('textbox');
+    expect(input).toHaveProperty('disabled', true);
+    expect(input.getAttribute('placeholder')).toMatch(/Sin conexión con Shiro/);
+    expect(screen.getByRole('button', { name: 'Enviar' })).toHaveProperty('disabled', true);
     expect(mic().disabled).toBe(true);
   });
 

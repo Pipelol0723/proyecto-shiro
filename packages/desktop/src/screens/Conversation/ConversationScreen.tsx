@@ -27,6 +27,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../../components/Avatar';
 import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
+import { useConnectionState } from '../../connection/use-connection';
 import { useCompanion } from '../../state/use-companion';
 import { useMicrophonePTT } from '../../audio/useMicrophonePTT';
 import { useAudio } from '../../audio/use-audio';
@@ -44,7 +45,9 @@ function clampAvatarSize(size: number): number {
 
 export function ConversationScreen(): JSX.Element {
   const bus = useBus();
-  const [state] = useCompanion();
+  const [state, dispatch] = useCompanion();
+  // Sin conexión abierta no se puede escribir ni hablar (P-07a, R-068).
+  const connected = useConnectionState() === 'open';
   const [draft, setDraft] = useState('');
   const [chatOpen, setChatOpen] = useState(true);
   const stageRef = useRef<HTMLElement | null>(null);
@@ -81,12 +84,18 @@ export function ConversationScreen(): JSX.Element {
   // hasta que la frase obsoleta terminara.
   const thinking = state.thinking;
   const sending = thinking; // alias semántico para los disables
-  const ptt = useMicrophonePTT({ bus, userId: LOCAL_USER_ID, enabled: !thinking });
+  const ptt = useMicrophonePTT({ bus, userId: LOCAL_USER_ID, enabled: !thinking && connected });
   const micActive = ptt.state === 'recording' || ptt.state === 'requesting';
-  const micDisabled = ptt.state === 'unsupported' || thinking;
+  const micDisabled = ptt.state === 'unsupported' || thinking || !connected;
+
+  // Si el micro falla tras `stt:listening` (permiso denegado, sin dispositivo),
+  // nadie emitiría `stt:transcribed` y «Escuchando…» quedaría fijo (R-118).
+  useEffect(() => {
+    if (ptt.state === 'error' && state.listening) dispatch({ type: 'LISTEN_END' });
+  }, [ptt.state, state.listening, dispatch]);
 
   async function sendMessage(text: string): Promise<void> {
-    if (thinking || !text.trim()) return;
+    if (!connected || thinking || !text.trim()) return;
     if (state.speaking) ttsPlayback.cancel();
     await bus.emit('user:message', { text: text.trim(), userId: LOCAL_USER_ID });
   }
@@ -94,7 +103,7 @@ export function ConversationScreen(): JSX.Element {
   function onSubmitText(e: React.FormEvent): void {
     e.preventDefault();
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || !connected) return;
     setDraft('');
     void sendMessage(text);
   }
@@ -117,6 +126,7 @@ export function ConversationScreen(): JSX.Element {
 
   const micTitle = (() => {
     if (ptt.state === 'unsupported') return 'Tu navegador no soporta captura de audio';
+    if (!connected) return 'Sin conexión con Shiro';
     if (sending) return 'Espera a que termine el turno actual';
     if (micActive) return 'Soltando para terminar…';
     if (state.speaking) return 'Interrumpir y hablar';
@@ -194,9 +204,9 @@ export function ConversationScreen(): JSX.Element {
           <input
             type="text"
             className={styles.input}
-            placeholder="Escribe a Shiro…"
+            placeholder={connected ? 'Escribe a Shiro…' : 'Sin conexión con Shiro…'}
             value={draft}
-            disabled={sending}
+            disabled={sending || !connected}
             onChange={(e) => {
               setDraft(e.currentTarget.value);
             }}
@@ -204,7 +214,7 @@ export function ConversationScreen(): JSX.Element {
           <button
             type="submit"
             className={`${styles.iconBtn} ${styles.send}`}
-            disabled={sending || !draft.trim()}
+            disabled={sending || !connected || !draft.trim()}
             aria-label="Enviar"
           >
             <IconSend />

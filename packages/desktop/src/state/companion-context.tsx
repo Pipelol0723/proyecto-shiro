@@ -22,7 +22,8 @@
  * componentes; el hook `useCompanion` vive en `./use-companion.ts`.
  */
 
-import { createContext, type Dispatch, type ReactNode } from 'react';
+import { createContext, useEffect, useRef, type Dispatch, type ReactNode } from 'react';
+import { useConnectionState } from '../connection/use-connection';
 import type { CompanionAction, CompanionState } from './companion-reducer';
 import { useCompanionState } from './useCompanionState';
 
@@ -35,5 +36,18 @@ export const CompanionContext = createContext<CompanionContextValue | null>(null
 
 export function CompanionProvider({ children }: { children: ReactNode }): JSX.Element {
   const value = useCompanionState();
+  const dispatch = value[1];
+
+  // Si la conexión pasa de `open` a cualquier otro estado, el turno en curso
+  // se pierde: apagamos «pensando/escuchando/hablando» (P-07a, R-068, R-082).
+  const connection = useConnectionState();
+  const previous = useRef(connection);
+  useEffect(() => {
+    if (previous.current === 'open' && connection !== 'open') {
+      dispatch({ type: 'CONNECTION_LOST' });
+    }
+    previous.current = connection;
+  }, [connection, dispatch]);
+
   return <CompanionContext.Provider value={value}>{children}</CompanionContext.Provider>;
 }

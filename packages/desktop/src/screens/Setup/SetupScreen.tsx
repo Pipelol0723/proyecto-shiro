@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import type { ServiceStatus, SystemHealthReport } from '@proyecto-shiro/core';
 import { useBus } from '../../use-bus';
+import { useConnectionState } from '../../connection/use-connection';
 import { useSystemHealth } from '../../health/useSystemHealth';
 import { useSecretsSave } from '../../health/useSecretsSave';
 import styles from './SetupScreen.module.css';
@@ -89,7 +90,17 @@ const SECRETS: readonly SecretRow[] = [
   },
 ] as const;
 
-function StatusBadge({ ok, checking }: { ok: boolean; checking: boolean }): JSX.Element {
+function StatusBadge({
+  ok,
+  checking,
+  unknown = false,
+}: {
+  ok: boolean;
+  checking: boolean;
+  /** Sin reporte porque el core-host no responde: no se sabe, no es «no detectado». */
+  unknown?: boolean;
+}): JSX.Element {
+  if (unknown) return <span className={`${styles.badge} ${styles.badgeChecking}`}>sin datos</span>;
   if (checking)
     return <span className={`${styles.badge} ${styles.badgeChecking}`}>comprobando…</span>;
   return ok ? (
@@ -101,8 +112,11 @@ function StatusBadge({ ok, checking }: { ok: boolean; checking: boolean }): JSX.
 
 export function SetupScreen(): JSX.Element {
   const bus = useBus();
-  const { report, checking, refresh } = useSystemHealth({ bus });
-  const secrets = useSecretsSave(bus);
+  const connected = useConnectionState() === 'open';
+  const { report, checking, timedOut, refresh } = useSystemHealth({ bus });
+  const secrets = useSecretsSave(bus, connected);
+  // Sin reporte y sin respuesta del core-host: no hay nada que mostrar salvo el aviso.
+  const unreachable = report === null && (timedOut || !connected);
   // Borradores de las keys que el usuario escribe (no se rellenan nunca
   // con el valor real — solo se conoce la presencia). Key por field.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -125,6 +139,16 @@ export function SetupScreen(): JSX.Element {
         </p>
       </header>
 
+      {(timedOut || !connected) && (
+        <div className={styles.section} role="alert">
+          <h2 className={styles.sectionTitle}>El core-host no responde</h2>
+          <p className={styles.degraded}>
+            Shiro no consigue hablar con su servidor local, así que no se puede comprobar nada ni
+            guardar keys. Reinicia el core-host (o la app) y pulsa «rechequear».
+          </p>
+        </div>
+      )}
+
       <div className={styles.section}>
         <div className={styles.sectionHead}>
           <h2 className={styles.sectionTitle}>Servicios externos</h2>
@@ -146,7 +170,11 @@ export function SetupScreen(): JSX.Element {
               <li key={svc.key} className={styles.card}>
                 <div className={styles.cardHead}>
                   <span className={styles.cardName}>{svc.name}</span>
-                  <StatusBadge ok={ok} checking={report === null && checking} />
+                  <StatusBadge
+                    ok={ok}
+                    checking={report === null && checking}
+                    unknown={unreachable}
+                  />
                 </div>
                 <p className={styles.cardPurpose}>{svc.purpose}</p>
                 {!ok && report !== null && (
@@ -171,7 +199,11 @@ export function SetupScreen(): JSX.Element {
               <li key={sec.key} className={styles.card}>
                 <div className={styles.cardHead}>
                   <span className={styles.cardName}>{sec.name}</span>
-                  <StatusBadge ok={ok} checking={report === null && checking} />
+                  <StatusBadge
+                    ok={ok}
+                    checking={report === null && checking}
+                    unknown={unreachable}
+                  />
                 </div>
                 <p className={styles.cardPurpose}>{sec.purpose}</p>
                 {!ok && report !== null && <p className={styles.degraded}>{sec.degraded}</p>}
