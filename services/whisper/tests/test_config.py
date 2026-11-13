@@ -46,7 +46,7 @@ def test_defaults_when_no_env() -> None:
     assert cfg.device == "auto"
     assert cfg.compute_type == "auto"
     assert cfg.language == "es"
-    assert cfg.host == "0.0.0.0"
+    assert cfg.host == "127.0.0.1"
     assert cfg.port == 8765
     assert cfg.partial_interval_ms == 1500
     assert cfg.sample_rate == 16000
