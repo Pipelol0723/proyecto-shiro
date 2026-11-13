@@ -21,11 +21,36 @@
  * Ver ADR 0012 (split cliente/server) y ADR 0013 (protocolo).
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import {
+  createServer,
+  STATUS_CODES,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
+import type { Duplex } from 'node:stream';
 import { parseEnvelope, serializeEnvelope } from '@proyecto-shiro/core';
 import type { ITransport, Logger, TransportReceiveHandler } from '@proyecto-shiro/core';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { DEFAULT_BIND_HOST } from './bind-host.js';
+import { describeRejectedOrigin, isOriginAllowed } from './origin-policy.js';
+
+/**
+ * Tope de un mensaje entrante. El default de `ws` son 100 MiB; los eventos
+ * del bus son JSON pequeños (el audio no viaja por aquí).
+ */
+const MAX_PAYLOAD_BYTES = 1_048_576;
+
+/** Responde a un upgrade que no se acepta y cierra el socket al terminar de escribir. */
+function rejectUpgrade(socket: Duplex, status: number): void {
+  const reason = STATUS_CODES[status] ?? 'Error';
+  socket.once('finish', () => {
+    socket.destroy();
+  });
+  socket.end(
+    `HTTP/1.1 ${String(status)} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`,
+  );
+}
 
 /**
  * Handler de un request HTTP no-upgrade. Devuelve `true` si el handler
@@ -73,6 +98,7 @@ export class WebSocketServerTransport implements ITransport {
    */
   private readonly httpServer: Server;
   private readonly server: WebSocketServer;
+  private readonly path: string;
   private readonly clients = new Set<WebSocket>();
   private readonly logger: Logger;
   private readonly readyPromise: Promise<void>;
@@ -86,9 +112,13 @@ export class WebSocketServerTransport implements ITransport {
     this.httpServer = createServer((req, res) => {
       this.handleHttpRequest(req, res);
     });
-    this.server = new WebSocketServer({
-      server: this.httpServer,
-      path: options.path ?? '/bus',
+    this.path = options.path ?? '/bus';
+    // `noServer`: el upgrade lo decide `handleUpgrade` (path y `Origin`) antes
+    // de que exista un WebSocket. La documentación de `ws` recomienda el
+    // evento `upgrade` frente a `verifyClient`.
+    this.server = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
+    this.httpServer.on('upgrade', (req, socket, head) => {
+      this.handleUpgrade(req, socket, head);
     });
 
     this.readyPromise = new Promise<void>((resolve, reject) => {
@@ -98,24 +128,27 @@ export class WebSocketServerTransport implements ITransport {
           typeof addr === 'string' || addr === null
             ? String(addr)
             : `${addr.family === 'IPv6' ? `[${addr.address}]` : addr.address}:${String(addr.port)}`;
-        this.logger.info(`escuchando en ${where} (path ${options.path ?? '/bus'})`);
+        this.logger.info(`escuchando en ${where} (path ${this.path})`);
         resolve();
       });
       this.httpServer.once('error', (err) => {
         reject(err);
       });
+      // Listener permanente: sin él, un 'error' posterior del httpServer
+      // (p. ej. sin descriptores al aceptar) tumbaría el proceso. Antes lo
+      // absorbía el propio `ws`, que con `noServer` ya no escucha al server.
+      this.httpServer.on('error', (err) => {
+        this.logger.debug('httpServer error (el de arranque se maneja vía ready())', { err });
+      });
       this.httpServer.listen(options.port, options.host ?? DEFAULT_BIND_HOST);
     });
 
-    // `ws` re-emite los errores del httpServer (incluido el EADDRINUSE al
-    // bindear el puerto) sobre la instancia del WebSocketServer. Sin un
-    // listener aquí, Node trata ese 'error' como no manejado y tumba el
-    // proceso con un stack feo ANTES de que `ready()` llegue a rechazar.
-    // Lo absorbemos a debug: el rechazo de `readyPromise` (via el 'error'
-    // del httpServer, arriba) es quien lleva el fallo a quien hizo `ready()`,
-    // que decide qué hacer (ver el manejo de EADDRINUSE en server.ts).
+    // El EADDRINUSE al bindear llega por el 'error' del httpServer (arriba):
+    // el rechazo de `readyPromise` lleva el fallo a quien hizo `ready()`, que
+    // decide qué hacer (ver server.ts). Este listener es solo una red para
+    // que un 'error' del WebSocketServer nunca quede sin manejar.
     this.server.on('error', (err) => {
-      this.logger.debug('WebSocketServer error (se maneja vía ready())', { err });
+      this.logger.debug('WebSocketServer error', { err });
     });
 
     this.server.on('connection', (ws) => {
@@ -130,6 +163,33 @@ export class WebSocketServerTransport implements ITransport {
    */
   onRequest(handler: HttpRequestHandler): void {
     this.httpHandlers.push(handler);
+  }
+
+  /**
+   * Decide un upgrade a WebSocket. Solo pasa el path del bus y un `Origin`
+   * permitido (ADR 0027, 2a); el resto se rechaza antes de crear el
+   * WebSocket, así que los `connection handlers` (que mandan el
+   * `memory:snapshot`) nunca se disparan para un origen ajeno.
+   */
+  private handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+    // Sin esto, un error del socket durante el rechazo quedaría sin manejar.
+    socket.on('error', () => {
+      socket.destroy();
+    });
+    const pathname = (req.url ?? '').split('?')[0];
+    if (pathname !== this.path) {
+      rejectUpgrade(socket, 400);
+      return;
+    }
+    const origin = req.headers.origin;
+    if (!isOriginAllowed(origin)) {
+      this.logger.warn(describeRejectedOrigin(origin));
+      rejectUpgrade(socket, 403);
+      return;
+    }
+    this.server.handleUpgrade(req, socket, head, (ws) => {
+      this.server.emit('connection', ws, req);
+    });
   }
 
   private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {

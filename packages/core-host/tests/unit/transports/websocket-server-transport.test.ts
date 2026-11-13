@@ -86,6 +86,75 @@ describe('WebSocketServerTransport', () => {
     },
   );
 
+  /**
+   * Intenta abrir un WebSocket y cuenta cómo acaba: `'open'`, el status HTTP
+   * con el que el servidor rechazó el upgrade, o el código de error.
+   */
+  function connectOutcome(url: string, origin?: string): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const client = new WebSocket(url, origin === undefined ? {} : { origin });
+      cleanup.push(() => {
+        client.terminate();
+      });
+      client.once('open', () => resolve('open'));
+      client.once('unexpected-response', (_req, res) => resolve(String(res.statusCode)));
+      client.once('error', (err: NodeJS.ErrnoException) => resolve(err.code ?? err.message));
+    });
+  }
+
+  it('rechaza con 403 un Origin ajeno', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+
+    const url = `ws://127.0.0.1:${t.port}/bus`;
+    expect(await connectOutcome(url, 'https://evil.example')).toBe('403');
+    // «null» es el Origin de una página file:// o de un iframe aislado.
+    expect(await connectOutcome(url, 'null')).toBe('403');
+    await tick(20);
+    expect(t.clientCount).toBe(0);
+  });
+
+  it('un Origin rechazado no dispara los connection handlers', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+    // Si se disparasen, el bootstrap mandaría el memory:snapshot al intruso.
+    const onConnection = vi.fn();
+    t.onConnection(onConnection);
+
+    await connectOutcome(`ws://127.0.0.1:${t.port}/bus`, 'https://evil.example');
+    await tick(20);
+    expect(onConnection).not.toHaveBeenCalled();
+  });
+
+  it.each(['http://tauri.localhost', 'http://localhost:5173', 'http://127.0.0.1:5173'])(
+    'acepta el Origin %s',
+    async (origin) => {
+      const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+      cleanup.push(() => t.close());
+      await t.ready();
+      expect(await connectOutcome(`ws://127.0.0.1:${t.port}/bus`, origin)).toBe('open');
+    },
+  );
+
+  it('acepta un cliente sin Origin (2a, sin token)', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+    expect(await connectOutcome(`ws://127.0.0.1:${t.port}/bus`)).toBe('open');
+  });
+
+  it('un path distinto de /bus no hace upgrade', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+    expect(await connectOutcome(`ws://127.0.0.1:${t.port}/otro`)).toBe('400');
+    expect(await connectOutcome(`ws://127.0.0.1:${t.port}/bus/extra`)).toBe('400');
+    await tick(20);
+    expect(t.clientCount).toBe(0);
+  });
+
   it('ready() resuelve cuando el server está escuchando', async () => {
     const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
     cleanup.push(() => t.close());
@@ -99,10 +168,10 @@ describe('WebSocketServerTransport', () => {
     await t1.ready();
 
     // Un segundo transport sobre el MISMO puerto debe rechazar `ready()`
-    // limpiamente. `ws` re-emite el EADDRINUSE sobre el WebSocketServer; sin
-    // el listener de 'error' que añadimos, Node lo trataría como 'error' no
-    // manejado y tumbaría el proceso (regresión del conflicto dev/sidecar —
-    // dos core-hosts peleando por el 9876; ver server.ts `isAddrInUse`).
+    // limpiamente. El EADDRINUSE llega por el 'error' del httpServer; sin
+    // los listeners que añadimos, Node lo trataría como 'error' no manejado
+    // y tumbaría el proceso (regresión del conflicto dev/sidecar — dos
+    // core-hosts peleando por el 9876; ver server.ts `isAddrInUse`).
     const t2 = new WebSocketServerTransport({ port: t1.port, logger: makeLogger() });
     cleanup.push(async () => {
       try {

@@ -47,7 +47,13 @@ export function createApprovalGate(
     if (entry === undefined) return; // requestId desconocido / ya resuelto
     pending.delete(p.requestId);
     clearTimeout(entry.timer);
-    entry.resolve(p.approved);
+    // El payload viene de un cliente por el bus: el tipo no está garantizado.
+    // Solo `true` aprueba; `"false"`, `1` o cualquier otra cosa cancelan.
+    const approved: unknown = p.approved;
+    if (typeof approved !== 'boolean') {
+      logger.warn(`tool:approval con approved no booleano (${typeof approved}) — cancelada`);
+    }
+    entry.resolve(approved === true);
   });
 
   return {

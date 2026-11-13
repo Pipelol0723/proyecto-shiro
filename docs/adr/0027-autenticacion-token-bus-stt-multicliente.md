@@ -241,3 +241,8 @@ clave. 2b tiene que añadirlo a esa lista.
   `SHIRO_BIND_HOST=::`). Entra en el modelo de amenaza actual, que acepta
   procesos locales. Se cierra cuando los clientes usen `127.0.0.1` de forma
   explícita, lo que exige ampliar la CSP de Tauri.
+- `/audio` no comprueba la cabecera `Host`. Con DNS rebinding, una web ajena
+  puede pedirlo como si fuera de su mismo origen, sin `Origin`, y leer un
+  audio si conoce su id. El id es un UUID aleatorio que solo viaja por el
+  bus, y el bus sí queda protegido porque un WebSocket siempre manda
+  `Origin`. Se cierra validando `Host` cuando llegue el token.

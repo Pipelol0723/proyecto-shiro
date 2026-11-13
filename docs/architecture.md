@@ -358,7 +358,7 @@ graph LR
 
 - **`ELEVENLABS_API_KEY` server-side**: vive solo en `process.env` del `core-host`. Sin ella, ElevenLabsTTS arranca con un `WARN` (no aborta) y todos los turnos caen al fallback.
 - **El bootstrap solo crea el AudioCache si `simulationSpeed !== 0`** — `simulationSpeed === 0` es la señal de "modo test" y mantiene el simulador legacy de `tts:audio-ended` para tests que no levantan red real.
-- **Sin auth en `GET /audio/`**: V1 local-only. CORS abierto (`Access-Control-Allow-Origin: *`). Cuando llegue multi-device público, habrá que firmar/limitar las URLs.
+- **Sin auth en `GET /audio/`**: V1 local-only. CORS acotado: `403` a un `Origin` ajeno y eco exacto del permitido (ADR 0027, 2a); nunca `*`. Cuando llegue multi-device público, habrá que firmar/limitar las URLs.
 - **WAV de SystemTTS son ~50-200 KB** para frases cortas — manejable en memoria sin streaming. Si el contenido crece, habrá que stream-pipe el archivo.
 
 ## Packaging Tauri: binario, sidecar y updater
@@ -661,10 +661,10 @@ esencial:
   `ApprovalGate` con timeout para las tools `confirm`; cota de vueltas del
   tool-loop; CSP sin `unsafe-eval` y chat que renderiza texto plano.
 - **Fronteras abiertas** (deuda): el WebSocket `/bus` y el HTTP de audio del
-  `core-host` escuchan solo en `127.0.0.1` salvo `SHIRO_BIND_HOST`, pero sin
-  autenticación ni comprobación de `Origin`, y el bus entrega el historial
-  (`memory:snapshot`) al conectar; el WS `/stt` de Whisper y Letta escuchan
-  en todas las interfaces.
+  `core-host` escuchan solo en `127.0.0.1` salvo `SHIRO_BIND_HOST` y rechazan
+  un `Origin` ajeno, pero sin autenticación: un proceso local todavía se
+  conecta y recibe el historial (`memory:snapshot`); el WS `/stt` de Whisper
+  y Letta escuchan en todas las interfaces.
   [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted,
   **en curso**: ver su enmienda del 2026-11-13) decide token compartido en el handshake,
   `SHIRO_BIND_HOST` con default `127.0.0.1`, allowlist de `Origin` y
