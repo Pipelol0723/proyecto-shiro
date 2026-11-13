@@ -250,4 +250,36 @@ describe('caída de conexión mientras Shiro habla', () => {
     expect(ended).not.toHaveBeenCalled();
     expect(FakeAudio.instances).toHaveLength(1);
   });
+
+  it('corta también un audio que aún está cargando (play() pendiente)', async () => {
+    vi.spyOn(FakeAudio.prototype, 'play').mockImplementation(function (this: FakeAudio) {
+      this.paused = false;
+      return new Promise<void>(() => undefined);
+    });
+    const { source, ended, speak } = setup();
+    const audio = await speak();
+    act(() => {
+      source.set('closed');
+    });
+    expect(audio?.paused).toBe(true);
+    expect(audio?.src).toBe('');
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+    expect(ended).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it('con la voz silenciada no hay audio que cortar y no sale el aviso', async () => {
+    window.localStorage.setItem('shiro:tts:muted', 'true');
+    try {
+      const { source, speak } = setup();
+      await speak();
+      act(() => {
+        source.set('closed');
+      });
+      expect(FakeAudio.instances).toHaveLength(0);
+      expect(screen.queryByText(NOTICE)).toBeNull();
+    } finally {
+      window.localStorage.removeItem('shiro:tts:muted');
+    }
+  });
 });
