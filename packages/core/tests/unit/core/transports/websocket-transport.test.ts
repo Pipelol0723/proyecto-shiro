@@ -357,6 +357,19 @@ describe('WebSocketTransport.onStateChange', () => {
     expect(seenByB).not.toContain('open');
   });
 
+  it('si un listener reconecta al recibir closed, no se programa otra reconexión', () => {
+    const { t, fake, ws } = make(true);
+    ws.simulateOpen();
+    t.onStateChange((state) => {
+      if (state === 'closed') t.connect();
+    });
+    ws.simulateUnexpectedClose();
+    expect(t.getState()).toBe('connecting');
+    expect(MockWebSocket.instances).toHaveLength(2);
+    // Con un temporizador pendiente acabaría habiendo dos sockets a la vez.
+    expect(fake.pending()).toBe(0);
+  });
+
   it('onStateChange notifica open cuando el socket abre', () => {
     const { t, ws } = make();
     const seen: string[] = [];
