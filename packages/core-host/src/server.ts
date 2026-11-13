@@ -84,13 +84,14 @@ async function main(): Promise<void> {
   });
 }
 
-/** `true` si el error es un EADDRINUSE (puerto ya ocupado). */
+/** `code` del error (p. ej. `EADDRINUSE`), si lo tiene. */
 function errorCode(err: unknown): unknown {
   return typeof err === 'object' && err !== null && 'code' in err
     ? (err as { code?: unknown }).code
     : undefined;
 }
 
+/** `true` si el error es un EADDRINUSE (puerto ya ocupado). */
 function isAddrInUse(err: unknown): boolean {
   return errorCode(err) === 'EADDRINUSE';
 }
