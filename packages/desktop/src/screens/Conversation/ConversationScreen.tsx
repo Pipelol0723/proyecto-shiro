@@ -201,6 +201,12 @@ export function ConversationScreen(): JSX.Element {
           {state.subtitle && <p className={styles.shiroCaption}>{state.subtitle}</p>}
         </div>
 
+        {state.voiceCutByConnection && (
+          <p className={styles.cutNotice} role="status">
+            Hay un problema con la conexión: se cortó lo que Shiro estaba diciendo.
+          </p>
+        )}
+
         {ptt.state === 'error' && ptt.error !== null && (
           <p className={styles.micError} role="alert">
             Micro: {ptt.error}

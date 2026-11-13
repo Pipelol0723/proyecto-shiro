@@ -1,7 +1,8 @@
 /**
- * Un audio TTS ya recibido sigue sonando tras una pérdida de conexión aunque
- * `speaking` se apague. Enviar un mensaje debe cortarlo igualmente para que
- * la frase vieja no se solape con la respuesta nueva.
+ * Una pérdida de conexión corta en local el audio TTS que suena (decisión del
+ * dueño, 2026-11-13); el corte y su aviso se prueban en voice-cut.test.tsx.
+ * Aquí se comprueba que, recuperada la conexión, enviar un mensaje con el
+ * audio ya cortado sigue funcionando y no reinicia la voz vieja.
  */
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -82,7 +83,7 @@ describe('audio TTS que sobrevive a una pérdida de conexión', () => {
     vi.unstubAllGlobals();
   });
 
-  it('enviar un mensaje tras recuperar la conexión corta el audio que sigue sonando', async () => {
+  it('tras una pérdida de conexión el audio queda cortado y enviar un mensaje no lo reinicia', async () => {
     const bus = new EventBus<EventMap>({
       logger: new Logger('error', { module: 'test' }),
       transports: [new InProcessTransport()],
@@ -111,14 +112,15 @@ describe('audio TTS que sobrevive a una pérdida de conexión', () => {
     const audio = FakeAudio.instances[0];
     expect(audio?.paused).toBe(false);
 
-    // Pérdida y recuperación: el reducer apaga `speaking`, el audio sigue.
+    // Pérdida y recuperación: el audio se corta en la pérdida.
     act(() => {
       source.set('closed');
     });
+    expect(audio?.paused).toBe(true);
     act(() => {
       source.set('open');
     });
-    expect(audio?.paused).toBe(false);
+    expect(audio?.paused).toBe(true);
 
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'hola' } });
