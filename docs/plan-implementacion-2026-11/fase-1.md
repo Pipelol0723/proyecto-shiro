@@ -1,6 +1,6 @@
 # Plan de implementación (2026-11) — Fase 1: encargos
 
-> Parte del [plan de implementación](README.md) (estado: propuesta, pendiente de aprobación). Los IDs R-xxx, L-xxx y P-xx son los de la [revisión](../revision-estado-2026-11.md) y del [plan de mejora](../plan-mejora-2026-11.md). Las referencias a otras secciones (§1, §2, §7 en el índice; §3 a §6 en los archivos hermanos) están resueltas en la tabla del [índice](README.md).
+> Parte del [plan de implementación](README.md) (estado: Fase 1 aprobada el 2026-11-13 y en ejecución; respuestas del dueño en §2.0 del índice). Los IDs R-xxx, L-xxx y P-xx son los de la [revisión](../revision-estado-2026-11.md) y del [plan de mejora](../plan-mejora-2026-11.md). Las referencias a otras secciones (§1, §2, §7 en el índice; §3 a §6 en los archivos hermanos) están resueltas en la tabla del [índice](README.md).
 
 ## 3. Fase 1 — encargos
 
@@ -10,18 +10,18 @@
 
 Una sola tabla para toda la Fase 1. En cada ola hay como mucho 2 PRs de agente abiertos; la ola siguiente empieza cuando se fusionan los de la anterior (o cuando uno se fusiona y el siguiente de la tabla no depende del otro).
 
-| Ola  | PR A                                 | PR B                                    | Requisito para empezar                                          | Pipe en esta ola                                    |
-| ---- | ------------------------------------ | --------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------- |
-| 1    | P-01 · self-dev apagado              | P-02 PR1 · timeouts de shell-tool       | nada                                                            | Ramas muertas (P-03b), en cualquier momento         |
-| 2    | P-02 PR2 · logger                    | P-08 · modal seguro                     | nada                                                            | Capturas del modal en los 3 temas                   |
-| 3    | P-02 PR3a · script `verify`          | P-04 PR1 · zod, form-data y shell-quote | nada                                                            | —                                                   |
-| 4    | P-04 PR2 · CI                        | P-05 PR1 · bind en loopback             | P-02 PR3a y P-04 PR1 fusionados                                 | Ajustes de GitHub tras P-04 PR2; `netstat` del bus  |
-| 5    | P-05 PR2 · Origin y `approved`       | P-06a · compose                         | P-05 PR1 fusionado; Docker arrancado y digest de Letta          | Pruebas de Origin y del binario; prueba del compose |
-| 6    | P-06b · Whisper                      | P-07b · AudioProvider                   | P-06a y P-04 PR2 fusionados                                     | Digest de la base CUDA; reconstruir Whisper         |
-| 7    | P-07a PR1 · `onStateChange` (core)   | P-02 PR3b · docs de `verify`            | PR3b: P-03a fusionado (si aún no, la ola sigue con un solo PR)  | —                                                   |
-| 8    | P-07a PR2 · conexión visible         | P-03 PR1 · `sync-agents-md.mjs`         | P-07a PR1 y P-07b; para P-03 PR1, P-03a, el ADR 0029 y P-04 PR2 | Prueba de conexión; revisar AGENTS.md regenerado    |
-| 9    | P-03 PR2 · plantilla en CONTRIBUTING | PR de la voz nueva (§5.8)               | P-03a fusionado                                                 | 10 min con la voz nueva                             |
-| cola | P-03 PR3 · `.gitignore` acotado      | —                                       | respuesta sobre `.claude/`                                      | —                                                   |
+| Ola  | PR A                                     | PR B                                               | Requisito para empezar                                          | Tareas manuales (las hace el agente, salvo «Pipe»)                             |
+| ---- | ---------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1    | P-01 · self-dev apagado (hecho, PR #102) | P-02 PR1 · timeouts de shell-tool (hecho, PR #101) | nada                                                            | Ramas remotas muertas: ya borradas (2026-11-13); quedan las locales fusionadas |
+| 2    | P-02 PR2 · logger                        | P-08 · modal seguro                                | nada                                                            | Capturas del modal en los 3 temas                                              |
+| 3    | P-02 PR3a · script `verify`              | P-04 PR1 · zod, form-data y shell-quote            | nada                                                            | —                                                                              |
+| 4    | P-04 PR2 · CI                            | P-05 PR1 · bind en loopback                        | P-02 PR3a y P-04 PR1 fusionados                                 | Ajustes de GitHub tras P-04 PR2; `netstat` del bus                             |
+| 5    | P-05 PR2 · Origin y `approved`           | P-06a · compose                                    | P-05 PR1 fusionado; Docker arrancado y digest de Letta          | Pruebas de Origin y del binario (compilado en local); prueba del compose       |
+| 6    | P-06b · Whisper                          | P-07b · AudioProvider                              | P-06a y P-04 PR2 fusionados                                     | Digest de la base CUDA; reconstruir Whisper                                    |
+| 7    | P-07a PR1 · `onStateChange` (core)       | P-02 PR3b · docs de `verify`                       | PR3b: P-03a fusionado (si aún no, la ola sigue con un solo PR)  | —                                                                              |
+| 8    | P-07a PR2 · conexión visible             | P-03 PR1 · `sync-agents-md.mjs`                    | P-07a PR1 y P-07b; para P-03 PR1, P-03a, el ADR 0029 y P-04 PR2 | Prueba de conexión; revisar AGENTS.md regenerado                               |
+| 9    | P-03 PR2 · plantilla en CONTRIBUTING     | PR de la voz nueva (§5.8)                          | P-03a fusionado                                                 | Pipe: 10 min con la voz nueva                                                  |
+| cola | P-03 PR3 · `.gitignore` acotado          | —                                                  | respuesta sobre `.claude/`                                      | —                                                                              |
 
 Choques de archivos que la tabla evita:
 
@@ -37,7 +37,7 @@ Choques de archivos que la tabla evita:
 - Rama `feat/pipe/<tarea>` desde `develop`, PR a `develop`, prefijo de commit de CLAUDE.md. Diff ≤ 300 líneas de código y tests (aquí no se cuentan el lockfile ni el texto de los ADR; criterio de este plan, a confirmar con el ADR 0029); si un PR se pasa, se parte como dice su encargo.
 - **Test rojo primero:** el commit con los tests nuevos falla por la razón correcta; el arreglo lo pone en verde. Donde el rojo no se puede ver en CI (P-06b), se demuestra en local y se pega la salida en el PR.
 - `npm run verify` antes de pedir revisión (P-02 PR3a; mientras no exista, la secuencia de CLAUDE.md «Antes de pushear»).
-- Las pruebas manuales con I/O real (voz, red, memoria, binario) las hace Pipe antes de fusionar.
+- Las pruebas manuales con I/O real (red, memoria, binario, modal, log) las hace el agente antes de fusionar; a Pipe solo se le piden las que necesitan su oído o su voz. El agente fusiona cuando el CI está en verde y un segundo agente ha revisado el diff (§2.0, A2 y A3).
 - Nadie toca README.md, CLAUDE.md, AGENTS.md ni el ADR 0029 mientras P-03a esté abierto; lo que haga falta cambiar ahí está en §3.14.
 - Las enmiendas de ADR viajan en el mismo PR que el código que las motiva.
 
@@ -52,7 +52,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
 | D1  | «Si falta el bloque `selfdev`, self-dev está apagado» (lo dice el comentario de `packages/core/src/config/schemas.ts:64-69`) | `parseSelfDevConfig(undefined)` aplica defaults (`selfdev-tools.ts:77-78`) y `wireSelfDev` lo habilita; el test `wire-selfdev.test.ts:34,64` lo demuestra (sin bloque → `enabled: true`)                                                         | P-01 debe meter `enabled` en `SelfDevConfigSchema` con default `false`, no solo en el YAML, y corregir el comentario                                  |
 | D2  | «`wireSelfDev` sale antes de `detectEnv` si es false»                                                                        | Hoy el orden es detectar entorno (`wire-selfdev.ts:316-321`, lanza `git` y `gh`) → LLM (`:324-328`) → parsear config (`:330-336`)                                                                                                                | P-01 reordena: parsear config primero                                                                                                                 |
 | D3  | El test de P-01 puede vivir en el bootstrap                                                                                  | `bootstrap.ts:338` salta self-dev entero en modo test (`simulationSpeed === 0`)                                                                                                                                                                  | El test va en `wire-selfdev.test.ts` y en un test que carga el YAML real                                                                              |
-| D4  | `--on-accent` «oscuro en cyber, blanco en kawaii/editorial» (ficha R-286)                                                    | Blanco sobre `#ec4899` (kawaii) da **3,53:1**, por debajo de 4,5:1. Cyber blanco/`#00ffe1` = 1,28:1. Editorial blanco/`#1a1a1a` = 17,4:1 (cálculo WCAG propio, 2026-11-12)                                                                       | Kawaii necesita texto oscuro (`#2a1530` = 4,77:1) o un fondo de botón más oscuro. Decide Pipe (§2.1 #1)                                               |
+| D4  | `--on-accent` «oscuro en cyber, blanco en kawaii/editorial» (ficha R-286)                                                    | Blanco sobre `#ec4899` (kawaii) da **3,53:1**, por debajo de 4,5:1. Cyber blanco/`#00ffe1` = 1,28:1. Editorial blanco/`#1a1a1a` = 17,4:1 (cálculo WCAG propio, 2026-11-12)                                                                       | Kawaii necesita texto oscuro (`#2a1530` = 4,77:1): decidido por Pipe (§2.0, B1)                                                                       |
 | D5  | ADR 0027 §4: allowlist `tauri://localhost`                                                                                   | En Windows Tauri 2 sirve el frontend en `http://<scheme>.localhost` salvo `useHttpsScheme` (docs oficiales de Tauri 2, consultadas el 2026-11-12); `tauri.conf.json` no activa `useHttpsScheme`                                                  | Allowlist: `http://tauri.localhost`, `http://localhost:5173`, `http://127.0.0.1:5173`                                                                 |
 | D6  | ADR 0027, notas: `packages/core-host/src/tools/approval-gate.ts`                                                             | Está en `packages/core-host/src/pipeline/approval-gate.ts`                                                                                                                                                                                       | Se corrige en la enmienda                                                                                                                             |
 | D7  | ADR 0027 §4: sin `Origin` solo se acepta con token válido                                                                    | En 2a no hay token. Si se exige token, los tests de Node y cualquier cliente no navegador se cortan                                                                                                                                              | La enmienda dice: en 2a la ausencia de `Origin` se acepta (bind loopback); desde 2b (P-40) exige token                                                |
@@ -61,7 +61,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
 | D10 | «Whisper sin root» es un cambio de una línea                                                                                 | El volumen `whisper_models` está montado en `/root/.cache/huggingface` (`docker-compose.yml:108`) y sus archivos son de root                                                                                                                     | P-06b usa un volumen nuevo y otra ruta de caché; el modelo se vuelve a descargar una vez                                                              |
 | D11 | «Origin y CORS acotados» en Whisper                                                                                          | El CORS de FastAPI no se aplica a WebSocket; `/stt` hace `ws.accept()` sin mirar nada (`main.py:128-130`)                                                                                                                                        | Hace falta comprobar `Origin` a mano en `/stt` antes de `accept()`                                                                                    |
 | D12 | Tope en `/transcribe` comprobando el tamaño                                                                                  | `Body(...)` (`main.py:98-99`) lee el cuerpo entero en RAM antes de que el handler pueda mirar nada                                                                                                                                               | Leer con `Request.stream()` y cortar al pasar el tope (413)                                                                                           |
-| D13 | Probar el binario real en WebView2 «en el mismo PR»                                                                          | Construir el binario exige Rust, y rustc no está en el PATH del portátil                                                                                                                                                                         | Ver alternativa en P-05 (prueba manual) y §2.1 #6                                                                                                     |
+| D13 | Probar el binario real en WebView2 «en el mismo PR»                                                                          | Construir el binario exige Rust. Rust 1.96 ya está instalado en el portátil, con las herramientas de C++ y WebView2, pero no en el PATH del usuario                                                                                              | El binario se compila en local para la prueba de P-05 (§2.0, B6)                                                                                      |
 | D14 | El gate pide `Test-NetConnection` desde otro equipo de la red                                                                | Ese equipo puede estar apagado o desconectado                                                                                                                                                                                                    | El test automático de «IP no-loopback rechazada» (P-05) cubre el gate; la prueba desde otro equipo queda como comprobación opcional                   |
 | D15 | Los clientes pueden pasar a `127.0.0.1`                                                                                      | La CSP de `tauri.conf.json:31` solo permite `ws://localhost:*` y `http://localhost:*`                                                                                                                                                            | No cambiar las URLs de los clientes a `127.0.0.1` en esta fase                                                                                        |
 | D16 | Arreglar las referencias 0025 → 0027 en los docs vivos (L-DOC-01)                                                            | README.md:598, CLAUDE.md:17 y AGENTS.md:16,85 los está editando P-03a ahora                                                                                                                                                                      | P-05 solo enmienda ADR 0027 (y la cabecera de 0025 si hace falta); el resto va en §3.14                                                               |
@@ -70,20 +70,20 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
 
 #### Tabla B — calidad, CI y cliente
 
-| #   | El plan supone                                                                              | El código dice                                                                                                                                                                                                                                                                                                                                | Consecuencia para los encargos                                                                                                                                                                      |
-| --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B1  | La única excepción del audit es **form-data** y caduca con el SDK de Anthropic 1.x (P-31a). | form-data entra en producción por `@anthropic-ai/sdk` 0.39.0 → `@types/node-fetch` 2.6.13, que pide `form-data: ^4.0.4` (`package-lock.json:2708`). El aviso GHSA-hmw2-7cc7-3qxx está parcheado en **4.0.6**, que cabe en `^4.0.4`, y 4.0.6 es la `latest` del registro (consulta del 2026-11-12). El resumen de audit ya decía `fix: true`.  | **No hace falta excepción.** P-04 PR1 sube form-data a 4.0.6 sin tocar el SDK. El archivo de excepciones arranca **vacío** y el mecanismo se prueba con fixtures.                                   |
-| B2  | zod es la única vulnerabilidad de producción.                                               | En producción hay tres: zod 4.4.3 (high), form-data 4.0.5 (high) y qs 6.15.2 (moderate, vía `@pixi/utils` → `url`). Comprobado con los flags `dev` del lock.                                                                                                                                                                                  | Con umbral `high`, qs no bloquea. Queda anotado para dependabot.                                                                                                                                    |
-| B3  | El test rojo de shell-tool es uno.                                                          | Fallan **dos** tests de forma alterna con el timeout de 5 s de Vitest: «falla si el comando no existe en PATH» (`shell-tool.test.ts:114`, 3,8 s en la corrida de hoy) y «spawnea un .cmd/.bat…» (`:126`, 5,02 s). El `30_000` de la línea 132 es el timeout **de la tool**, no el del test.                                                   | P-02 PR1 da timeout a los dos.                                                                                                                                                                      |
-| B4  | Gate F1: «0 tests omitidos sin motivo anotado».                                             | El único omitido es `ollama-llm-live.test.ts:31` con `it.skipIf(!ENABLED)` y su motivo ya está anotado en las líneas 1-15 (opt-in con `OLLAMA_INTEGRATION=1`).                                                                                                                                                                                | El gate se cumple sin tocarlo. No hay que forzarlo.                                                                                                                                                 |
-| B5  | `send()` rechaza y así el cliente se entera.                                                | `EventBus.emit` captura el rechazo de cada transport y solo lo loguea (`event-bus.ts:60-66`). Además despacha en local **antes** de saber si salió (`:59`), así que `user:message` entra al historial aunque se pierda.                                                                                                                       | Que `send()` rechace documenta el contrato, pero **la UI tiene que mirar el estado**, no la promesa. P-07a deshabilita el envío sin conexión.                                                       |
-| B6  | `onStateChange` es un cambio aditivo «declarado en architecture.md».                        | ADR 0013 dice que, con la conexión caída, el mensaje «se pierde» sin más (`docs/adr/0013-protocolo-websocket-eventbus.md:123`). El desktop no tiene acceso al transport: `main.tsx:27-32` lo crea y solo pasa el bus a `<App>`, y `BusProvider` no expone los transports (`bus-context.tsx:31-43`).                                           | P-07a PR1 lleva una **enmienda de ADR 0013** (regla única del plan: en el mismo PR). P-07a PR2 añade un `ConnectionProvider` alimentado desde `main.tsx`.                                           |
-| B7  | Los scripts de raíz (`scripts/*.mjs`) se pueden añadir sin más.                             | `eslint .` aplica `recommendedTypeChecked` a todo lo que no esté ignorado. Ya hubo que ignorar `packages/desktop/scripts/*.mjs` por eso (`eslint.config.js:40-43`). No existe la carpeta `scripts/` en la raíz.                                                                                                                               | P-04 y P-03 añaden `'scripts/**/*.mjs'` a los ignores de ESLint y llevan `// @ts-check`.                                                                                                            |
-| B8  | Los tests de scripts corren con `node --test`.                                              | En Node 22, `node --test` sin argumentos busca también `**/*.test.ts` (strip-types activo por defecto según la doc de Node 22) y recorrería los tests de Vitest de los paquetes.                                                                                                                                                              | Se llama siempre con glob explícito: `node --test "scripts/**/*.test.mjs"`.                                                                                                                         |
-| B9  | P-02 actualiza README y CLAUDE.md para citar `verify`.                                      | Ese bloque (`README.md:121-125`, CLAUDE.md «Antes de pushear») lo están reescribiendo ahora otros agentes, y AGENTS.md pasará a ser generado.                                                                                                                                                                                                 | P-02 se parte: **PR3a** añade solo el script (sin documentos, sin esperar); **PR3b** cambia ese bloque **después** de P-03a. Si los otros agentes ya escriben `npm run verify`, PR3b no hace falta. |
-| B10 | El check obligatorio es «el de CI».                                                         | El job se llama `Typecheck, lint, test, build` (`ci.yml:16`). Un required check se ata a ese nombre: si se renombra después, `develop` queda bloqueado.                                                                                                                                                                                       | P-04 PR2 lo renombra a `verify` **antes** de que Pipe lo marque como required.                                                                                                                      |
-| B11 | Subir el audio a un provider basta.                                                         | Con Live2D activo, `useLipSync` crea un `AudioContext` por montaje y no lo cierra (`useLipSync.ts:113-130`), y `createMediaElementSource` solo puede llamarse una vez por elemento (`:83-100`, captura el error y devuelve `null`). Volver al chat con un audio sonando deja ese audio sin lip-sync, y cada visita acumula un `AudioContext`. | Fuera de alcance (Live2D aparcado). Se anota como riesgo de P-07b y como prueba manual si Pipe tiene los assets de Live2D.                                                                          |
-| B12 | Limpieza de ramas: 5 ramas.                                                                 | Hay 9 ramas remotas además de `origin/main` y `origin/develop` (la de esta revisión incluida) y **71 locales**. El `develop` local está desfasado frente a `origin/develop` (no incluye PR #97/#98) y hay 8 worktrees que retienen ramas.                                                                                                     | P-03b separa remoto (6 ramas, cada una con su R-xxx) y local (`git branch -d`, solo fusionadas, contra `origin/develop`, saltando las de worktrees).                                                |
+| #   | El plan supone                                                                              | El código dice                                                                                                                                                                                                                                                                                                                                | Consecuencia para los encargos                                                                                                                                                                         |
+| --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B1  | La única excepción del audit es **form-data** y caduca con el SDK de Anthropic 1.x (P-31a). | form-data entra en producción por `@anthropic-ai/sdk` 0.39.0 → `@types/node-fetch` 2.6.13, que pide `form-data: ^4.0.4` (`package-lock.json:2708`). El aviso GHSA-hmw2-7cc7-3qxx está parcheado en **4.0.6**, que cabe en `^4.0.4`, y 4.0.6 es la `latest` del registro (consulta del 2026-11-12). El resumen de audit ya decía `fix: true`.  | **No hace falta excepción.** P-04 PR1 sube form-data a 4.0.6 sin tocar el SDK. El archivo de excepciones arranca **vacío** y el mecanismo se prueba con fixtures.                                      |
+| B2  | zod es la única vulnerabilidad de producción.                                               | En producción hay tres: zod 4.4.3 (high), form-data 4.0.5 (high) y qs 6.15.2 (moderate, vía `@pixi/utils` → `url`). Comprobado con los flags `dev` del lock.                                                                                                                                                                                  | Con umbral `high`, qs no bloquea. Queda anotado para dependabot.                                                                                                                                       |
+| B3  | El test rojo de shell-tool es uno.                                                          | Fallan **dos** tests de forma alterna con el timeout de 5 s de Vitest: «falla si el comando no existe en PATH» (`shell-tool.test.ts:114`, 3,8 s en la corrida de hoy) y «spawnea un .cmd/.bat…» (`:126`, 5,02 s). El `30_000` de la línea 132 es el timeout **de la tool**, no el del test.                                                   | P-02 PR1 da timeout a los dos.                                                                                                                                                                         |
+| B4  | Gate F1: «0 tests omitidos sin motivo anotado».                                             | El único omitido es `ollama-llm-live.test.ts:31` con `it.skipIf(!ENABLED)` y su motivo ya está anotado en las líneas 1-15 (opt-in con `OLLAMA_INTEGRATION=1`).                                                                                                                                                                                | El gate se cumple sin tocarlo. No hay que forzarlo.                                                                                                                                                    |
+| B5  | `send()` rechaza y así el cliente se entera.                                                | `EventBus.emit` captura el rechazo de cada transport y solo lo loguea (`event-bus.ts:60-66`). Además despacha en local **antes** de saber si salió (`:59`), así que `user:message` entra al historial aunque se pierda.                                                                                                                       | Que `send()` rechace documenta el contrato, pero **la UI tiene que mirar el estado**, no la promesa. P-07a deshabilita el envío sin conexión.                                                          |
+| B6  | `onStateChange` es un cambio aditivo «declarado en architecture.md».                        | ADR 0013 dice que, con la conexión caída, el mensaje «se pierde» sin más (`docs/adr/0013-protocolo-websocket-eventbus.md:123`). El desktop no tiene acceso al transport: `main.tsx:27-32` lo crea y solo pasa el bus a `<App>`, y `BusProvider` no expone los transports (`bus-context.tsx:31-43`).                                           | P-07a PR1 lleva una **enmienda de ADR 0013** (regla única del plan: en el mismo PR). P-07a PR2 añade un `ConnectionProvider` alimentado desde `main.tsx`.                                              |
+| B7  | Los scripts de raíz (`scripts/*.mjs`) se pueden añadir sin más.                             | `eslint .` aplica `recommendedTypeChecked` a todo lo que no esté ignorado. Ya hubo que ignorar `packages/desktop/scripts/*.mjs` por eso (`eslint.config.js:40-43`). No existe la carpeta `scripts/` en la raíz.                                                                                                                               | P-04 y P-03 añaden `'scripts/**/*.mjs'` a los ignores de ESLint y llevan `// @ts-check`.                                                                                                               |
+| B8  | Los tests de scripts corren con `node --test`.                                              | En Node 22, `node --test` sin argumentos busca también `**/*.test.ts` (strip-types activo por defecto según la doc de Node 22) y recorrería los tests de Vitest de los paquetes.                                                                                                                                                              | Se llama siempre con glob explícito: `node --test "scripts/**/*.test.mjs"`.                                                                                                                            |
+| B9  | P-02 actualiza README y CLAUDE.md para citar `verify`.                                      | Ese bloque (`README.md:121-125`, CLAUDE.md «Antes de pushear») lo están reescribiendo ahora otros agentes, y AGENTS.md pasará a ser generado.                                                                                                                                                                                                 | P-02 se parte: **PR3a** añade solo el script (sin documentos, sin esperar); **PR3b** cambia ese bloque **después** de P-03a. Si los otros agentes ya escriben `npm run verify`, PR3b no hace falta.    |
+| B10 | El check obligatorio es «el de CI».                                                         | El job se llama `Typecheck, lint, test, build` (`ci.yml:16`). Un required check se ata a ese nombre: si se renombra después, `develop` queda bloqueado.                                                                                                                                                                                       | P-04 PR2 lo renombra a `verify` **antes** de marcarlo como required.                                                                                                                                   |
+| B11 | Subir el audio a un provider basta.                                                         | Con Live2D activo, `useLipSync` crea un `AudioContext` por montaje y no lo cierra (`useLipSync.ts:113-130`), y `createMediaElementSource` solo puede llamarse una vez por elemento (`:83-100`, captura el error y devuelve `null`). Volver al chat con un audio sonando deja ese audio sin lip-sync, y cada visita acumula un `AudioContext`. | Fuera de alcance (Live2D aparcado). Se anota como riesgo de P-07b y como prueba manual si Pipe tiene los assets de Live2D.                                                                             |
+| B12 | Limpieza de ramas: 5 ramas.                                                                 | Hay 9 ramas remotas además de `origin/main` y `origin/develop` (la de esta revisión incluida) y **71 locales**. El `develop` local está desfasado frente a `origin/develop` (no incluye PR #97/#98) y hay 8 worktrees que retienen ramas.                                                                                                     | P-03b separa remoto (6 ramas, cada una con su R-xxx; las remotas muertas ya se borraron el 2026-11-13) y local (`git branch -d`, solo fusionadas, contra `origin/develop`, saltando las de worktrees). |
 
 ### 3.4 P-02 — Suite verde, logger que serializa `Error` y `npm run verify`
 
@@ -94,6 +94,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
   2. `fix: el logger serializa Error con message, stack y cause`
   3. PR3a `chore: añade npm run verify como único paso previo al push` (solo `package.json`)
   4. PR3b `docs: cita npm run verify en README y CLAUDE.md` (después de P-03a; se omite si P-03a ya lo dejó así)
+- **Estado (2026-11-13).** PR1 **hecho** (PR #101). Quedan PR2 (logger), PR3a (`verify`) y PR3b (la cita en los documentos); P-02 no se tacha hasta fusionar el último.
 
 **Archivos a tocar**
 
@@ -140,7 +141,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
 **Riesgos y reversión.**
 
 - Los `stack` hacen más largas las líneas de error. Por eso el recorte a 10 líneas. Se revierte el PR2 sin tocar nada más.
-- Una propiedad propia de un error podría contener un secreto (p. ej. una URL con key). Por eso solo se copian primitivas. Pipe revisa en el diff la lista de props copiadas.
+- Una propiedad propia de un error podría contener un secreto (p. ej. una URL con key). Por eso solo se copian primitivas. El agente revisor mira en el diff la lista de props copiadas.
 - `verify` tarda lo que suman los 5 pasos (≈ 1-2 min en el portátil). Si molesta, no se recorta: es el precio de no romper el CI.
 
 **Depende de:** nada (PR1, PR2 y PR3a); PR3b depende de P-03a. **Desbloquea:** P-04 PR2 (CI usa `verify`, gracias a PR3a), el gate 1 de F1 y la regla «`verify` verde» de ADR 0029.
@@ -150,6 +151,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
 - **Objetivo.** Que self-dev no se registre (ni la tool `selfdev:propose`) salvo que alguien ponga `selfdev.enabled: true` a mano. Es contención mientras F3 lo arregla de verdad.
 - **Qué cierra.** Contiene R-001, R-017 y R-018 (no los arregla: el arreglo es P-23 y P-25a). Cumple el punto 4 del gate de F1.
 - **PRs.** 1: `chore: desactiva self-dev por defecto hasta aislar el eval`. Sin ADR: es reversible en minutos y el ADR 0023 ya prevé un modo apagado («dev-only»). Se añade solo la nota en la revisión de seguridad.
+- **Estado (2026-11-13).** **Hecho**: PR #102, fusionado el 13-nov.
 
 **Archivos a tocar**
 
@@ -207,10 +209,10 @@ Nota: `config/` es inmutable para self-dev (`immutable-paths.ts`), así que Shir
 | `packages/desktop/src/components/ToolApproval/ToolApprovalModal.tsx:54-72`                                                  | `autoFocus` pasa de «Permitir una vez» (`:66`) a «Cancelar». Orden visual igual                                                                                                                                                                                                                                                                |
 | ídem `:21-30`                                                                                                               | Guardar `openedAt` al aparecer `pending`. Listener `keydown` en fase de captura: si la tecla es `' '` o `'Enter'` y han pasado menos de 500 ms desde que se abrió → `preventDefault()` y `stopPropagation()`. `Escape` sigue cancelando. Comentario de cabecera: «Esc cancela; foco inicial en Cancelar; Space/Enter ignorados 500 ms (R-030)» |
 | `packages/desktop/src/themes/cyber.css:24`                                                                                  | `--on-accent: #07070d;` (15,7:1 sobre `#00ffe1`)                                                                                                                                                                                                                                                                                               |
-| `packages/desktop/src/themes/kawaii.css:25`                                                                                 | `--on-accent: #2a1530;` (4,77:1 sobre `#ec4899`), salvo que Pipe prefiera texto blanco sobre un fondo más oscuro (§2.1 #1)                                                                                                                                                                                                                     |
+| `packages/desktop/src/themes/kawaii.css:25`                                                                                 | `--on-accent: #2a1530;` (4,77:1 sobre `#ec4899`): texto oscuro, decidido por Pipe (§2.0, B1)                                                                                                                                                                                                                                                   |
 | `packages/desktop/src/themes/editorial.css:22`                                                                              | `--on-accent: #ffffff;` (17,4:1 sobre `#1a1a1a`)                                                                                                                                                                                                                                                                                               |
 | `ToolApprovalModal.module.css:95`                                                                                           | `color: var(--on-accent);`                                                                                                                                                                                                                                                                                                                     |
-| `packages/desktop/src/screens/Setup/SetupScreen.module.css:190` y `packages/desktop/src/updater/UpdateBanner.module.css:49` | Mismo cambio: el mismo `color: white` sobre `--accent` (botones «Guardar» de las API keys y «Actualizar y reiniciar»). Son 2 líneas; propuesta: incluirlas                                                                                                                                                                                     |
+| `packages/desktop/src/screens/Setup/SetupScreen.module.css:190` y `packages/desktop/src/updater/UpdateBanner.module.css:49` | Mismo cambio: el mismo `color: white` sobre `--accent` (botones «Guardar» de las API keys y «Actualizar y reiniciar»). Son 2 líneas y entran en este PR (§2.0, B1)                                                                                                                                                                             |
 
 **Test rojo primero**
 
@@ -228,9 +230,9 @@ Nota: `config/` es inmutable para self-dev (`immutable-paths.ts`), así que Shir
 1. Rama `feat/pipe/p08-modal-seguro`. Tests rojos.
 2. Cambios de TSX y CSS.
 3. `npm run verify`.
-4. Pipe: `npm run dev`, provocar una tool `confirm` (por ejemplo, pedir a Shiro que escriba un archivo en `~/shiro-workspace`), comprobar que Space al aparecer el modal no aprueba, y capturar el modal en los 3 temas.
+4. El agente: `npm run dev`, provocar una tool `confirm` (por ejemplo, pedir a Shiro que escriba un archivo en `~/shiro-workspace`), comprobar que Space al aparecer el modal no aprueba, y capturar el modal en los 3 temas.
 
-**Criterio de hecho.** Tests nuevos verdes (rojos antes) y `verify` verde. Pipe da el visto bueno a las 3 capturas (texto del botón legible a simple vista).
+**Criterio de hecho.** Tests nuevos verdes (rojos antes) y `verify` verde. Las 3 capturas van en el PR y el agente revisor comprueba que el texto del botón se lee a simple vista.
 
 **Tamaño, quién y horas.** ≈ 120 líneas (≈ 30 de código y CSS, ≈ 90 de tests) · agente · 1 h (revisión y capturas).
 
@@ -246,7 +248,7 @@ Nota: `config/` es inmutable para self-dev (`immutable-paths.ts`), así que Shir
 - **PRs (2) y una acción en GitHub:**
   1. `fix: sube zod y form-data a versiones parcheadas y corrige el override de shell-quote`
   2. `ci: permisos mínimos, dependabot y audit de producción`
-  3. Pipe marca el check `verify` como _required_ en `develop` (Settings → Branches o Rulesets).
+  3. El agente marca el check `verify` como _required_ en `develop` (Settings → Branches o Rulesets).
 
 **Archivos a tocar**
 
@@ -265,7 +267,7 @@ Nota: `config/` es inmutable para self-dev (`immutable-paths.ts`), así que Shir
 | 2   | `.github/dependabot.yml` (nuevo)         | Ver abajo.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 2   | `docs/security-review-2026-07.md`        | Fila SEC-12 de la tabla viva (la crea P-03a): pasa a «mitigado: audit de producción en CI desde <fecha>». Si la tabla aún no existe, una línea en el PR y se añade cuando exista.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-`dependabot.yml` propuesto (sintaxis de la referencia oficial, consultada el 2026-11-12; el límite por defecto es 5 PRs por ecosistema, aquí se baja):
+`dependabot.yml` aprobado tal cual (§2.0, B4; sintaxis de la referencia oficial, consultada el 2026-11-12; el límite por defecto es 5 PRs por ecosistema, aquí se baja):
 
 ```yaml
 version: 2
@@ -330,7 +332,7 @@ PR1 no lleva test nuevo: su verificación es que los tests de `wire-schema` y de
 1. Antes de PR1: el agente captura `npm audit --omit=dev --json` a `scripts/fixtures/` (recortado a zod, form-data y qs).
 2. PR1: subir zod, form-data y el override; `npm run verify`; `npm audit --omit=dev` sin high ni critical. Regenerar el sidecar no hace falta en el PR (no hay release hasta F3).
 3. PR2: script, tests, fixtures, `package.json`, ESLint, dependabot y `ci.yml`, en ese orden. Comprobar en el PR que el job `verify` corre y sale verde.
-4. Pipe, tras fusionar PR2: (a) Settings → Code security: activar _Dependabot alerts_ y _Dependabot security updates_ si no lo están; (b) regla de rama para `develop` con el check `verify` obligatorio y PR obligatorio. Lo confirma en el momento (§9 del plan).
+4. El agente, tras fusionar PR2: (a) Settings → Code security: activar _Dependabot alerts_ y _Dependabot security updates_ si no lo están; (b) regla de rama para `develop` con el check `verify` obligatorio y PR obligatorio (§2.0, A3).
 
 **Criterio de hecho**
 
@@ -340,16 +342,16 @@ PR1 no lleva test nuevo: su verificación es que los tests de `wire-schema` y de
 - En GitHub: el job se llama `verify`, el workflow muestra `permissions: contents: read`, dependabot abre su primera tanda el lunes siguiente con ≤ 5 PRs, y un PR de prueba con un test roto no se puede fusionar en `develop`.
 - `git grep -n "|| true" .github/` no devuelve nada.
 
-**Prueba manual (Pipe).** Abrir un PR borrador que rompa un test a propósito y comprobar que el botón de merge queda bloqueado. Cerrarlo sin fusionar.
+**Prueba manual (el agente).** Abrir un PR borrador que rompa un test a propósito y comprobar que el botón de merge queda bloqueado. Cerrarlo sin fusionar.
 
-**Tamaño y quién.** PR1 ≈ 30 líneas más el lock, agente (haiku), 0,5 h. PR2 ≈ 250 líneas, mixto (sonnet escribe; Pipe decide ecosistemas y límites), 1,5 h. Ajustes de GitHub: humano, 0,25 h. **Total 2,25 h.**
+**Tamaño y quién.** PR1 ≈ 30 líneas más el lock, agente (haiku), 0,5 h. PR2 ≈ 250 líneas, mixto (sonnet escribe; ecosistemas y límites ya decididos), 1,5 h. Ajustes de GitHub: agente, 0,25 h. **Total 2,25 h.**
 
 **Riesgos y reversión.**
 
-- `npm audit` depende del registro: una caída hace fallar el CI con código 2. Es lo correcto (no se aprueba a ciegas); si pasa a menudo, Pipe puede relanzar el job. No se añade `|| true`.
+- `npm audit` depende del registro: una caída hace fallar el CI con código 2. Es lo correcto (no se aprueba a ciegas); si pasa a menudo, se relanza el job. No se añade `|| true`.
 - Un aviso nuevo de producción pone `develop` en rojo de un día para otro. Es el objetivo; la salida es subir el paquete o añadir una excepción **con fecha** y el ítem que la cierra.
 - Un PR de dependabot rompe algo sutil. El check obligatorio lo frena; si pasa, se revierte el PR de dependabot.
-- Reversión: PR2 se revierte entero; la regla de rama la quita Pipe en Settings.
+- Reversión: PR2 se revierte entero; la regla de rama se quita en Settings.
 
 **Depende de:** P-02 PR3a (`verify`) para PR2. **Desbloquea:** el gate 1 de F1 (CI verde con audit y check obligatorio), el límite de «2 PRs de agente» con red de seguridad automática, y los lotes de versiones (cada uno se valida con este CI).
 
@@ -413,18 +415,18 @@ PR1 no lleva test nuevo: su verificación es que los tests de `wire-schema` y de
 **Pasos (los dos PRs)**
 
 1. PR 1: rama `feat/pipe/p05-loopback`. Commit 1: getter `address` (sin cambio de conducta). Commit 2: tests rojos. Commit 3: `bind-host.ts`, transport, bootstrap, server, `.env.example`. Commit 4: `docs: enmienda ADR 0027 — secuencia 2a/2b y correcciones`.
-2. `npm run verify`. Prueba manual de bind (abajo). Pipe aprueba y fusiona.
+2. `npm run verify`. El agente hace la prueba manual de bind (abajo) y fusiona tras la revisión con opus y el CI en verde.
 3. PR 2: rama `feat/pipe/p05-origin` desde `develop` actualizado. Tests rojos, después `origin-policy.ts`, upgrade, audio-route y approval-gate.
 4. `npm run verify` y prueba manual de Origin con el cliente real (abajo). Revisión con opus (el plan lo pide para PRs de seguridad).
 
 **Criterio de hecho**
 
 - `npm run verify` verde, con los casos nuevos verdes y rojos en el commit anterior.
-- PR 1, Pipe: con `npm run dev` arrancado, `netstat -ano | findstr :9876` muestra solo `127.0.0.1:9876 … LISTENING` (ninguna línea `0.0.0.0` ni `[::]`).
-- PR 2, Pipe: (a) en la consola de DevTools de cualquier web abierta en el navegador, `new WebSocket('ws://localhost:9876/bus')` falla y el log del core-host muestra `Origin rechazado: https://…`; (b) el chat del cliente funciona (texto, voz y lip-sync) con `npm run dev` (Origin `http://localhost:5173`); (c) **cliente empaquetado** (Origin `http://tauri.localhost`), ver la nota siguiente.
-- **Prueba con WebView2 sin compilar Rust** (D13): si Pipe tiene instalado un binario de Shiro de una release anterior, arranca primero el core-host nuevo con `npm run dev -w @proyecto-shiro/core-host` y después abre el binario. Su sidecar encuentra el puerto ocupado y se cierra limpio (`server.ts:91-101`), así que la ventana del binario se conecta al core-host nuevo. En el log debe salir la conexión aceptada (y ningún `Origin rechazado: http://tauri.localhost`), y el chat y el audio deben funcionar. Si no hay binario instalado, hace falta instalar Rust o bajar uno de GitHub Releases (§2.1 #6).
+- PR 1, el agente: con `npm run dev` arrancado, `netstat -ano | findstr :9876` muestra solo `127.0.0.1:9876 … LISTENING` (ninguna línea `0.0.0.0` ni `[::]`).
+- PR 2, el agente: (a) en la consola de DevTools de cualquier web abierta en el navegador, `new WebSocket('ws://localhost:9876/bus')` falla y el log del core-host muestra `Origin rechazado: https://…`; (b) el chat del cliente funciona (texto, voz y lip-sync) con `npm run dev` (Origin `http://localhost:5173`); (c) **cliente empaquetado** (Origin `http://tauri.localhost`), ver la nota siguiente.
+- **Prueba con WebView2 y binario compilado en local** (D13, §2.0 B6): Rust 1.96 ya está instalado (fuera del PATH del usuario: el agente añade la ruta de cargo a la sesión). El binario 0.1.0 antiguo se desinstaló el 13-nov conservando los datos de la app. El agente compila el binario con el código del PR (`npm run build:sidecar -w @proyecto-shiro/desktop` y `npm run tauri:build -w @proyecto-shiro/desktop`) y abre el binario resultante. En el log debe salir la conexión aceptada (y ningún `Origin rechazado: http://tauri.localhost`), y el chat y el audio deben funcionar.
 
-**Tamaño, quién y horas.** PR 1 ≈ 150 líneas de código y tests más ≈ 60 del ADR; PR 2 ≈ 200 líneas · mixto (agente escribe; revisión con opus; Pipe hace las pruebas manuales) · 4,5 h.
+**Tamaño, quién y horas.** PR 1 ≈ 150 líneas de código y tests más ≈ 60 del ADR; PR 2 ≈ 200 líneas · mixto (agente escribe; revisión con opus; el agente hace las pruebas manuales y fusiona) · 4,5 h.
 
 **Riesgos y reversión.**
 
@@ -445,21 +447,21 @@ PR1 no lleva test nuevo: su verificación es que los tests de `wire-schema` y de
 
 | Archivo:línea                              | Cambio                                                                                                                                                                                                                                                                                          |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docker-compose.yml:26`                    | `image: letta/letta:<versión>@sha256:<digest>` con el valor que da Pipe y un comentario: fecha, «versión probada con @letta-ai/letta-client ^1.12.0 (`packages/core/package.json:25`); subirla junto al SDK, con backup previo»                                                                 |
+| `docker-compose.yml:26`                    | `image: letta/letta:<versión>@sha256:<digest>` con el valor que saca el agente y un comentario: fecha, «versión probada con @letta-ai/letta-client ^1.12.0 (`packages/core/package.json:25`); subirla junto al SDK, con backup previo»                                                          |
 | `docker-compose.yml:28-29`                 | `- '${LETTA_BIND:-127.0.0.1}:8283:8283'`                                                                                                                                                                                                                                                        |
 | `docker-compose.yml:70-71`                 | `- '${WHISPER_BIND:-127.0.0.1}:8765:8765'`                                                                                                                                                                                                                                                      |
-| `docker-compose.yml:60` (servicio whisper) | `profiles: ['stt']` (propuesta; §2.1 #3). Letta sin profile: siempre arranca                                                                                                                                                                                                                    |
+| `docker-compose.yml:60` (servicio whisper) | `profiles: ['stt']` (decidido, §2.0 B2). Letta sin profile: siempre arranca                                                                                                                                                                                                                     |
 | `docker-compose.yml:3-22`                  | Cabecera actualizada: `docker compose up -d` levanta Letta; `docker compose up -d whisper` o `docker compose --profile stt up -d` levantan Whisper; `LETTA_BIND`/`WHISPER_BIND` solo para exponer a la LAN a sabiendas (sin auth hasta P-40); cómo subir Letta (backup, `pull`, prueba de humo) |
 
-Según la documentación de Compose (consultada el 2026-11-12), los servicios sin `profiles` arrancan siempre, y un servicio con profile se activa al nombrarlo en la línea de comandos (`docker compose up -d whisper`). Lo que sí cambia es el flujo: `docker compose up -d` a secas **deja de levantar Whisper**, y el health del Setup lo marcará en rojo si Pipe no lo arranca. `README.md:247,273` y `services/whisper/README.md:13` ya nombran el servicio (`up -d letta` / `up -d whisper`); la línea sobre el profile va con P-03a (§3.14), y el aviso claro en el Setup, en P-12.
+Según la documentación de Compose (consultada el 2026-11-12), los servicios sin `profiles` arrancan siempre, y un servicio con profile se activa al nombrarlo en la línea de comandos (`docker compose up -d whisper`). Lo que sí cambia es el flujo: `docker compose up -d` a secas **deja de levantar Whisper**, y el health del Setup lo marcará en rojo si no se arranca. `README.md:247,273` y `services/whisper/README.md:13` ya nombran el servicio (`up -d letta` / `up -d whisper`); la línea sobre el profile va con P-03a (§3.14), y el aviso claro en el Setup, en P-12.
 
 **Test rojo primero.** No hay test automático razonable para compose en esta fase. El «rojo» es la comprobación manual previa: con el compose actual, `netstat -ano | findstr ":8283 :8765"` muestra `0.0.0.0`. Opcional y barato: un paso de CI `docker compose config -q` que valide la sintaxis (sin arrancar nada).
 
 **Pasos**
 
-1. **Pipe** arranca Docker Desktop y obtiene el digest de la imagen que hoy funciona, **sin hacer pull**: `docker image ls --digests letta/letta`. La versión, si la imagen la etiqueta: `docker image inspect letta/letta:latest --format "{{json .Config.Labels}}"` (que tenga la etiqueta de versión está **sin verificar**). Si `latest` local no tiene digest de repositorio, se anota el ID y se decide con Pipe.
+1. **El agente** arranca Docker Desktop y obtiene el digest de la imagen que hoy funciona, **sin hacer pull**: `docker image ls --digests letta/letta`. La versión, si la imagen la etiqueta: `docker image inspect letta/letta:latest --format "{{json .Config.Labels}}"` (que tenga la etiqueta de versión está **sin verificar**). Si `latest` local no tiene digest de repositorio, se anota el ID y se decide con Pipe.
 2. Agente: rama `feat/pipe/p06a-compose-loopback`, cambios de la tabla y `docker compose config -q`.
-3. Pipe, prueba manual: `docker compose up -d` (solo Letta), `docker compose up -d whisper`, `netstat` y un turno con memoria.
+3. El agente, prueba manual: `docker compose up -d` (solo Letta), `docker compose up -d whisper`, `netstat` y un turno con memoria.
 
 **Criterio de hecho**
 
@@ -467,9 +469,9 @@ Según la documentación de Compose (consultada el 2026-11-12), los servicios si
 - `netstat -ano | findstr ":8283 :8765"` → solo `127.0.0.1`. El Postgres de Letta no aparece (no se publica en compose).
 - `curl http://127.0.0.1:8283/v1/health/` responde. Con `npm run dev`, el setup marca Letta y Whisper en verde y un turno de chat se guarda y se recuerda al recargar (igual que antes).
 - `docker compose up -d` sin argumentos no levanta Whisper; `docker compose up -d whisper` sí.
-- Con Whisper parado, el Setup lo marca en rojo (conducta esperada, no un fallo). Pipe lo comprueba una vez; el texto del aviso («arranca Whisper con `docker compose up -d whisper`») se mejora en P-12.
+- Con Whisper parado, el Setup lo marca en rojo (conducta esperada, no un fallo). El agente lo comprueba una vez; el texto del aviso («arranca Whisper con `docker compose up -d whisper`») se mejora en P-12.
 
-**Tamaño, quién y horas.** ~30 líneas · mixto (Pipe aporta el digest y prueba; agente edita) · 2 h.
+**Tamaño, quién y horas.** ~30 líneas · mixto (el agente saca el digest, edita y prueba) · 2 h.
 
 **Riesgos y reversión.**
 
@@ -477,7 +479,7 @@ Según la documentación de Compose (consultada el 2026-11-12), los servicios si
 - Recrear el contenedor con el digest no toca el volumen `letta_pgdata`. Aun así, no se hace `down -v` nunca.
 - Reversión: revertir el commit y `docker compose up -d`.
 
-**Depende de:** Pipe con Docker arrancado. **Desbloquea:** P-06b; P-11a (backup con `pg_dump` contra la imagen fijada); el gate 2 de F1.
+**Depende de:** Docker arrancado (lo arranca el agente). **Desbloquea:** P-06b; P-11a (backup con `pg_dump` contra la imagen fijada); el gate 2 de F1.
 
 ### 3.10 P-06b — Whisper con topes, bind y sin root, con job pytest mínimo (incluye enmienda ADR 0019)
 
@@ -489,12 +491,12 @@ Según la documentación de Compose (consultada el 2026-11-12), los servicios si
 
 | Archivo:línea                                           | Cambio                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `services/whisper/config.py:37-39, 60-72`               | Default `WHISPER_HOST` → `127.0.0.1`. Campos nuevos: `max_audio_seconds` (`WHISPER_MAX_AUDIO_SECONDS`, 60), `idle_timeout_s` (`WHISPER_IDLE_TIMEOUT_S`, 15), `allowed_origins` (`WHISPER_ALLOWED_ORIGINS`, separados por comas; default los tres de P-05) y la propiedad `max_audio_bytes = sample_rate * 2 * max_audio_seconds` (60 s a 16 kHz Int16 = 1 920 000 bytes)                                                                                          |
+| `services/whisper/config.py:37-39, 60-72`               | Default `WHISPER_HOST` → `127.0.0.1`. Campos nuevos: `max_audio_seconds` (`WHISPER_MAX_AUDIO_SECONDS`, 90; decidido, §2.0 B3), `idle_timeout_s` (`WHISPER_IDLE_TIMEOUT_S`, 15), `allowed_origins` (`WHISPER_ALLOWED_ORIGINS`, separados por comas; default los tres de P-05) y la propiedad `max_audio_bytes = sample_rate * 2 * max_audio_seconds` (90 s a 16 kHz Int16 = 2 880 000 bytes)                                                                       |
 | `services/whisper/main.py:75-80`                        | CORS: `allow_origins=list(config.allowed_origins)`, `allow_methods=["GET","POST"]`, `allow_headers=["Content-Type"]`                                                                                                                                                                                                                                                                                                                                              |
 | `services/whisper/main.py:97-118`                       | `/transcribe` recibe `Request`: si `Content-Length` > `max_audio_bytes` → 413; si no, lee `request.stream()` acumulando y corta con 413 al pasar el tope (D12). El resto, igual                                                                                                                                                                                                                                                                                   |
 | `services/whisper/main.py:128-135`                      | Antes de `ws.accept()`: si hay `origin` en `ws.headers` y no está en `allowed_origins` → `await ws.close(code=1008)` (Starlette responde 403 al handshake) y `logger.warning`                                                                                                                                                                                                                                                                                     |
 | `services/whisper/main.py:142-163`                      | `msg = await asyncio.wait_for(ws.receive(), timeout=config.idle_timeout_s)`; si salta el timeout → `_emit_error(…, "sesión inactiva")` y cerrar con 1001. Tras `buffer.extend(...)`, si `len(buffer) > config.max_audio_bytes` → `_emit_error(…, "audio demasiado largo")`, `ws.close(code=1009)` y salir. Una bandera `closed` evita el segundo `close()` en el `finally` (`:194-198`). Un semáforo de sesiones concurrentes queda opcional (fuera del criterio) |
-| `services/whisper/Dockerfile:9`                         | `FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04@sha256:<digest>` (Pipe lo saca con `docker image ls --digests nvidia/cuda`), con comentario y fecha                                                                                                                                                                                                                                                                                                            |
+| `services/whisper/Dockerfile:9`                         | `FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04@sha256:<digest>` (el agente lo saca con `docker image ls --digests nvidia/cuda`), con comentario y fecha                                                                                                                                                                                                                                                                                                       |
 | `services/whisper/Dockerfile:11-15`                     | `HF_HOME=/home/shiro/.cache/huggingface`, `WHISPER_HOST=0.0.0.0`, `WHISPER_PORT=8765` (dentro del contenedor tiene que ser 0.0.0.0; la frontera está en compose)                                                                                                                                                                                                                                                                                                  |
 | `services/whisper/Dockerfile` antes de `:47`            | `RUN useradd --create-home --uid 10001 shiro && mkdir -p /home/shiro/.cache/huggingface && chown -R shiro:shiro /home/shiro` y `USER shiro`                                                                                                                                                                                                                                                                                                                       |
 | `services/whisper/Dockerfile:52`                        | `CMD ["python", "-m", "services.whisper.main"]` (`run()` usa `config.host` y `config.port`, `main.py:201-211`)                                                                                                                                                                                                                                                                                                                                                    |
@@ -503,7 +505,7 @@ Según la documentación de Compose (consultada el 2026-11-12), los servicios si
 | `services/whisper/tests/test_config.py:49`              | Esperar `127.0.0.1` (si no, este test queda rojo cuando P-18 meta la suite entera)                                                                                                                                                                                                                                                                                                                                                                                |
 | `.github/workflows/ci.yml` (job nuevo `whisper-limits`) | `runs-on: ubuntu-latest`, `timeout-minutes: 5`, `actions/checkout` y `actions/setup-python` (Python 3.11; versión y pin al estilo que deje P-04), `pip install fastapi==0.115.6 httpx==0.28.1 numpy==2.2.1 pytest==8.3.4` (las de `requirements.txt`, sin faster-whisper), `python -m pytest services/whisper/tests/test_limits.py -q` desde la raíz                                                                                                              |
 | `services/whisper/README.md:80, 142-148`                | Tabla de variables (host `127.0.0.1` nativo / `0.0.0.0` en el contenedor y publicado en loopback; topes y orígenes nuevos); el enlace de seguridad pasa de ADR 0025 a ADR 0027; sección «Whisper nativo en Windows» como alternativa a Docker (venv, `python -m services.whisper.main`, bind loopback por defecto)                                                                                                                                                |
-| `docs/adr/0019-…md`                                     | Sección `## Enmienda (2026-11-…): topes, bind y usuario`: bind por capas (código 127.0.0.1, contenedor 0.0.0.0 con publicación loopback), topes (60 s → 1009, 15 s de inactividad → 1001, 413 en `/transcribe`), Origin en `/stt` antes de `accept`, `USER` no root y volumen nuevo, base CUDA por digest, Whisper nativo como alternativa. El ejemplo `ports: ['8765:8765']` de `:69` se marca como superado                                                     |
+| `docs/adr/0019-…md`                                     | Sección `## Enmienda (2026-11-…): topes, bind y usuario`: bind por capas (código 127.0.0.1, contenedor 0.0.0.0 con publicación loopback), topes (90 s configurables → 1009, 15 s de inactividad → 1001, 413 en `/transcribe`), Origin en `/stt` antes de `accept`, `USER` no root y volumen nuevo, base CUDA por digest, Whisper nativo como alternativa. El ejemplo `ports: ['8765:8765']` de `:69` se marca como superado                                       |
 
 **Test rojo primero** (`services/whisper/tests/test_limits.py`, con un `_FakeTranscriber` igual al de `test_transcribe.py:18-28`, el singleton parcheado con `monkeypatch.setattr(t_mod, "_singleton", fake)` y `main.config` sustituido por `dataclasses.replace(config, max_audio_seconds=1, idle_timeout_s=1)`)
 
@@ -522,20 +524,20 @@ El job de CI corre solo `test_limits.py`. Los tests rotos de R-194 (`test_health
 1. Esperar a que P-06a y P-04 PR 2 estén en `develop`. Rama `feat/pipe/p06b-whisper-topes`.
 2. Tests rojos. El rojo se demuestra **en local** (el agente pega en el PR la salida de `python -m pytest services/whisper/tests/test_limits.py -q` con los fallos); el job de CI entra en el mismo commit que el arreglo, para no dejar un commit con CI colgado o rojo en el historial del PR.
 3. `config.py`, `main.py`, `Dockerfile`, compose, README del servicio y enmienda de ADR 0019.
-4. Pipe saca el digest de la base CUDA (Docker arrancado, sin pull).
-5. CI verde. Pipe reconstruye y prueba (abajo).
+4. El agente saca el digest de la base CUDA (Docker arrancado, sin pull).
+5. CI verde. El agente reconstruye y prueba (abajo).
 
 **Criterio de hecho**
 
 - CI: el job `whisper-limits` en verde y `verify` en verde.
-- Pipe: `docker compose build whisper && docker compose up -d whisper` (la primera vez descarga de nuevo el modelo `small` en el volumen nuevo). `docker compose exec whisper id -u` → `10001`. `netstat -ano | findstr :8765` → solo `127.0.0.1`. Un turno por voz funciona como antes (push-to-talk, partials, final).
-- Pipe: mantener pulsado el push-to-talk más de 60 s → el cliente muestra el error `WS cerrado sin transcripción final (code=1009)` (`whisper-stt-client.ts:190`). Ese texto es mejorable; queda para P-42.
+- El agente: `docker compose build whisper && docker compose up -d whisper` (la primera vez descarga de nuevo el modelo `small` en el volumen nuevo). `docker compose exec whisper id -u` → `10001`. `netstat -ano | findstr :8765` → solo `127.0.0.1`. Un turno por voz funciona como antes (push-to-talk, partials, final); hablar al micro es de Pipe, o el agente envía un clip grabado al WS.
+- El agente: mantener abierto el push-to-talk (o un stream de prueba al WS `/stt`) más de 90 s → el cliente muestra el error `WS cerrado sin transcripción final (code=1009)` (`whisper-stt-client.ts:190`). Ese texto es mejorable; queda para P-42.
 
 **Tamaño, quién y horas.** ≈ 250 líneas (≈ 90 Python, ≈ 80 tests, ≈ 20 Docker/compose/CI, ≈ 60 docs) · mixto · 4 h.
 
 **Riesgos y reversión.**
 
-- Tope de 60 s demasiado corto para un mensaje largo de Pipe → se sube con `WHISPER_MAX_AUDIO_SECONDS` en `.env` sin tocar código (§2.1 #4).
+- Tope de 90 s demasiado corto para un mensaje largo de Pipe → se sube con `WHISPER_MAX_AUDIO_SECONDS` en `.env` sin tocar código (§2.0 B3).
 - El usuario no root no puede escribir la caché → falla al descargar el modelo. Por eso se usa un volumen nuevo (Docker copia el contenido y los permisos del punto de montaje solo cuando el volumen está vacío; es conducta documentada de los volúmenes con nombre, aquí **sin verificar** con Docker Desktop en Windows). Plan B: `chown` en un entrypoint.
 - `asyncio.wait_for` sobre `ws.receive()` cancela la espera; los partials en curso (`to_thread`) terminan solos. Riesgo bajo.
 - `--ws-max-size` de uvicorn (16 MiB por mensaje, docs de uvicorn consultadas el 2026-11-12) no limita el stream completo: por eso hace falta el tope propio.
@@ -582,7 +584,7 @@ El job de CI corre solo `test_limits.py`. Los tests rotos de R-194 (`test_health
 
 - Tests nuevos en verde; `git grep -n "useTtsPlayback(" packages/desktop/src` devuelve **una sola** llamada (en `audio-context.tsx`).
 
-**Prueba manual (Pipe), con `npm run dev` y TTS activo:** pedir una respuesta larga, cambiar a Setup mientras habla y volver: la frase no se corta y al terminar desaparece «Hablando…». Pedir otra respuesta, irse a Módulos antes de que llegue: suena igualmente. Con los assets de Live2D instalados, además: volver al chat con un audio sonando y anotar si la boca se mueve (ver riesgo).
+**Prueba manual (el agente, mirando el estado del elemento de audio y el indicador «Hablando…»; escucharlo es opcional para Pipe), con `npm run dev` y TTS activo:** pedir una respuesta larga, cambiar a Setup mientras habla y volver: la frase no se corta y al terminar desaparece «Hablando…». Pedir otra respuesta, irse a Módulos antes de que llegue: suena igualmente. Con los assets de Live2D instalados, además: volver al chat con un audio sonando y anotar si la boca se mueve (ver riesgo).
 
 **Tamaño y quién.** ≈ 160 líneas, agente (sonnet), 1 h (incluye la prueba manual).
 
@@ -672,7 +674,7 @@ PR2, en `packages/desktop/tests/`:
 
 1. PR1: tipos y error; test; `setState` y `onStateChange`; `send()` rechaza; exportaciones; enmienda de ADR 0013 y párrafo de architecture.md; `npm run verify`.
 2. PR2 (con P-07b ya fusionado): `ConnectionProvider`, hook y banner; `main.tsx` y `App.tsx`; reducer y efecto; `ConversationScreen`; health y secrets; tests; `npm run verify`.
-3. Prueba manual de Pipe en el PR2 (abajo) antes de fusionar.
+3. Prueba manual del agente en el PR2 (abajo) antes de fusionar.
 
 **Criterio de hecho**
 
@@ -680,18 +682,18 @@ PR2, en `packages/desktop/tests/`:
 - `git grep -n "drop .* — conexión no abierta" packages/core/src` sigue existiendo como log, y `git grep -n "TransportNotOpenError" packages/core/src` lo encuentra en `send()`.
 - ADR 0013 tiene la nota de enmienda con fecha.
 
-**Prueba manual (Pipe), con `npm run dev`:**
+**Prueba manual (el agente), con `npm run dev`:**
 
 1. Con todo arriba, parar el core-host (Ctrl+C en su terminal): en ≤ 3 s aparece el banner y el input y el micro quedan deshabilitados.
 2. Volver a arrancar el core-host: el banner desaparece solo y se puede escribir.
 3. Mandar un mensaje y, mientras pone «Pensando…», parar el core-host: la UI deja de «pensar».
 4. Ir a Setup con el core-host parado: en ≤ 8 s sale «El core-host no responde» en lugar de «comprobando…».
 
-**Tamaño y quién.** PR1 ≈ 180 líneas, agente (sonnet), 1 h (incluye revisar la enmienda). PR2 ≈ 290 líneas, mixto (sonnet; Pipe hace la prueba manual), 2 h. **Total 3 h.** Si PR2 pasa de 300 líneas, se parte en «banner + input» y «Setup + secrets».
+**Tamaño y quién.** PR1 ≈ 180 líneas, agente (sonnet), 1 h (incluye revisar la enmienda). PR2 ≈ 290 líneas, mixto (sonnet; el agente hace la prueba manual), 2 h. **Total 3 h.** Si PR2 pasa de 300 líneas, se parte en «banner + input» y «Setup + secrets».
 
 **Riesgos y reversión.**
 
-- Arrancar con el input deshabilitado hasta la primera conexión puede parecer un fallo si el core-host tarda (arranque en frío con Letta). El banner explica qué pasa; si molesta, se cambia el texto, no el bloqueo.
+- Arrancar con el input deshabilitado hasta la primera conexión puede parecer un fallo si el core-host tarda (arranque en frío con Letta). El banner explica qué pasa; si molesta, se cambia el texto, no el bloqueo (aceptado por Pipe, §2.0 B4).
 - `send()` que rechaza genera un `logger.error` en el bus por cada envío perdido. Es deseable (antes era silencioso); con P-02 el log ya dice el motivo.
 - Que un consumidor futuro haga `await transport.send()` sin `try/catch`. Hoy solo lo llama `EventBus` (comprobado: `event-bus.ts:62`).
 - Reversión: PR2 se revierte sin tocar core. PR1 se revierte junto con la enmienda (viajan juntos).
@@ -702,11 +704,11 @@ PR2, en `packages/desktop/tests/`:
 
 - **Objetivo.** Que AGENTS.md no vuelva a divergir de CLAUDE.md, que cada encargo a un agente tenga la misma forma y que el repo no tenga ramas muertas que confundan a agentes y humanos.
 - **Qué cierra.** La parte de AGENTS.md de L-DOC-03 (dentro de P-03a) y L-TOOL-03 (R-234, R-235, R-236, R-237, R-238, R-219; R-217 la cierra el ADR 0029 de los otros agentes).
-- **PRs (3) y una acción humana:**
+- **PRs (3) y la limpieza de ramas:**
   1. `chore: genera AGENTS.md desde CLAUDE.md con scripts/sync-agents-md.mjs`
   2. `docs: plantilla de encargo para agentes en CONTRIBUTING`
   3. `chore: acota los patrones de .gitignore a la raíz` (opcional, R-219; ver §2.2 #13 sobre `.claude/`)
-  4. Pipe borra las ramas muertas (lista abajo).
+  4. Ramas muertas: las remotas ya están borradas (2026-11-13); las locales fusionadas las borra el agente (abajo).
 
 **Archivos a tocar**
 
@@ -715,7 +717,7 @@ PR2, en `packages/desktop/tests/`:
 | 1   | `scripts/sync-agents-md.mjs` (nuevo)                     | Exporta `buildAgentsMd(claudeMd: string): string`. Extrae de CLAUDE.md los bloques entre `<!-- agents-md:start -->` y `<!-- agents-md:end -->` (en orden), normaliza fines de línea a LF y antepone una cabecera fija: «Generado desde CLAUDE.md por `scripts/sync-agents-md.mjs`. No editar a mano: edita CLAUDE.md y ejecuta `npm run agents:sync`». Sin marcadores, o con marcadores desparejados, lanza. CLI: sin argumentos escribe AGENTS.md; `--check` sale con 1 y un diff de las primeras líneas distintas si AGENTS.md no coincide. |
 | 1   | `scripts/sync-agents-md.test.mjs` (nuevo)                | Tests con `node:test` (ver abajo).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 1   | `CLAUDE.md`                                              | Marcadores alrededor de las secciones que el ADR 0029 defina como extracto (reglas duras y comandos). **Qué secciones van lo decide el ADR 0029**, no este encargo.                                                                                                                                                                                                                                                                                                                                                                           |
-| 1   | `AGENTS.md`                                              | Regenerado. El diff frente a la versión que dejen los agentes de documentación lo revisa Pipe.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| 1   | `AGENTS.md`                                              | Regenerado. El diff frente a la versión que dejen los agentes de documentación lo revisa un segundo agente (§2.0, A2).                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 1   | `package.json:13-24`                                     | `"agents:sync": "node scripts/sync-agents-md.mjs"` y `"agents:check": "node scripts/sync-agents-md.mjs --check"`; `verify` añade `&& npm run agents:check` (§2.2 #12).                                                                                                                                                                                                                                                                                                                                                                        |
 | 1   | `eslint.config.js`                                       | Ya cubierto si P-04 PR2 entró antes (`'scripts/**/*.mjs'`); si no, se añade aquí.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 2   | `CONTRIBUTING.md` (85 líneas; nueva sección tras `:1-7`) | «Encargar trabajo a un agente», con la plantilla: lote y hallazgos que cierra; archivos con archivo:línea; test rojo (archivo, nombres y por qué falla hoy); pasos; criterio de hecho con comandos; tamaño (≤ 300 líneas); prohibiciones fijas (no tocar inmutables de self-dev, no pushear a `develop` ni `main`, no `--no-verify`, no subir majors fuera de su lote, no tocar `.env*` ni `config/` salvo que el encargo lo diga); y «qué revisa Pipe» (la intención). Enlaza a las reglas de PR del ADR 0029 en vez de copiarlas.           |
@@ -734,7 +736,7 @@ Rojos porque el módulo no existe; cada regla se implementa contra su test.
 
 **Atención a Prettier.** `format:check` también formatea AGENTS.md. El generador tiene que producir Markdown que Prettier deje igual: el criterio incluye `npx prettier --check AGENTS.md` tras regenerar. Si no es posible, AGENTS.md entra en `.prettierignore` con un comentario.
 
-**Ramas (acción de Pipe, una por una; nada se borra sin su confirmación en el momento):**
+**Ramas remotas (ya no existen: las dos `claude/*` se borraron solas al fusionar sus PRs y las otras cuatro se borraron el 2026-11-13, parte de P-03b; la tabla queda como registro de la revisión):**
 
 | Rama remota                             | Hallazgo | Motivo                                   |
 | --------------------------------------- | -------- | ---------------------------------------- |
@@ -747,7 +749,7 @@ Rojos porque el módulo no existe; cada regla se implementa contra su test.
 
 `claude/project-review-restructure-4bc57a` **no** se borra: es la de la revisión en curso.
 
-Locales: primero `git fetch --prune` y comprobar que `develop` local está al día con `origin/develop` (hoy no lo está). Después, `git branch --merged origin/develop` y `git branch -d` (nunca `-D`) para cada una, saltando las que tenga abiertas alguno de los 8 worktrees (`git worktree list`). Lo puede preparar un agente como lista de comandos; los ejecuta Pipe.
+Locales: primero `git fetch --prune` y comprobar que `develop` local está al día con `origin/develop` (hoy no lo está). Después, `git branch --merged origin/develop` y `git branch -d` (nunca `-D`) para cada una, saltando las que tenga abiertas alguno de los 8 worktrees (`git worktree list`). Lo hace el agente (§2.0, A3).
 
 **Criterio de hecho**
 
@@ -756,11 +758,11 @@ Locales: primero `git fetch --prune` y comprobar que `develop` local está al d�
 - CONTRIBUTING tiene la plantilla y `git grep -n "Encargar trabajo a un agente" CONTRIBUTING.md` la encuentra.
 - `git ls-remote --heads origin` solo muestra `main`, `develop` y las ramas con trabajo vivo.
 
-**Tamaño y quién.** PR1 ≈ 150 líneas más el AGENTS.md regenerado, agente (sonnet), 1 h. PR2 ≈ 60 líneas, mixto (haiku redacta y Pipe ajusta las prohibiciones), 0,5 h. PR3 ≈ 10 líneas, agente (haiku), dentro de la media hora de ramas. Ramas: humano, 0,5 h. **Total 2 h** (recortable → F2, salvo el script si Pipe quiere el gate 6 con AGENTS.md generado ya en F1).
+**Tamaño y quién.** PR1 ≈ 150 líneas más el AGENTS.md regenerado, agente (sonnet), 1 h. PR2 ≈ 60 líneas, mixto (haiku redacta y un segundo agente revisa las prohibiciones), 0,5 h. PR3 ≈ 10 líneas, agente (haiku), dentro de la media hora de ramas. Ramas: agente, 0,5 h. **Total 2 h** (recortable → F2, salvo el script si Pipe quiere el gate 6 con AGENTS.md generado ya en F1).
 
 **Riesgos y reversión.**
 
-- Los agentes de documentación pueden dejar AGENTS.md con contenido que no sale de CLAUDE.md. Al generarlo, ese contenido desaparece: Pipe decide en el diff si se sube a CLAUDE.md.
+- Los agentes de documentación pueden dejar AGENTS.md con contenido que no sale de CLAUDE.md. Al generarlo, ese contenido desaparece: se decide en la revisión del diff si se sube a CLAUDE.md.
 - Un `.gitignore` acotado puede destapar archivos que antes se ignoraban (p. ej. un `data/` local). El agente lista con `git status --ignored` antes y después y lo pone en el PR.
 - Borrar una rama remota es irreversible desde GitHub si nadie la tiene en local. Por eso va de una en una, con su R-xxx.
 
@@ -772,7 +774,7 @@ Para no pisar al grupo que sincroniza la documentación con el ADR 0029, estas l
 
 - `CLAUDE.md:17` y `AGENTS.md:16,85`: «ADR 0025 (modelo de confianza local)» → ADR 0027, con el estado «2a implementada (P-05/P-06); 2b (token) pendiente».
 - `README.md:598` (§Seguridad) y `docs/architecture.md:22,657-664`: lo mismo.
-- `README.md:247,273`: añadir una línea sobre `LETTA_BIND`/`WHISPER_BIND` y el profile `stt` si Pipe acepta los profiles.
+- `README.md:247,273`: añadir una línea sobre `LETTA_BIND`/`WHISPER_BIND` y el profile `stt` (aceptado, §2.0 B2).
 
 ### 3.15 Comprobación del gate de F1
 
@@ -787,19 +789,19 @@ Para no pisar al grupo que sincroniza la documentación con el ADR 0029, estas l
 
 ### 3.16 Cifras de la Fase 1
 
-| Ítem         | PRs                   | Diff aprox.          | Quién               | Horas humanas                                   |
-| ------------ | --------------------- | -------------------- | ------------------- | ----------------------------------------------- |
-| P-01         | 1                     | ≈ 80 líneas          | mixto               | 1,5                                             |
-| P-02         | 4                     | ≈ 155 líneas         | agente              | 2                                               |
-| P-04         | 2 + ajustes en GitHub | ≈ 280 + lock         | mixto               | 2,25                                            |
-| P-05         | 2                     | ≈ 350 + ≈ 60 del ADR | mixto (opus revisa) | 4,5                                             |
-| P-06a        | 1                     | ≈ 30 líneas          | mixto               | 2                                               |
-| P-06b        | 1                     | ≈ 250 líneas         | mixto               | 4                                               |
-| P-07a        | 2                     | ≈ 470 líneas         | mixto               | 3                                               |
-| P-07b        | 1                     | ≈ 160 líneas         | agente              | 1                                               |
-| P-08         | 1                     | ≈ 120 líneas         | agente              | 1                                               |
-| P-03 (resto) | 3 + ramas             | ≈ 220 + AGENTS.md    | mixto / humano      | 2                                               |
-| **Total**    | **18 PRs**            |                      |                     | **≈ 23,25 h** (+ 3,5 h de P-03a, de otro grupo) |
+| Ítem                  | PRs                   | Diff aprox.          | Quién               | Horas humanas                                   |
+| --------------------- | --------------------- | -------------------- | ------------------- | ----------------------------------------------- |
+| P-01 (hecho, PR #102) | 1                     | ≈ 80 líneas          | mixto               | 1,5                                             |
+| P-02                  | 4                     | ≈ 155 líneas         | agente              | 2                                               |
+| P-04                  | 2 + ajustes en GitHub | ≈ 280 + lock         | mixto               | 2,25                                            |
+| P-05                  | 2                     | ≈ 350 + ≈ 60 del ADR | mixto (opus revisa) | 4,5                                             |
+| P-06a                 | 1                     | ≈ 30 líneas          | mixto               | 2                                               |
+| P-06b                 | 1                     | ≈ 250 líneas         | mixto               | 4                                               |
+| P-07a                 | 2                     | ≈ 470 líneas         | mixto               | 3                                               |
+| P-07b                 | 1                     | ≈ 160 líneas         | agente              | 1                                               |
+| P-08                  | 1                     | ≈ 120 líneas         | agente              | 1                                               |
+| P-03 (resto)          | 3 + ramas             | ≈ 220 + AGENTS.md    | mixto / humano      | 2                                               |
+| **Total**             | **18 PRs**            |                      |                     | **≈ 23,25 h** (+ 3,5 h de P-03a, de otro grupo) |
 
 Las horas coinciden con el plan de mejora salvo P-07a (+0,5 h por la enmienda de ADR 0013, que el plan no contaba) y el script de AGENTS.md (≈ 1 h que estaba dentro de P-03a).
 
