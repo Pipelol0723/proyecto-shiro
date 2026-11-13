@@ -8,24 +8,37 @@
  * Se monta una vez en el root (`AppShell`), junto a `<UpdateBanner />`, para
  * que cubra cualquier pantalla. Invisible mientras no hay petición pendiente.
  *
- * `Esc` cancela (decisión segura por defecto).
+ * Esc cancela; foco inicial en Cancelar; Space/Enter ignorados 500 ms (R-030),
+ * para que una pulsación por reflejo mientras el usuario escribe nunca apruebe.
  */
 
 import { useEffect } from 'react';
 import { useToolApproval } from './useToolApproval';
 import styles from './ToolApprovalModal.module.css';
 
+/** Ventana tras abrirse en la que Space y Enter no hacen nada (R-030). */
+const IGNORE_ACTIVATION_MS = 500;
+
 export function ToolApprovalModal(): JSX.Element | null {
   const { pending, respond } = useToolApproval();
 
   useEffect(() => {
     if (pending === null) return;
+    const openedAt = Date.now();
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') respond(false);
+      if (e.key === 'Escape') {
+        respond(false);
+        return;
+      }
+      if ((e.key === ' ' || e.key === 'Enter') && Date.now() - openedAt < IGNORE_ACTIVATION_MS) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     };
-    window.addEventListener('keydown', onKey);
+    // Fase de captura: corta la tecla antes de que active el botón enfocado.
+    window.addEventListener('keydown', onKey, true);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [pending, respond]);
 
@@ -34,6 +47,7 @@ export function ToolApprovalModal(): JSX.Element | null {
   return (
     <div className={styles.backdrop} role="presentation">
       <div
+        key={pending.requestId}
         className={styles.card}
         role="alertdialog"
         aria-modal="true"
@@ -54,6 +68,7 @@ export function ToolApprovalModal(): JSX.Element | null {
           <button
             type="button"
             className={styles.cancel}
+            autoFocus
             onClick={() => {
               respond(false);
             }}
@@ -63,7 +78,6 @@ export function ToolApprovalModal(): JSX.Element | null {
           <button
             type="button"
             className={styles.allow}
-            autoFocus
             onClick={() => {
               respond(true);
             }}
