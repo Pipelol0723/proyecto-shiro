@@ -13,6 +13,7 @@ import {
   EventBus,
   InProcessTransport,
   Logger,
+  WebSocketTransport,
   type EventMap,
   type IEventBus,
   type TransportState,
@@ -127,6 +128,34 @@ describe('ConnectionProvider', () => {
   });
 });
 
+describe('ConnectionProvider con WebSocketTransport real', () => {
+  it('lee el estado de un transport real sin perder el receptor (this)', () => {
+    class FakeSocket {
+      readyState = 0;
+      onopen: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onmessage: (() => void) | null = null;
+      send(): void {}
+      close(): void {}
+    }
+    const transport = new WebSocketTransport({
+      url: 'ws://localhost:0/bus',
+      logger: new Logger('error', { module: 'test' }),
+      webSocketCtor: FakeSocket as unknown as NonNullable<
+        ConstructorParameters<typeof WebSocketTransport>[0]['webSocketCtor']
+      >,
+      autoConnect: false,
+    });
+    const { result } = renderHook(() => useConnectionState(), {
+      wrapper: ({ children }) => (
+        <ConnectionProvider source={transport}>{children}</ConnectionProvider>
+      ),
+    });
+    expect(result.current).toBe('closed');
+  });
+});
+
 describe('ConnectionBanner', () => {
   it('muestra el banner tras 1 s sin conexión y lo quita al reconectar', () => {
     vi.useFakeTimers();
@@ -222,6 +251,15 @@ describe('ConversationScreen sin conexión', () => {
     });
     expect(screen.getByText(/Pensando/)).toBeDefined();
     expect(screen.getByText(/Escuchando/)).toBeDefined();
+    await act(async () => {
+      await bus.emit('llm:responded', {
+        text: 'hola',
+        emotion: 'neutral',
+        tier: 'local',
+        latencyMs: 1,
+      } as EventMap['llm:responded']);
+    });
+    expect(screen.getByText(/Hablando/)).toBeDefined();
 
     act(() => {
       source.set('closed');
