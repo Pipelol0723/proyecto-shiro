@@ -444,6 +444,7 @@ PR1 no lleva test nuevo: su verificación es que los tests de `wire-schema` y de
 - **Objetivo.** Letta y Whisper publicados solo en loopback salvo override, Letta fijada a la imagen que funciona hoy, y profiles para no levantar Whisper si no se pide.
 - **Qué cierra.** L-HOME-01, L-TOOL-02 (fijar Letta; «Whisper nativo» se documenta en P-06b) y la parte de compose de L-SEG-10 y L-SEG-17. Hallazgos R-315, R-213, R-326 (parte de la versión), R-327 y la parte de compose de R-031, R-033 y R-053 (Letta).
 - **PRs.** 1: `chore: compose en loopback y Letta fijada`. Sin ADR (la enmienda de ADR 0027 de P-05 ya cubre el bind).
+- **Estado (2026-11-13).** **Hecho** en el PR #134, con la prueba manual en su descripción. Diferencias con lo escrito abajo: la imagen va solo por digest, sin etiqueta de versión (la imagen local solo tenía `latest`; es Letta 0.16.8 y queda anotado en el comentario). «Recrear no toca el volumen» solo vale si el despliegue previo salió de este compose: con otro volumen u otro Postgres hay que migrar los datos antes, con copia previa (así se hizo en el equipo del dueño; el detalle está en el PR). Quedan para P-06b el `CMD` de Whisper (dentro del contenedor sigue en `0.0.0.0`) y la base CUDA por digest. Queda para después, visto en la prueba: con Ollama recién arrancado las escrituras a Letta superan su tope de 10 s y el drenado, al reintentar, duplica recuerdos.
 
 **Archivos a tocar**
 

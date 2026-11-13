@@ -2,14 +2,18 @@
 #
 # Servicios:
 #   - letta    Memoria persistente (ADRs 0017, 0018)
-#   - whisper  STT con faster-whisper (ADR 0019)
+#   - whisper  STT con faster-whisper (ADR 0019); perfil `stt`
 #
-# Se arrancan aparte del `npm run dev` porque son servicios de larga vida
-# que quieres siempre arriba:
+# Se arrancan aparte del `npm run dev` porque son servicios de larga vida:
 #
-#   docker compose up -d           # ambos
-#   docker compose up -d letta     # solo memoria
-#   docker compose up -d whisper   # solo STT
+#   docker compose up -d                 # Letta (Whisper NO: tiene perfil)
+#   docker compose up -d whisper         # Whisper
+#   docker compose --profile stt up -d   # los dos
+#
+# Los dos se publican solo en esta máquina (127.0.0.1). `LETTA_BIND` y
+# `WHISPER_BIND` permiten exponerlos a la red a sabiendas (por ejemplo
+# `LETTA_BIND=0.0.0.0`): Whisper no tiene autenticación y Letta solo su
+# password, así que no lo hagas en una red que no controles. Ver ADR 0027.
 #
 # Requisitos previos:
 #   1. Ollama corriendo en el host (localhost:11434) con los modelos:
@@ -18,15 +22,27 @@
 #        LETTA_SERVER_PASSWORD=algo-secreto
 #
 # Verificar que arrancaron:
-#   curl http://localhost:8283/v1/health/      # Letta
-#   curl http://localhost:8765/health          # Whisper
+#   curl http://127.0.0.1:8283/v1/health/      # Letta
+#   curl http://127.0.0.1:8765/health          # Whisper
+#
+# Subir Letta de versión: es un cambio con riesgo para los datos. Antes,
+# copia de seguridad del volumen `letta_pgdata` con Letta parado
+# (`docker compose stop letta`) o un volcado con `pg_dump`; después cambia el
+# digest de abajo, `docker compose pull letta`, `docker compose up -d letta` y
+# una prueba de humo (health y que el agente y sus recuerdos siguen ahí).
+# Una versión nueva puede migrar el esquema: volver al digest anterior no lo
+# deshace, la vuelta atrás es restaurar la copia. Súbela junto al SDK
+# `@letta-ai/letta-client`. Nunca `docker compose down -v`.
 
 services:
   letta:
-    image: letta/letta:latest # TODO: pinar a una versión concreta cuando confirmemos una estable
+    # Fijada por digest (2026-11-13): Letta 0.16.8, la versión probada con
+    # `@letta-ai/letta-client` ^1.12 (packages/core/package.json). `latest`
+    # cambiaba la imagen en cada `pull` sin avisar.
+    image: letta/letta@sha256:aa66c3eeee13d2dfc40c650d709b550237ee31bfc91942a52fa488a13fa8c102
     restart: unless-stopped
     ports:
-      - '8283:8283'
+      - '${LETTA_BIND:-127.0.0.1}:8283:8283'
     environment:
       # Protección por password (auth Bearer). El cliente usa la misma var.
       - SECURE=true
@@ -58,6 +74,9 @@ services:
       start_period: 40s
 
   whisper:
+    # Con perfil: `docker compose up -d` a secas no lo levanta. Hay que
+    # nombrarlo (`docker compose up -d whisper`) o activar el perfil `stt`.
+    profiles: ['stt']
     # Build local: la imagen mete faster-whisper + FastAPI sobre una base
     # con CUDA runtime. Sin GPU el contenedor sigue funcionando (faster-
     # whisper detecta y cae a CPU automáticamente). Ver
@@ -68,7 +87,9 @@ services:
     image: shiro-whisper:local
     restart: unless-stopped
     ports:
-      - '8765:8765'
+      # Dentro del contenedor uvicorn escucha en 0.0.0.0 (lo fija el CMD del
+      # Dockerfile); lo que se acota es la publicación en el host.
+      - '${WHISPER_BIND:-127.0.0.1}:8765:8765'
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
       - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}

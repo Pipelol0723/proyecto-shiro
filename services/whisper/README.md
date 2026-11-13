@@ -13,6 +13,9 @@ Desde la raíz del repo:
 docker compose up -d whisper
 ```
 
+Hay que nombrarlo: el servicio tiene el perfil `stt` y `docker compose up -d` a
+secas no lo levanta.
+
 La primera vez tarda varios minutos porque construye la imagen y
 descarga el modelo (`small` por defecto, ~244 MB). El cache de modelos
 queda en un volumen Docker, así que reinicios posteriores son rápidos.
@@ -77,7 +80,7 @@ El servicio (Python standalone) trae defaults conservadores; el `docker-compose.
 | `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`              | `2500`          | Cada cuánto retranscribir el buffer para emitir un partial. Más alto = menos cómputo acumulado por turno.                                                                                                                                      |
 | `WHISPER_HOTWORDS`              | `""` (sin hotwords) | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Faster-whisper ≥1.1.0. Sesga sin filtrarse al output — usar esto en vez de un prompt completo evita que Whisper escupa la frase como transcripción cuando el audio es ambiguo. |
 | `WHISPER_SAMPLE_RATE`           | `16000`             | `16000`         | Sample rate esperado del PCM Int16 LE mono que envía el cliente.                                                                                                                                                                               |
-| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765`  | (sin efecto)    | Bind del servidor **solo sin Docker** (`python -m services.whisper.main`). En Docker el `CMD` del `Dockerfile` fija `--host 0.0.0.0 --port 8765` y la exposición la decide `ports:` de compose (hoy `8765:8765`, todas las interfaces).        |
+| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765`  | (sin efecto)    | Bind del servidor **solo sin Docker** (`python -m services.whisper.main`). En Docker el `CMD` del `Dockerfile` fija `--host 0.0.0.0 --port 8765` y la exposición la decide `ports:` de compose (solo `127.0.0.1` salvo `WHISPER_BIND`).        |
 
 Sin compose el servicio usa sus propios defaults (`auto`, 1500 ms y sin hotwords). Para igualar compose exporta `WHISPER_COMPUTE_TYPE=int8`, `WHISPER_PARTIAL_INTERVAL_MS=2500` y `WHISPER_HOTWORDS=Shiro`.
 
@@ -144,11 +147,13 @@ probablemente rotos (R-194). El plan de mejora propone un job mínimo de pytest
   embeddings. Para modelos mayores, espera a hardware más holgado.
 - **Sin estado persistente**: cada conexión WS es independiente, no hay
   agentes ni sesiones que sobrevivan.
-- **Seguridad (deuda local diferida)**: el servicio escucha en `0.0.0.0` con
-  CORS `*`, sin autenticación, y el buffer del WS `/stt` no tiene tope (audio
-  ilimitado → DoS de memoria/CPU). La decisión vigente es
+- **Seguridad (deuda local diferida)**: dentro del contenedor el servicio
+  escucha en `0.0.0.0`, pero compose lo publica solo en `127.0.0.1` salvo
+  `WHISPER_BIND`. Sigue con CORS `*`, sin autenticación, y el buffer del WS
+  `/stt` no tiene tope (audio ilimitado → DoS de memoria/CPU). La decisión
+  vigente es
   [ADR 0027](../../docs/adr/0027-autenticacion-token-bus-stt-multicliente.md)
   (token en el handshake, `WHISPER_HOST` a `127.0.0.1` y tope de buffer con
-  cierre 1009), Accepted y **sin implementar**. Estado en la fila SEC-02 de la
+  cierre 1009), Accepted y **sin implementar en este servicio**. Estado en la fila SEC-02 de la
   tabla viva de
   [`docs/security-review-2026-07.md`](../../docs/security-review-2026-07.md).
