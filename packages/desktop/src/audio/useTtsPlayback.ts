@@ -157,7 +157,12 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
       // Expone el elemento para que el avatar arranque el lip-sync.
       setAudioElement(audio);
 
+      // `error` y el rechazo de `play()` pueden llegar los dos para el mismo
+      // audio: el fin se emite una sola vez.
+      let done = false;
       const finish = (): void => {
+        if (done) return;
+        done = true;
         // Un audio cortado no emite su fin: quien lo corta (`tts:cancel`)
         // emite el suyo cuando toca, y si lo reemplaza otro audio, el fin
         // del anterior llegaría al reducer cuando ya suena el nuevo.
@@ -201,7 +206,16 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
     return () => {
       unsubAudio();
       unsubCancel();
+      // Si el provider se vuelve a montar con un audio sonando (Fast Refresh,
+      // remontaje), el corte no emitiría su fin y el reducer se quedaría en
+      // `speaking`. Un audio muteado o ya terminado no tiene `audioRef`.
+      const audioId = currentAudioIdRef.current;
+      const userId = currentUserIdRef.current;
+      const wasPlaying = audioRef.current !== null && audioId !== null;
       stopCurrent();
+      if (wasPlaying && audioId !== null) {
+        void bus.emit('tts:audio-ended', { userId: userId ?? '', audioId });
+      }
     };
   }, [bus, stopCurrent]);
 

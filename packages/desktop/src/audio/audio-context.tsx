@@ -11,7 +11,7 @@
  * Va fuera del `ErrorBoundary`: un fallo de render no corta el audio.
  */
 
-import { createContext, type ReactNode } from 'react';
+import { createContext, useMemo, type ReactNode } from 'react';
 import { useBus } from '../use-bus';
 import { useTtsPlayback, type UseTtsPlaybackResult } from './useTtsPlayback';
 
@@ -30,6 +30,13 @@ export interface AudioProviderProps {
 
 export function AudioProvider({ children, audioFactory }: AudioProviderProps): JSX.Element {
   const bus = useBus();
-  const value = useTtsPlayback({ bus, audioFactory });
+  const playback = useTtsPlayback({ bus, audioFactory });
+  const { muted, setMuted, cancel, audioElement } = playback;
+  // El hook devuelve un objeto nuevo en cada render; se estabiliza para que
+  // un re-render del padre no repinte a todos los consumidores.
+  const value = useMemo(
+    () => ({ muted, setMuted, cancel, audioElement }),
+    [muted, setMuted, cancel, audioElement],
+  );
   return <AudioContext.Provider value={value}>{children}</AudioContext.Provider>;
 }
