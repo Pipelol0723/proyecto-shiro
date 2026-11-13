@@ -178,9 +178,12 @@ cualquiera de estas:
 
 ## Enmienda (2026-11-13): secuencia 2a/2b y correcciones
 
-La decisión no cambia. Esta enmienda la parte en dos entregas y corrige tres
-datos que el código desmiente. Viaja con el PR que hace el bind del bus
-(P-05 del plan de mejora).
+La decisión final no cambia. Esta enmienda la parte en dos entregas, relaja
+temporalmente el punto 4 mientras dure la primera (ver abajo), amplía la
+allowlist y corrige tres datos que el código desmiente. Viaja con el PR que
+hace el bind del bus (P-05 del plan de mejora) y deja superada la primera
+viñeta de la nota del 2026-11-12: el bus y `/audio` ya no escuchan en todas
+las interfaces.
 
 ### Secuencia
 
@@ -220,8 +223,8 @@ regla original.
 
 `secrets-file.ts` solo lee y escribe las claves de `MANAGED_KEYS` (hoy, las
 dos API keys). Un `SHIRO_BUS_TOKEN` guardado en `secrets.env` se ignoraría al
-arrancar y se perdería en el siguiente `secrets:save`. 2b tiene que añadirlo
-a esa lista.
+arrancar y se perdería en el siguiente `secrets:save` que cambie alguna
+clave. 2b tiene que añadirlo a esa lista.
 
 ### Residuos aceptados hasta 2b
 
@@ -231,3 +234,10 @@ a esa lista.
 - Con `SHIRO_BIND_HOST` fuera de loopback, el bus queda abierto a esa red sin
   auth, y `/audio` sigue anunciando `http://localhost:<puerto>`, así que un
   cliente remoto no oiría nada.
+- Los clientes siguen usando `localhost`, que en Windows resuelve primero a
+  `::1`. El core-host ya solo ocupa `127.0.0.1`, así que otro proceso local
+  que escuche en `::` o `::1` en el mismo puerto arranca sin `EADDRINUSE` y
+  recibe esas conexiones (también un core-host antiguo, o uno con
+  `SHIRO_BIND_HOST=::`). Entra en el modelo de amenaza actual, que acepta
+  procesos locales. Se cierra cuando los clientes usen `127.0.0.1` de forma
+  explícita, lo que exige ampliar la CSP de Tauri.

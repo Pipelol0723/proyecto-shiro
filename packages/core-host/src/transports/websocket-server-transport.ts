@@ -95,7 +95,9 @@ export class WebSocketServerTransport implements ITransport {
       this.httpServer.once('listening', () => {
         const addr = this.httpServer.address();
         const where =
-          typeof addr === 'string' ? addr : `${addr?.address ?? '?'}:${String(addr?.port ?? '?')}`;
+          typeof addr === 'string' || addr === null
+            ? String(addr)
+            : `${addr.family === 'IPv6' ? `[${addr.address}]` : addr.address}:${String(addr.port)}`;
         this.logger.info(`escuchando en ${where} (path ${options.path ?? '/bus'})`);
         resolve();
       });

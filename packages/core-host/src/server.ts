@@ -85,12 +85,22 @@ async function main(): Promise<void> {
 }
 
 /** `true` si el error es un EADDRINUSE (puerto ya ocupado). */
+function errorCode(err: unknown): unknown {
+  return typeof err === 'object' && err !== null && 'code' in err
+    ? (err as { code?: unknown }).code
+    : undefined;
+}
+
 function isAddrInUse(err: unknown): boolean {
+  return errorCode(err) === 'EADDRINUSE';
+}
+
+/** `listen()` no pudo usar el host pedido: no resuelve o no es de esta máquina. */
+function isBindHostUnusable(err: unknown): boolean {
+  const code = errorCode(err);
   return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code?: unknown }).code === 'EADDRINUSE'
+    (code === 'ENOTFOUND' || code === 'EADDRNOTAVAIL') &&
+    (process.env.SHIRO_BIND_HOST ?? '').trim() !== ''
   );
 }
 
@@ -106,6 +116,13 @@ main().catch((err: unknown) => {
         'ya hay otro core-host corriendo. Este proceso se cierra limpiamente.',
     );
     process.exit(0);
+  }
+  if (isBindHostUnusable(err)) {
+    console.error(
+      `core-host: no se puede escuchar en SHIRO_BIND_HOST=${String(process.env.SHIRO_BIND_HOST)} ` +
+        `(${String(errorCode(err))}). Debe ser una IP de esta máquina, 0.0.0.0 o localhost.`,
+    );
+    process.exit(1);
   }
   console.error('fallo al arrancar core-host:', err);
   process.exit(1);

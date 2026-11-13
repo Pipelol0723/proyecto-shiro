@@ -21,7 +21,9 @@ const IPV4_LOOPBACK = /^127(\.\d{1,3}){3}$/;
 
 /**
  * Lee `SHIRO_BIND_HOST` del entorno. Ausente, vacío o en blanco → default.
- * No valida que el valor sea una IP: si no lo es, `listen()` falla al arrancar.
+ * No valida el valor: un nombre que no resuelve o una IP que no es de esta
+ * máquina hacen fallar `listen()` al arrancar (`server.ts` lo explica); un
+ * nombre que sí resuelve se usa tal cual.
  */
 export function resolveBindHost(env: NodeJS.ProcessEnv): BindHost {
   const raw = env.SHIRO_BIND_HOST?.trim();
