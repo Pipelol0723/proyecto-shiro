@@ -102,6 +102,8 @@ Pipe aprobó el 2026-11-13 los saltos mayores de tooling, escalonados. El plan d
 
 ##### V2a — Menores de tooling
 
+**Hecho (2026-11-13).** Entró por los PRs de Dependabot #129 (prettier 3.9.10, typescript-eslint 8.72.1, tsx, `@types/node`, testing-library, y también `@vercel/ncc` 0.45 y `@yao-pkg/pkg` 6.25, con el sidecar construido y arrancado) y #130 (`@fontsource/*`, entre otras de producción), y por el PR #132 (eslint 9.39.5, `@types/react` y transitivas con avisos). Prettier 3.9 cambió el formato de las uniones de tipos cortas: el reformateo fue en el mismo PR.
+
 PR `chore: actualiza herramientas de desarrollo dentro de su major`. Sube las filas «V2a» del inventario. Riesgo bajo. Prettier 3.10 puede reformatear algún archivo: el PR incluye `npm run format` y se revisa que el diff sea solo formato. `@types/node` se queda en `^22` (no 26: el runtime es Node 22, ver V5c).
 
 ##### V2b — TypeScript 6.0
