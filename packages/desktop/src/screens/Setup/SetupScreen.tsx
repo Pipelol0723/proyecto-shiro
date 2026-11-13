@@ -17,6 +17,7 @@ import { useState } from 'react';
 import type { ServiceStatus, SystemHealthReport } from '@proyecto-shiro/core';
 import { useBus } from '../../use-bus';
 import { useConnectionState } from '../../connection/use-connection';
+import { useDisconnectedFor } from '../../connection/use-disconnected-for';
 import { useSystemHealth } from '../../health/useSystemHealth';
 import { useSecretsSave } from '../../health/useSecretsSave';
 import styles from './SetupScreen.module.css';
@@ -113,6 +114,8 @@ function StatusBadge({
 export function SetupScreen(): JSX.Element {
   const bus = useBus();
   const connected = useConnectionState() === 'open';
+  // La tarjeta por «sin conexión» espera la misma gracia que el banner.
+  const disconnectedAWhile = useDisconnectedFor();
   const { report, checking, timedOut, refresh } = useSystemHealth({ bus });
   const secrets = useSecretsSave(bus, connected);
   // Sin reporte y sin respuesta del core-host: no hay nada que mostrar salvo el aviso.
@@ -139,7 +142,7 @@ export function SetupScreen(): JSX.Element {
         </p>
       </header>
 
-      {(timedOut || !connected) && (
+      {(timedOut || disconnectedAWhile) && (
         <div className={styles.section} role="alert">
           <h2 className={styles.sectionTitle}>El core-host no responde</h2>
           <p className={styles.degraded}>

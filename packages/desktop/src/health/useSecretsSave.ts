@@ -40,6 +40,15 @@ export function useSecretsSave(bus: IEventBus<EventMap>, connected: boolean): Us
     return unsubscribe;
   }, [bus]);
 
+  // Si la conexión se cae con un guardado en vuelo, el ack no llegará nunca:
+  // se sale de 'saving' en vez de quedarse esperando (R-120).
+  useEffect(() => {
+    if (!connected && status === 'saving') {
+      setStatus('error');
+      setError('Sin conexión con el core-host; no se confirmó el guardado');
+    }
+  }, [connected, status]);
+
   const save = useCallback(
     (updates: EventMap['secrets:save']) => {
       if (!connected) {

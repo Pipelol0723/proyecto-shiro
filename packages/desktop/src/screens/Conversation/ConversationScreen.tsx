@@ -88,6 +88,14 @@ export function ConversationScreen(): JSX.Element {
   const micActive = ptt.state === 'recording' || ptt.state === 'requesting';
   const micDisabled = ptt.state === 'unsupported' || thinking || !connected;
 
+  // Si se pierde la conexión con la captura en curso, `enabled` desmonta los
+  // listeners de teclado (se pierde el keyup) y el botón queda deshabilitado
+  // (se pierde el pointerup): hay que parar el micro explícitamente.
+  const { state: pttState, stop: pttStop } = ptt;
+  useEffect(() => {
+    if (!connected && pttState === 'recording') void pttStop();
+  }, [connected, pttState, pttStop]);
+
   // Si el micro falla tras `stt:listening` (permiso denegado, sin dispositivo),
   // nadie emitiría `stt:transcribed` y «Escuchando…» quedaría fijo (R-118).
   useEffect(() => {

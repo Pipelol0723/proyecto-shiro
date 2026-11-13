@@ -136,15 +136,13 @@ describe('ConnectionProvider con WebSocketTransport real', () => {
       onclose: (() => void) | null = null;
       onerror: (() => void) | null = null;
       onmessage: (() => void) | null = null;
-      send(): void {}
-      close(): void {}
+      send = vi.fn();
+      close = vi.fn();
     }
     const transport = new WebSocketTransport({
       url: 'ws://localhost:0/bus',
       logger: new Logger('error', { module: 'test' }),
-      webSocketCtor: FakeSocket as unknown as NonNullable<
-        ConstructorParameters<typeof WebSocketTransport>[0]['webSocketCtor']
-      >,
+      webSocketCtor: FakeSocket,
       autoConnect: false,
     });
     const { result } = renderHook(() => useConnectionState(), {
