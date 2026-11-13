@@ -29,7 +29,7 @@ import { IconMic, IconSend } from '../../components/Icons';
 import { useBus } from '../../use-bus';
 import { useCompanion } from '../../state/use-companion';
 import { useMicrophonePTT } from '../../audio/useMicrophonePTT';
-import { useTtsPlayback } from '../../audio/useTtsPlayback';
+import { useAudio } from '../../audio/use-audio';
 import { ChatPanel } from './ChatPanel';
 import styles from './ConversationScreen.module.css';
 
@@ -69,10 +69,10 @@ export function ConversationScreen(): JSX.Element {
     };
   }, []);
 
-  // Reproduce el audio TTS que el server emite por `tts:audio`. Mute
-  // persistido en localStorage por cliente (ver ADR 0020) — el toggle
-  // de la UI cambia esta preferencia.
-  const ttsPlayback = useTtsPlayback({ bus });
+  // El audio TTS lo reproduce `AudioProvider` (global, sobrevive al cambio
+  // de pantalla). Mute persistido en localStorage por cliente (ver ADR
+  // 0020) — el toggle de la UI cambia esta preferencia.
+  const ttsPlayback = useAudio();
 
   // Mientras el LLM piensa, bloqueamos input. Mientras Shiro habla
   // (speaking) SÍ permitimos input — pero antes emitimos `tts:cancel`

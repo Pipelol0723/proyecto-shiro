@@ -3,9 +3,9 @@
  * el bus (`tts:audio`) y emite `tts:audio-ended` al terminar. También
  * responde a `tts:cancel` parando el audio en curso.
  *
- * Diseñado para montarse **una sola vez** (en el root del árbol, o en
- * `ConversationScreen`). Si lo montas varias veces tendrás N
- * reproducciones simultáneas — eco garantizado.
+ * Diseñado para montarse **una sola vez**, en `AudioProvider` (encima del
+ * switch de pantallas, para que la voz no se corte al navegar). Si lo
+ * montas varias veces tendrás N reproducciones simultáneas — eco garantizado.
  *
  * Toggle mute persistido en `localStorage` con key
  * `shiro:tts:muted` para que cada dispositivo recuerde su preferencia
@@ -105,9 +105,15 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
   const audioFactoryRef = useRef(audioFactory);
   audioFactoryRef.current = audioFactory;
 
+  // Audios que cortamos nosotros (R-119). Al asignar `src = ''` el navegador
+  // dispara `error` en el elemento; sin esta marca `finish` lo trataría como
+  // un fallo y emitiría un `tts:audio-ended` espurio del audio que ya no suena.
+  const cutAudiosRef = useRef(new WeakSet<HTMLAudioElement>());
+
   const stopCurrent = useCallback(() => {
     const audio = audioRef.current;
     if (audio !== null) {
+      cutAudiosRef.current.add(audio);
       try {
         audio.pause();
         audio.src = '';
@@ -152,6 +158,10 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
       setAudioElement(audio);
 
       const finish = (): void => {
+        // Un audio cortado no emite su fin: quien lo corta (`tts:cancel`)
+        // emite el suyo cuando toca, y si lo reemplaza otro audio, el fin
+        // del anterior llegaría al reducer cuando ya suena el nuevo.
+        if (cutAudiosRef.current.has(audio)) return;
         if (audioRef.current === audio) {
           audioRef.current = null;
           currentAudioIdRef.current = null;

@@ -4,14 +4,12 @@
  * con otra pantalla montada.
  *
  * `Audio` se sustituye con `vi.stubGlobal` para que el test valga igual
- * antes y después de introducir `AudioProvider`. El harness lo monta si el
- * módulo existe (`import.meta.glob`), de modo que la versión «roja» se
- * ejecuta contra el árbol anterior (BusProvider + CompanionProvider).
+ * antes y después de introducir `AudioProvider`.
  */
 
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
   EventBus,
   InProcessTransport,
@@ -21,26 +19,13 @@ import {
 } from '@proyecto-shiro/core';
 import { BusProvider } from '../../src/bus-context';
 import { CompanionProvider } from '../../src/state/companion-context';
+import { AudioProvider } from '../../src/audio/audio-context';
+import { useAudio } from '../../src/audio/use-audio';
 import { ConversationScreen } from '../../src/screens/Conversation/ConversationScreen';
 
 vi.mock('../../src/components/Avatar', () => ({
   Avatar: () => <div data-testid="avatar" />,
 }));
-
-interface AudioModule {
-  AudioProvider: (props: { children: ReactNode }) => JSX.Element;
-}
-interface UseAudioModule {
-  useAudio: () => unknown;
-}
-const audioModules = import.meta.glob<AudioModule>('../../src/audio/audio-context.tsx', {
-  eager: true,
-});
-const useAudioModules = import.meta.glob<UseAudioModule>('../../src/audio/use-audio.ts', {
-  eager: true,
-});
-const AudioProvider = Object.values(audioModules)[0]?.AudioProvider;
-const useAudio = Object.values(useAudioModules)[0]?.useAudio;
 
 class FakeAudio {
   static instances: FakeAudio[] = [];
@@ -94,7 +79,7 @@ function Harness({ bus }: { bus: IEventBus<EventMap> }): JSX.Element {
   return (
     <BusProvider bus={bus}>
       <CompanionProvider>
-        {AudioProvider ? <AudioProvider>{screens}</AudioProvider> : screens}
+        <AudioProvider>{screens}</AudioProvider>
       </CompanionProvider>
     </BusProvider>
   );
@@ -109,9 +94,9 @@ describe('AudioProvider', () => {
     vi.stubGlobal(
       'ResizeObserver',
       class {
-        observe(): void {}
-        disconnect(): void {}
-        unobserve(): void {}
+        observe = vi.fn();
+        disconnect = vi.fn();
+        unobserve = vi.fn();
       },
     );
     window.localStorage.removeItem('shiro:tts:muted');
@@ -169,8 +154,7 @@ describe('AudioProvider', () => {
   });
 
   it('useAudio fuera de AudioProvider lanza un error claro', () => {
-    expect(useAudio).toBeDefined();
-    expect(() => renderHook(() => useAudio?.())).toThrow(
+    expect(() => renderHook(() => useAudio())).toThrow(
       'useAudio debe usarse dentro de AudioProvider',
     );
   });
