@@ -2,9 +2,11 @@
 # 7 PRs abiertos a la vez entre todos los ecosistemas. Docker queda fuera a
 # propósito: Letta se fija por digest y sus subidas exigen backup previo.
 #
-# Un `ignore` puede dejar también sin PR las actualizaciones de seguridad de
-# ese paquete (sin verificar): solo se ignora lo que tiene un ítem del plan
-# que lo sube, y se quita la entrada al cerrarlo.
+# Según la documentación de GitHub, un `ignore` también afecta a las
+# actualizaciones de seguridad de ese paquete (el del SDK las bloquea todas;
+# con `update-types` no está claro). Por eso solo se ignora lo que tiene un
+# ítem del plan que lo sube, y se quita la entrada al cerrarlo. Los avisos de
+# esos paquetes hay que vigilarlos en las alertas de Dependabot.
 version: 2
 updates:
   - package-ecosystem: npm
