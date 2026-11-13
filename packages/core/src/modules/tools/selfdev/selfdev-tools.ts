@@ -42,6 +42,11 @@ const SelfDevShellCommandSchema = z.object({
  * cada módulo valida su propia `config`).
  */
 export const SelfDevConfigSchema = z.object({
+  /**
+   * Interruptor general. Apagado por defecto hasta el gate de la Fase 3
+   * (plan P-01 / P-29): solo se enciende a mano con `selfdev.enabled: true`.
+   */
+  enabled: z.boolean().default(false),
   /** Worktree aislado (relativo a la raíz del repo) donde Shiro genera. */
   worktree_path: z.string().min(1).default('../shiro-selfdev'),
   /** Prefijo de rama de los PRs de Shiro (distinto de `feat/<user>/...`). */

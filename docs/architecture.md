@@ -598,8 +598,8 @@ El hito **Self-improvement** (ver [ADR 0023](adr/0023-shiro-self-improvement-pro
 lleva lo agéntico un paso más: Shiro propone **PRs a su propio repo**. Es
 _propose-only_ — el humano siempre mergea. Vive en `core-host/src/selfdev/`,
 reusa el loop tool-use y el `ApprovalGate` del hito Agentic, y **solo se activa
-en entorno de desarrollo** (repo clonado + `git`/`gh`/`npm`; en el binario
-instalado queda apagado por auto-detección con `git rev-parse` + `gh`).
+en entorno de desarrollo** (repo clonado + `git`/`gh`/`npm`) y **si `selfdev.enabled: true`**
+(apagado por defecto desde P-01; en el binario queda apagado por auto-detección con `git rev-parse` + `gh`).
 
 **Trigger**: la tool `selfdev:propose` (tier `confirm`, en el registry del
 chat). Cuando el usuario pide "proponé un fix para X", el LLM cloud la llama; el

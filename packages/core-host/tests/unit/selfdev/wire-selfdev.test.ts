@@ -31,7 +31,9 @@ function baseOpts(modules: LoadedModules, detectEnv: (l: Logger) => Promise<Self
   return {
     bus,
     modules,
-    config: {} as unknown as ModulesConfig, // sin bloque selfdev → defaults
+    // self-dev está apagado por defecto (P-01): los casos que ejercitan el resto
+    // de la lógica de habilitación lo encienden aquí; los de «apagado» lo pisan.
+    config: { selfdev: { enabled: true } } as unknown as ModulesConfig,
     logger,
     userId: 'me',
     approvalGate: createApprovalGate(bus, logger),
@@ -41,14 +43,50 @@ function baseOpts(modules: LoadedModules, detectEnv: (l: Logger) => Promise<Self
 }
 
 describe('wireSelfDev', () => {
+  it('deshabilitado por defecto: sin selfdev.enabled no llama a detectEnv ni registra el trigger', async () => {
+    const { modules, registry } = fakeModules(true);
+    const detectEnv = vi.fn(() => Promise.resolve({ available: true, repoRoot: '/fake/repo' }));
+    const res = await wireSelfDev({
+      ...baseOpts(modules, detectEnv),
+      config: {} as unknown as ModulesConfig,
+    });
+    expect(res.enabled).toBe(false);
+    expect(detectEnv).not.toHaveBeenCalled();
+    expect(registry.get('selfdev:propose')).toBeUndefined();
+  });
+
+  it('deshabilitado con selfdev.enabled=false explícito', async () => {
+    const { modules, registry } = fakeModules(true);
+    const detectEnv = vi.fn(() => Promise.resolve({ available: true, repoRoot: '/fake/repo' }));
+    const res = await wireSelfDev({
+      ...baseOpts(modules, detectEnv),
+      config: { selfdev: { enabled: false } } as unknown as ModulesConfig,
+    });
+    expect(res.enabled).toBe(false);
+    expect(detectEnv).not.toHaveBeenCalled();
+    expect(registry.get('selfdev:propose')).toBeUndefined();
+  });
+
   it('deshabilitado si el entorno no es apto (no repo/gh) — no registra el trigger', async () => {
     const { modules, registry } = fakeModules(true);
-    const res = await wireSelfDev(
-      baseOpts(modules, () =>
-        Promise.resolve({ available: false, repoRoot: '', reason: 'no repo' }),
-      ),
+    const detectEnv = vi.fn(() =>
+      Promise.resolve({ available: false, repoRoot: '', reason: 'no repo' }),
     );
+    const res = await wireSelfDev(baseOpts(modules, detectEnv));
     expect(res.enabled).toBe(false);
+    expect(detectEnv).toHaveBeenCalledOnce();
+    expect(registry.get('selfdev:propose')).toBeUndefined();
+  });
+
+  it('un selfdev.enabled que no es el booleano true (p. ej. "true") cuenta como apagado', async () => {
+    const { modules, registry } = fakeModules(true);
+    const detectEnv = vi.fn(() => Promise.resolve({ available: true, repoRoot: '/fake/repo' }));
+    const res = await wireSelfDev({
+      ...baseOpts(modules, detectEnv),
+      config: { selfdev: { enabled: 'true' } } as unknown as ModulesConfig,
+    });
+    expect(res.enabled).toBe(false);
+    expect(detectEnv).not.toHaveBeenCalled();
     expect(registry.get('selfdev:propose')).toBeUndefined();
   });
 

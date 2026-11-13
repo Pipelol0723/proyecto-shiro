@@ -2,6 +2,8 @@
  * `wireSelfDev` (ADR 0023) — cablea el flujo de self-improvement en el bootstrap.
  *
  * Responsabilidades:
+ *   0. **Interruptor `selfdev.enabled`** (default `false`, P-01): sin él se sale
+ *      antes de detectar el entorno.
  *   1. **Auto-detección dev-only**: self-dev requiere el repo clonado + `git` +
  *      `gh` en el PATH. En el binario instalado (cwd = data dir, sin repo) queda
  *      apagado. Se detecta con `git rev-parse --show-toplevel` + `gh --version`.
@@ -305,13 +307,27 @@ async function detectSelfDevEnv(logger: Logger): Promise<SelfDevEnv> {
 // ─── Wiring ───────────────────────────────────────────────────────────
 
 /**
- * Cablea self-dev si el entorno lo soporta. Idempotente respecto al registry
+ * Cablea self-dev si `selfdev.enabled: true` y el entorno lo soporta. Idempotente respecto al registry
  * (registra la tool una vez). Devuelve `enabled` + `dispose`.
  */
 export async function wireSelfDev(opts: WireSelfDevOptions): Promise<WireSelfDevResult> {
   const { bus, modules, config, logger, userId, approvalGate, announce, persist } = opts;
   const log = logger.child({ module: 'SelfDev' });
   const noop: WireSelfDevResult = { enabled: false, dispose: () => undefined };
+
+  // Primero la config: apagado por defecto (P-01), así que sin `enabled: true`
+  // no se lanza ni `git` ni `gh`.
+  let sdConfig: SelfDevConfig;
+  try {
+    sdConfig = parseSelfDevConfig(config.selfdev);
+  } catch (err) {
+    log.warn('config selfdev inválida — self-dev deshabilitado', { err });
+    return noop;
+  }
+  if (!sdConfig.enabled) {
+    log.info('self-dev desactivado por config (selfdev.enabled=false)');
+    return noop;
+  }
 
   const detect = opts.detectEnv ?? detectSelfDevEnv;
   const env = await detect(log);
@@ -324,14 +340,6 @@ export async function wireSelfDev(opts: WireSelfDevOptions): Promise<WireSelfDev
   const llm: ILLMModule = modules.llmCloud;
   if (typeof llm.generateWithTools !== 'function') {
     log.warn('self-dev no disponible: el LLM cloud no soporta tool-use (generateWithTools)');
-    return noop;
-  }
-
-  let sdConfig: SelfDevConfig;
-  try {
-    sdConfig = parseSelfDevConfig(config.selfdev);
-  } catch (err) {
-    log.warn('config selfdev inválida — self-dev deshabilitado', { err });
     return noop;
   }
 
