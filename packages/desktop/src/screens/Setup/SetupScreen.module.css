@@ -187,7 +187,7 @@
   padding: 0 14px;
   border-radius: 6px;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border: none;
   cursor: pointer;
   flex-shrink: 0;

@@ -92,7 +92,7 @@
 
 .allow {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
