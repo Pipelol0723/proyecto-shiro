@@ -10,11 +10,13 @@ import { useConnectionState } from './use-connection';
 export const DISCONNECT_GRACE_MS = 1000;
 
 export function useDisconnectedFor(graceMs: number = DISCONNECT_GRACE_MS): boolean {
-  const state = useConnectionState();
+  // Solo importa si está abierta: los saltos entre 'connecting' y 'closed' de
+  // los reintentos no deben reiniciar la gracia.
+  const open = useConnectionState() === 'open';
   const [elapsed, setElapsed] = useState(false);
 
   useEffect(() => {
-    if (state === 'open') {
+    if (open) {
       setElapsed(false);
       return;
     }
@@ -24,7 +26,7 @@ export function useDisconnectedFor(graceMs: number = DISCONNECT_GRACE_MS): boole
     return () => {
       clearTimeout(timer);
     };
-  }, [state, graceMs]);
+  }, [open, graceMs]);
 
-  return state !== 'open' && elapsed;
+  return !open && elapsed;
 }

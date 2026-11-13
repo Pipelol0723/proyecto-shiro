@@ -119,7 +119,7 @@ export function SetupScreen(): JSX.Element {
   const { report, checking, timedOut, refresh } = useSystemHealth({ bus });
   const secrets = useSecretsSave(bus, connected);
   // Sin reporte y sin respuesta del core-host: no hay nada que mostrar salvo el aviso.
-  const unreachable = report === null && (timedOut || !connected);
+  const unreachable = report === null && (timedOut || disconnectedAWhile);
   // Borradores de las keys que el usuario escribe (no se rellenan nunca
   // con el valor real — solo se conoce la presencia). Key por field.
   const [drafts, setDrafts] = useState<Record<string, string>>({});

@@ -91,10 +91,17 @@ export function ConversationScreen(): JSX.Element {
   // Si se pierde la conexión con la captura en curso, `enabled` desmonta los
   // listeners de teclado (se pierde el keyup) y el botón queda deshabilitado
   // (se pierde el pointerup): hay que parar el micro explícitamente.
-  const { state: pttState, stop: pttStop } = ptt;
+  // Se cancela (no `stop`): parar pediría la transcripción a Whisper y se
+  // emitiría un `stt:transcribed` local que el servidor nunca recibiría.
+  const { state: pttState, cancel: pttCancel } = ptt;
   useEffect(() => {
-    if (!connected && pttState === 'recording') void pttStop();
-  }, [connected, pttState, pttStop]);
+    if (!connected && pttState === 'recording') pttCancel();
+  }, [connected, pttState, pttCancel]);
+
+  // Tras una pérdida de conexión `speaking` se apaga, pero un audio ya recibido
+  // puede seguir sonando: se corta también si el elemento suena de verdad.
+  const audioIsPlaying =
+    state.speaking || (ttsPlayback.audioElement !== null && !ttsPlayback.audioElement.paused);
 
   // Si el micro falla tras `stt:listening` (permiso denegado, sin dispositivo),
   // nadie emitiría `stt:transcribed` y «Escuchando…» quedaría fijo (R-118).
@@ -104,7 +111,7 @@ export function ConversationScreen(): JSX.Element {
 
   async function sendMessage(text: string): Promise<void> {
     if (!connected || thinking || !text.trim()) return;
-    if (state.speaking) ttsPlayback.cancel();
+    if (audioIsPlaying) ttsPlayback.cancel();
     await bus.emit('user:message', { text: text.trim(), userId: LOCAL_USER_ID });
   }
 
@@ -125,7 +132,7 @@ export function ConversationScreen(): JSX.Element {
     e.currentTarget.setPointerCapture(e.pointerId);
     // Si Shiro está hablando, interrumpir antes de empezar a capturar
     // (cancelable mid-speech, ADR 0020 decisión 4).
-    if (state.speaking) ttsPlayback.cancel();
+    if (audioIsPlaying) ttsPlayback.cancel();
     void ptt.start();
   }
   function onMicPointerUp(): void {
