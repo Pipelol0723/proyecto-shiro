@@ -162,13 +162,15 @@ describe('WebSocketTransport', () => {
     expect(t.getState()).toBe('open');
   });
 
-  it('send dropea silenciosamente si la conexión no está abierta', async () => {
+  it('send rechaza con TransportNotOpenError si la conexión no está abierta', async () => {
     const t = new WebSocketTransport({
       url: 'ws://x',
       logger: makeLogger(),
       webSocketCtor: MockWebSocket,
     });
-    await t.send('user:message', { text: 'hola', userId: 'u1' });
+    await expect(t.send('user:message', { text: 'hola', userId: 'u1' })).rejects.toMatchObject({
+      name: 'TransportNotOpenError',
+    });
     expect(MockWebSocket.instances[0]!.sent).toHaveLength(0);
   });
 
@@ -280,5 +282,89 @@ describe('WebSocketTransport', () => {
     // delay específica está bien cubierta por la longitud del array).
     flush();
     expect(MockWebSocket.instances).toHaveLength(3);
+  });
+});
+
+describe('WebSocketTransport.onStateChange', () => {
+  beforeEach(() => {
+    MockWebSocket.instances = [];
+  });
+  afterEach(() => {
+    MockWebSocket.instances = [];
+  });
+
+  function make(withScheduler = false) {
+    const fake = makeFakeScheduler();
+    const t = new WebSocketTransport({
+      url: 'ws://x',
+      logger: makeLogger(),
+      webSocketCtor: MockWebSocket,
+      ...(withScheduler ? { scheduler: fake.scheduler } : {}),
+    });
+    return { t, fake, ws: MockWebSocket.instances[0]! };
+  }
+
+  it('onStateChange notifica connecting → open al abrir', () => {
+    const { t, ws } = make();
+    const seen: string[] = [];
+    t.onStateChange((s) => seen.push(s));
+    expect(t.getState()).toBe('connecting');
+    ws.simulateOpen();
+    expect(seen).toEqual(['open']);
+  });
+
+  it('onStateChange notifica closed cuando el servidor cierra el socket', () => {
+    const { t, fake, ws } = make(true);
+    ws.simulateOpen();
+    const seen: string[] = [];
+    t.onStateChange((s) => seen.push(s));
+    ws.simulateUnexpectedClose();
+    expect(seen).toEqual(['closed']);
+    // La reconexión posterior pasa a connecting.
+    fake.flush();
+    expect(seen).toEqual(['closed', 'connecting']);
+  });
+
+  it('onStateChange no notifica si el estado no cambia', () => {
+    const { t, ws } = make();
+    ws.simulateOpen();
+    const handler = vi.fn();
+    t.onStateChange(handler);
+    ws.simulateOpen();
+    ws.simulateError();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('la función devuelta por onStateChange da de baja al listener', () => {
+    const { t, ws } = make();
+    const handler = vi.fn();
+    const off = t.onStateChange(handler);
+    off();
+    ws.simulateOpen();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('un listener que lanza no impide notificar a los demás', () => {
+    const { t, ws } = make();
+    const second = vi.fn();
+    t.onStateChange(() => {
+      throw new Error('listener roto');
+    });
+    t.onStateChange(second);
+    ws.simulateOpen();
+    expect(second).toHaveBeenCalledWith('open');
+    expect(t.getState()).toBe('open');
+  });
+
+  it('close() notifica closing y closed, y después no notifica reconexiones', () => {
+    const { t, fake, ws } = make(true);
+    ws.simulateOpen();
+    const seen: string[] = [];
+    t.onStateChange((s) => seen.push(s));
+    void t.close();
+    expect(seen).toEqual(['closing', 'closed']);
+    ws.simulateUnexpectedClose();
+    fake.flush();
+    expect(seen).toEqual(['closing', 'closed']);
   });
 });
