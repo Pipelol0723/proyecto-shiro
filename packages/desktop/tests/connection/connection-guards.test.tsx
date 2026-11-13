@@ -25,6 +25,7 @@ import { useSecretsSave } from '../../src/health/useSecretsSave';
 
 const pttMock = vi.hoisted(() => ({
   stop: vi.fn(() => Promise.resolve()),
+  cancel: vi.fn(),
 }));
 
 vi.mock('../../src/audio/useMicrophonePTT', () => ({
@@ -33,6 +34,7 @@ vi.mock('../../src/audio/useMicrophonePTT', () => ({
     error: null,
     start: vi.fn(() => Promise.resolve()),
     stop: pttMock.stop,
+    cancel: pttMock.cancel,
   }),
 }));
 vi.mock('../../src/components/Avatar', () => ({
@@ -83,6 +85,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   pttMock.stop.mockClear();
+  pttMock.cancel.mockClear();
 });
 
 function stubBrowser(): void {
@@ -98,7 +101,7 @@ function stubBrowser(): void {
 }
 
 describe('micro y conexión', () => {
-  it('al perder la conexión con el micro grabando, para la captura', () => {
+  it('al perder la conexión con el micro grabando, cancela la captura sin pedir transcripción', () => {
     stubBrowser();
     const source = makeSource('open');
     render(
@@ -106,11 +109,13 @@ describe('micro y conexión', () => {
         <ConversationScreen />
       </Tree>,
     );
-    expect(pttMock.stop).not.toHaveBeenCalled();
+    expect(pttMock.cancel).not.toHaveBeenCalled();
     act(() => {
       source.set('closed');
     });
-    expect(pttMock.stop).toHaveBeenCalled();
+    expect(pttMock.cancel).toHaveBeenCalled();
+    // stop() pediría la transcripción final y se emitiría un mensaje fantasma.
+    expect(pttMock.stop).not.toHaveBeenCalled();
   });
 });
 
@@ -134,6 +139,25 @@ describe('useSecretsSave y pérdida de conexión', () => {
 });
 
 describe('SetupScreen sin conexión', () => {
+  it('arrancando en connecting no muestra «sin datos» antes de la gracia; después sí', () => {
+    vi.useFakeTimers();
+    stubBrowser();
+    const source = makeSource('connecting');
+    render(
+      <Tree source={source}>
+        <SetupScreen />
+      </Tree>,
+    );
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(screen.queryByText('sin datos')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    expect(screen.getAllByText('sin datos').length).toBeGreaterThan(0);
+  });
+
   it('una reconexión rápida (< 1 s) no hace aparecer la tarjeta de alerta', () => {
     vi.useFakeTimers();
     stubBrowser();
