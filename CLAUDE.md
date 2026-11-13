@@ -127,9 +127,11 @@ npm run verify
 
 Hace los mismos pasos que el CI, en el mismo orden, y se detiene en el primero
 que falla: compila core (`npm run build -w @proyecto-shiro/core`) y luego
-ejecuta `format:check`, `lint`, `typecheck`, `test` y `build`. Compilar core
-primero es obligatorio: los demás paquetes leen sus tipos de
-`packages/core/dist`, que no se versiona.
+ejecuta `format:check`, `lint`, `typecheck`, `test`, `build` y `test:scripts`.
+Compilar core primero es obligatorio: los demás paquetes leen sus tipos de
+`packages/core/dist`, que no se versiona. El CI ejecuta además
+`npm run audit:prod` (avisos `high` o `critical` en dependencias de
+producción), que necesita red.
 
 ## Calidad de código
 

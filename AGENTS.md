@@ -31,4 +31,5 @@ npm run verify
 ```
 
 Hace los mismos pasos que el CI, en el mismo orden: compila core y luego
-ejecuta `format:check`, `lint`, `typecheck`, `test` y `build`.
+ejecuta `format:check`, `lint`, `typecheck`, `test`, `build` y `test:scripts`.
+El CI ejecuta además `npm run audit:prod`, que necesita red.
