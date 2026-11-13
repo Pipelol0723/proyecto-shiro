@@ -1,8 +1,10 @@
 # ADR 0034: TTS — voz diseñada de Gemini como primaria, ElevenLabs y SystemTTS de respaldo
 
-- **Status**: Proposed
+- **Status**: Accepted (sin implementar)
 - **Fecha**: 2026-11-13
 - **Decidido por**: Pipelol0723
+
+> **Estado de implementación (2026-11-13):** el dueño aceptó la decisión el mismo día. **Sin implementar todavía**: hasta que entre el código, Shiro sigue hablando con ElevenLabs y SystemTTS (ADR 0020). El módulo no sirve para uso diario hasta que el dueño active el nivel de pago (ver «Qué tiene que hacer el dueño»).
 
 ## Contexto
 
@@ -114,7 +116,7 @@ Al implementar se añade la fila correspondiente en la tabla viva de la [revisi�
 
 ## Qué tiene que hacer el dueño
 
-1. Aceptar o rechazar este ADR.
+1. Aceptar o rechazar este ADR. **Aceptado el 2026-11-13.**
 2. Activar la facturación en el proyecto de Google de la clave, poner la alerta de presupuesto y comprobar con una frase que la voz elegida sigue funcionando.
 3. Validar la prueba real del último paso de la implementación.
 4. Apuntar la renovación de la voz para octubre de 2027.
