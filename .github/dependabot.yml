@@ -1,18 +1,40 @@
 # Único dependabot.yml del repo (ítem P-04 del plan de mejora). Como mucho
-# 5 PRs abiertos a la vez entre todos los ecosistemas. Docker queda fuera a
+# 7 PRs abiertos a la vez entre todos los ecosistemas. Docker queda fuera a
 # propósito: Letta se fija por digest y sus subidas exigen backup previo.
+#
+# Según la documentación de GitHub, un `ignore` también afecta a las
+# actualizaciones de seguridad de ese paquete (el del SDK las bloquea todas;
+# con `update-types` no está claro). Por eso solo se ignora lo que tiene un
+# ítem del plan que lo sube, y se quita la entrada al cerrarlo. Los avisos de
+# esos paquetes hay que vigilarlos en las alertas de Dependabot.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly, day: monday }
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 4
     cooldown: { default-days: 7 }
     ignore:
       # Las majors van por los lotes de versiones planificados, con tests.
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+      # El SDK de Anthropic es 0.x: cada «minor» cambia los tipos y rompe el
+      # typecheck. Sube con el ítem P-31a del plan.
+      - dependency-name: '@anthropic-ai/sdk'
     groups:
+      # Un paquete entra en el primer grupo que lo recoge, así que los dos
+      # específicos van antes que los generales.
+      #
+      # Tauri: `tauri build` falla si la versión mayor.menor de un paquete
+      # `@tauri-apps/*` no casa con la de su crate. Este PR no se fusiona
+      # solo: va en el mismo cambio que el del grupo «tauri» de cargo, con el
+      # binario compilado y probado en local (el CI no compila Rust).
+      tauri:
+        patterns: ['@tauri-apps/*']
+      # Empaquetado del sidecar. El CI no lo construye: antes de fusionar,
+      # `npm run build:sidecar -w @proyecto-shiro/desktop` y arrancar el .exe.
+      sidecar:
+        patterns: ['@vercel/ncc', '@yao-pkg/pkg']
       npm-produccion:
         dependency-type: production
         update-types: [minor, patch]
@@ -23,6 +45,12 @@ updates:
     directory: /
     schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 1
+    ignore:
+      # tauri-action v1 cambia las URL de `latest.json` y cómo reutiliza un
+      # release en borrador, y solo se ejercita al publicar un tag. Sube con
+      # la prueba de release del ítem P-09.
+      - dependency-name: 'tauri-apps/tauri-action'
+        update-types: ['version-update:semver-major']
     groups:
       actions: { patterns: ['*'] }
   - package-ecosystem: cargo
@@ -33,6 +61,7 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
     groups:
+      # No se fusiona solo: ver el grupo «tauri» de npm, arriba.
       tauri: { patterns: ['tauri*'] }
   - package-ecosystem: pip
     directory: /services/whisper
