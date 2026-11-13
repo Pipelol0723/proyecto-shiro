@@ -22,6 +22,8 @@ GTX 1650 de 4 GB, donde corre todo el stack.
 - [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md) — cómo se mantiene el proyecto: ramas, PRs de agentes, regla de ADR y checklist pre-release.
 - [`plan-modular-ai-companion.md`](plan-modular-ai-companion.md) — plan y visión original (histórico).
 
+<!-- agents-md:start -->
+
 ## ⚠️ Cuándo escribir un ADR (no te lo saltes)
 
 Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
@@ -54,6 +56,8 @@ Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
 - Tareas operativas (CI tweaks, bumps de dependencias menores, formato).
 - Decisiones reversibles en menos de 30 minutos sin tocar otros módulos.
 
+<!-- agents-md:end -->
+
 ## Estructura del monorepo
 
 ```
@@ -79,6 +83,8 @@ El estado de los hitos y la hoja de ruta (Ahora / Siguiente / Ideas) viven
 ([ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md)). No los
 copies aquí ni en otro documento: enlaza a esa tabla. Para el detalle técnico
 de cada hito, lee [`docs/architecture.md`](docs/architecture.md) y su ADR.
+
+<!-- agents-md:start -->
 
 ## Convenciones de Git
 
@@ -127,9 +133,12 @@ npm run verify
 
 Hace los mismos pasos que el CI, en el mismo orden, y se detiene en el primero
 que falla: compila core (`npm run build -w @proyecto-shiro/core`) y luego
-ejecuta `format:check`, `lint`, `typecheck`, `test`, `build` y `test:scripts`.
-Compilar core primero es obligatorio: los demás paquetes leen sus tipos de
-`packages/core/dist`, que no se versiona. El CI ejecuta además
+ejecuta `format:check`, `lint`, `typecheck`, `test`, `build`, `test:scripts` y
+`agents:check` (que comprueba que AGENTS.md coincide con lo que genera este
+archivo: si tocas un bloque marcado con `agents-md`, ejecuta
+`npm run agents:sync`). Compilar core primero es obligatorio: los demás
+paquetes leen sus tipos de `packages/core/dist`, que no se versiona. El CI
+ejecuta además
 `npm run audit:prod` (avisos `high` o `critical` en dependencias de
 producción), que necesita red.
 
@@ -166,6 +175,8 @@ class LLMModule {
   }
 }
 ```
+
+<!-- agents-md:end -->
 
 ## Si tienes dudas
 

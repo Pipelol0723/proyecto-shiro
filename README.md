@@ -434,20 +434,22 @@ El avatar visual usa **`pixi-live2d-display-lipsyncpatch`** (fork mantenido de `
 
 ## Scripts disponibles (desde la raíz)
 
-| Comando                 | Descripción                                      |
-| ----------------------- | ------------------------------------------------ |
-| `npm run build`         | Compila todos los workspaces (`tsc` por paquete) |
-| `npm run typecheck`     | Verifica tipos en todos los paquetes             |
-| `npm test`              | Ejecuta tests vía Vitest workspace               |
-| `npm run test:watch`    | Tests en modo watch                              |
-| `npm run test:coverage` | Tests con reporte de cobertura                   |
-| `npm run lint`          | Lintea todo el monorepo con ESLint               |
-| `npm run lint:fix`      | Lintea y arregla lo automatizable                |
-| `npm run format`        | Formatea con Prettier (todos los paquetes)       |
-| `npm run format:check`  | Verifica formato sin escribir (lo que usa el CI) |
-| `npm run verify`        | Todos los checks del CI, en orden                |
-| `npm run test:scripts`  | Tests de los scripts de la raíz (`node --test`)  |
-| `npm run audit:prod`    | Audit de producción: falla con high o critical   |
+| Comando                 | Descripción                                       |
+| ----------------------- | ------------------------------------------------- |
+| `npm run build`         | Compila todos los workspaces (`tsc` por paquete)  |
+| `npm run typecheck`     | Verifica tipos en todos los paquetes              |
+| `npm test`              | Ejecuta tests vía Vitest workspace                |
+| `npm run test:watch`    | Tests en modo watch                               |
+| `npm run test:coverage` | Tests con reporte de cobertura                    |
+| `npm run lint`          | Lintea todo el monorepo con ESLint                |
+| `npm run lint:fix`      | Lintea y arregla lo automatizable                 |
+| `npm run format`        | Formatea con Prettier (todos los paquetes)        |
+| `npm run format:check`  | Verifica formato sin escribir (lo que usa el CI)  |
+| `npm run verify`        | Todos los checks del CI, en orden                 |
+| `npm run test:scripts`  | Tests de los scripts de la raíz (`node --test`)   |
+| `npm run audit:prod`    | Audit de producción: falla con high o critical    |
+| `npm run agents:sync`   | Regenera AGENTS.md desde los bloques de CLAUDE.md |
+| `npm run agents:check`  | Falla si AGENTS.md no coincide con CLAUDE.md      |
 
 Para ejecutar un script solo en un paquete:
 
@@ -475,7 +477,7 @@ arregla primero.
 npm run verify
 ```
 
-Por dentro son estos siete pasos, que también puedes lanzar sueltos:
+Por dentro son estos ocho pasos, que también puedes lanzar sueltos:
 
 ```bash
 npm run build -w @proyecto-shiro/core   # tipos de core para el resto (dist no se versiona)
@@ -485,6 +487,7 @@ npm run typecheck      # TypeScript en core, core-host y desktop
 npm test               # Vitest — toda la suite
 npm run build          # compila los tres paquetes
 npm run test:scripts   # tests de los scripts de la raíz (node --test)
+npm run agents:check   # AGENTS.md coincide con lo que genera CLAUDE.md (si no: npm run agents:sync)
 ```
 
 El CI ejecuta además `npm run audit:prod`, que falla si una dependencia de
