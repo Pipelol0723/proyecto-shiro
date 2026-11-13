@@ -22,10 +22,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@letta-ai/letta-client": "^1.12.0",
+    "@letta-ai/letta-client": "^1.12.1",
     "better-sqlite3": "^11.7.0",
     "say": "^0.16.0",
-    "yaml": "^2.9.0",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
