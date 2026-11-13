@@ -80,7 +80,7 @@ desde el 2026-11-13; las demás fases, pendientes de aprobación.
 
 - Node.js >= 20; se recomienda 22, que es la que usan el CI y el sidecar
 - npm >= 10
-- **Rust 1.77+** (solo para `tauri:dev` y `tauri:build` — el modo dev de Vite no lo requiere). Instala desde [rustup.rs](https://rustup.rs/).
+- **Rust 1.90+** (solo para `tauri:dev` y `tauri:build` — el modo dev de Vite no lo requiere). Instala desde [rustup.rs](https://rustup.rs/).
 - En Windows: **Microsoft C++ Build Tools** + **WebView2 Runtime** (preinstalado en Windows 11). Tauri lo verifica al primer `tauri:dev`.
 - **Ollama** (LLM local y embeddings de la memoria) y **Docker Desktop** (Letta y Whisper): necesarios para los hitos LLM, Memoria y STT (ver sus secciones).
 - Python 3.11 solo si corres Whisper sin Docker.
