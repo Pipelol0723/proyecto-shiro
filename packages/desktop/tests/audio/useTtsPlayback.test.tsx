@@ -31,6 +31,7 @@ function wrap(bus: IEventBus<EventMap>) {
 
 interface FakeAudio {
   src: string;
+  _src: string;
   crossOrigin: string | null;
   paused: boolean;
   _listeners: Map<string, (() => void)[]>;
@@ -42,7 +43,16 @@ interface FakeAudio {
 
 function makeFakeAudio(): FakeAudio {
   const fake: FakeAudio = {
-    src: '',
+    // Como el navegador: asignar '' a un audio con fuente dispara `error`.
+    get src(): string {
+      return fake._src;
+    },
+    set src(value: string) {
+      const hadSource = fake._src !== '';
+      fake._src = value;
+      if (value === '' && hadSource) fake.trigger('error');
+    },
+    _src: '',
     crossOrigin: null,
     paused: true,
     _listeners: new Map<string, (() => void)[]>(),
@@ -65,6 +75,8 @@ function makeFakeAudio(): FakeAudio {
   };
   return fake;
 }
+
+const AUDIO_A = { url: 'http://x/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
 
 describe('useTtsPlayback', () => {
   it('reproduce el audio recibido vía tts:audio', async () => {
@@ -353,6 +365,73 @@ describe('useTtsPlayback', () => {
     expect(result.current.audioElement).toBeNull();
   });
 
+  it('cortar un audio al llegar otro no emite tts:audio-ended del anterior', async () => {
+    const bus = makeBus();
+    const first = makeFakeAudio();
+    const second = makeFakeAudio();
+    const queue = [first, second];
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (p) => {
+      ended.push(p);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => queue.shift() as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', { ...AUDIO_A, audioId: 'a' });
+    });
+    await act(async () => {
+      await bus.emit('tts:audio', { ...AUDIO_A, audioId: 'b' });
+    });
+
+    expect(first.paused).toBe(true);
+    expect(ended.filter((e) => e.audioId === 'a')).toHaveLength(0);
+
+    act(() => {
+      second.trigger('ended');
+    });
+    await waitFor(() => {
+      expect(ended).toEqual([{ userId: 'me', audioId: 'b' }]);
+    });
+  });
+
+  it('tts:cancel emite exactamente un tts:audio-ended', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (p) => {
+      ended.push(p);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO_A);
+    });
+    await act(async () => {
+      await bus.emit('tts:cancel', { audioId: 'a', userId: 'me' });
+    });
+
+    await waitFor(() => {
+      expect(ended).toHaveLength(1);
+    });
+    expect(ended[0]).toEqual({ userId: 'me', audioId: 'a' });
+  });
+
   it('setMuted persiste en localStorage', () => {
     window.localStorage.removeItem('shiro:tts:muted');
     const bus = makeBus();
@@ -364,5 +443,62 @@ describe('useTtsPlayback', () => {
 
     expect(window.localStorage.getItem('shiro:tts:muted')).toBe('true');
     window.localStorage.removeItem('shiro:tts:muted');
+  });
+
+  it('desmontar el hook con un audio sonando emite tts:audio-ended para no dejar speaking colgado', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (p) => {
+      ended.push(p);
+    });
+    const { unmount } = renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO_A);
+    });
+
+    unmount();
+
+    await waitFor(() => {
+      expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+    });
+  });
+
+  it('si play() rechaza y además salta error, emite un solo tts:audio-ended', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    audio.play = () => Promise.reject(new Error('NotSupportedError'));
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (p) => {
+      ended.push(p);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO_A);
+    });
+    act(() => {
+      audio.trigger('error');
+    });
+
+    await waitFor(() => {
+      expect(ended).toHaveLength(1);
+    });
   });
 });

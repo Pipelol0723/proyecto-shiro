@@ -2,7 +2,9 @@
  * App — layout final del cliente desktop.
  *
  * `BusProvider` envuelve todo; dentro, `CompanionProvider` monta el state
- * del companion **una sola vez**, por encima del switch de pantallas. Eso
+ * del companion **una sola vez**, por encima del switch de pantallas, y
+ * `AudioProvider` el reproductor TTS (fuera del `ErrorBoundary`: un fallo de
+ * render no corta la voz, y esta no se corta al cambiar de pantalla). Eso
  * es clave: el historial de chat y la suscripción a `memory:snapshot` viven
  * en el provider, no en `ConversationScreen`, así que la conversación
  * **sobrevive a los cambios de pantalla** (antes se perdía al navegar —
@@ -19,6 +21,7 @@ import { useState } from 'react';
 import type { EventMap, IEventBus } from '@proyecto-shiro/core';
 import { BusProvider } from './bus-context';
 import { CompanionProvider } from './state/companion-context';
+import { AudioProvider } from './audio/audio-context';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar, Header, type ScreenId } from './layout';
 import {
@@ -47,9 +50,11 @@ export function App({ bus }: AppProps = {}): JSX.Element {
             se llevaba TODA la app a blanco. Ahora el boundary muestra el
             error (diagnosticable) en vez de una pantalla muerta. El Avatar
             tiene además su propio boundary que cae al Orbe sin molestar. */}
-        <ErrorBoundary fallback={(error) => <AppCrashFallback error={error} />}>
-          <AppShell />
-        </ErrorBoundary>
+        <AudioProvider>
+          <ErrorBoundary fallback={(error) => <AppCrashFallback error={error} />}>
+            <AppShell />
+          </ErrorBoundary>
+        </AudioProvider>
       </CompanionProvider>
     </BusProvider>
   );

@@ -549,6 +549,7 @@ El job de CI corre solo `test_limits.py`. Los tests rotos de R-194 (`test_health
 
 ### 3.11 P-07b — Audio global con `AudioProvider`
 
+- **Estado (2026-11-13).** **Hecho** en el PR #121, con la prueba manual escrita en su descripción. Además de lo pedido, el fin de cada audio se emite una sola vez y también al desmontar el reproductor. Sin probar con Live2D (riesgo B11): los assets no están instalados.
 - **Objetivo.** Que la voz de Shiro no se corte al cambiar de pantalla y que las respuestas que llegan en otra pantalla suenen.
 - **Qué cierra.** L-BUG-02 (R-058 y R-119).
 - **PRs (1):** `fix: AudioProvider global para la voz de Shiro`.

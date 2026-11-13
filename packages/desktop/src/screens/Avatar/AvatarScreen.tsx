@@ -14,10 +14,12 @@
 
 import { Avatar } from '../../components/Avatar';
 import { useCompanion } from '../../state/use-companion';
+import { useAudio } from '../../audio/use-audio';
 import styles from './AvatarScreen.module.css';
 
 export function AvatarScreen(): JSX.Element {
   const [state] = useCompanion();
+  const { audioElement } = useAudio();
 
   return (
     <div className={styles.screen}>
@@ -28,6 +30,7 @@ export function AvatarScreen(): JSX.Element {
           listening={state.listening}
           thinking={state.thinking}
           size={420}
+          audioElement={audioElement}
         />
       </section>
 
