@@ -222,7 +222,7 @@ Sobre `claude-haiku-5-5` como alternativa barata:
 
 PR `chore: actualiza Tauri en bloque y fija la toolchain de Rust`.
 
-**Hecho en parte (2026-11-13, PR #126).** Tauri subió a 2.12 en bloque (crates y paquetes JS), con `zip` 9.4.1 y `rustls` 0.23.46, porque las alertas de Dependabot marcaban `zip` 4.6.1 con un aviso critical y otro high; `npm audit` no ve el lado Rust. El binario se compiló y se probó en local. De este lote queda fijar la toolchain de Rust con `rust-toolchain.toml` y la prueba de actualización real, que va con la release de P-09.
+**Hecho en parte (2026-11-13, PR #126).** Tauri subió a 2.12 en bloque (crates y paquetes JS), con `zip` 9.4.1 y `rustls` 0.23.46, porque las alertas de Dependabot marcaban `zip` 4.6.1 con un aviso critical y otro high; `npm audit` no ve el lado Rust. El binario se compiló y se probó en local. De este lote quedan tres cosas: fijar la toolchain de Rust con `rust-toolchain.toml`; `@vercel/ncc`, que ahora llega por el grupo `sidecar` de Dependabot; y la prueba de actualización real, que va con la release de P-09. El inventario de arriba conserva las versiones de partida. La revisión de ese PR dejó tres apuntes para P-09 que ya existían antes: al instalar una actualización en Windows el updater termina el proceso sin matar el sidecar; conviene activar `requireSignedVersion` en la configuración del updater; y el log de la app rota a los 40 KB borrando el anterior.
 
 Qué sube:
 

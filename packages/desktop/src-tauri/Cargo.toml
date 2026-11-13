@@ -25,7 +25,8 @@ tauri-plugin-single-instance = "2"
 # Plugin de Vista del estado de la ventana (recordar tamaño/posición
 # entre reinicios). Pequeño y útil desde V1.
 tauri-plugin-window-state = "2"
-# Logs estructurados a archivo en `~/AppData/Roaming/proyecto-shiro/`.
+# Logs estructurados a archivo en la carpeta de logs de la app
+# (`%LOCALAPPDATA%com.pipelol.proyecto-shirologs` en Windows).
 # Útil para diagnosticar crashes del sidecar (que entra en task #32).
 tauri-plugin-log = "2"
 # Notificaciones del sistema (toasts del Updater entran aquí).
@@ -44,9 +45,10 @@ tauri-plugin-process = "2"
 # el auto-updater no rompe la cadena de updates al añadir permisos.
 #
 # `capabilities/default.json` no concede hoy ningún permiso de estos
-# plugins: sin permiso y sin código que los invoque no hay superficie de
-# explotación. Al añadir uno, cuidado con el identificador: tauri-build
-# valida los permisos y un nombre mal escrito hace fallar el build.
+# plugins: sin permiso, el webview no puede invocar sus comandos IPC.
+# `shell` sí se usa ya desde Rust (`lib.rs`) para lanzar el sidecar. Al
+# añadir un permiso, cuidado con el identificador: tauri-build los valida
+# y un nombre mal escrito hace fallar el build.
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
