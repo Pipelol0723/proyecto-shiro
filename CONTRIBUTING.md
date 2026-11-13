@@ -32,14 +32,16 @@ aquí: están en «PRs de agentes y de self-dev» de [`CLAUDE.md`](CLAUDE.md) y 
 el [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md).
 
 ```markdown
-## Encargo «<P-xx>»: <título corto>
+## Encargo «<P-xx, si lo hay>»: <título corto>
 
-**Qué cierra**: ítem del plan P-xx, lote L-xxx, hallazgos R-xxx.
+**Qué cierra**: ítem del plan P-xx, lote L-xxx, hallazgos R-xxx. Si es una
+propuesta de self-dev que no cierra nada del plan: la intención en una frase.
 
-**Rama y PR**: `claude/<tarea>` o `shiro/<tema>`, creada desde
-`origin/develop`. Título del PR: `<prefijo>: <asunto>`.
+**Rama y PR**: `claude/<tarea>`, `feat/<nombre>/<tarea>` o `shiro/<tema>`
+(la que indique el encargo), creada desde `origin/develop`. Título del PR: `<prefijo>: <asunto>`.
 
 **Qué leer antes**: sección del plan, ADR y archivos que dan el contexto.
+Requisitos previos: qué debe estar ya en `develop`.
 
 **Archivos a tocar** (`archivo:línea`):
 
@@ -62,14 +64,16 @@ código 0, más los propios del encargo.
 
 **Prohibiciones fijas**:
 
-- No tocar los archivos inmutables de self-dev (lista en
-  `packages/core/src/modules/tools/selfdev/immutable-paths.ts`,
-  ADR 0023 §3).
+- En propuestas de self-dev (`shiro/<tema>`): no tocar los archivos
+  inmutables (lista en
+  `packages/core/src/modules/tools/selfdev/immutable-paths.ts`, ADR 0023 §3)
+  y mantenerse en el alcance del ADR 0023 §4. En encargos de `claude/*` o
+  `feat/*`, esos archivos solo se tocan si «Archivos a tocar» los nombra.
 - No pushear a `develop` ni a `main`; todo entra por PR.
 - No usar `--no-verify`.
 - No subir versiones mayores de dependencias fuera de su lote.
 - No tocar `.env*` ni `config/` salvo que el encargo lo diga.
-- No commitear secretos, modelos pesados ni datos personales.
+- No commitear lo de «Lo que NO se commitea» de [`CLAUDE.md`](CLAUDE.md).
 
 **Qué devuelve el agente**: commits, evidencia del test en rojo, resultado de
 `npm run verify`, desviaciones respecto al encargo y dudas.
