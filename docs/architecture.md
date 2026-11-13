@@ -721,6 +721,24 @@ cuando se añade un transporte nuevo. Solo se inyecta el transport
 adicional al EventBus en el arranque. Ver
 [ADR 0003](adr/0003-transport-abstraction-device-registry.md).
 
+### Estado de conexión del transport
+
+`ITransport` no cambia. Los transports con conexión real implementan además
+`IObservableTransport` (`packages/core/src/interfaces/ITransport.ts`):
+`getState(): TransportState` (`'connecting' | 'open' | 'closing' | 'closed'`) y
+`onStateChange(handler)`, que devuelve la función de baja y solo notifica
+cuando el estado cambia (un listener que lanza se loguea y no afecta a los
+demás). `WebSocketTransport` lo implementa; `InProcessTransport` y el
+transport del servidor no. Sin conexión abierta, `send()` no encola: rechaza
+con `TransportNotOpenError`, y `EventBus.emit` ya captura y loguea ese
+rechazo. La UI se entera del estado por `onStateChange`. El contrato
+(`TransportState`, `TransportStateHandler`, `IObservableTransport`,
+`TransportNotOpenError`) es **definitivo** y lo hereda el
+ADR 0033 (por redactar). Solo detecta
+el **cierre** del socket, no un socket medio abierto: eso es el heartbeat
+(R-101, ADR 0033). Ver la enmienda de 2026-11-13 del
+[ADR 0013](adr/0013-protocolo-websocket-eventbus.md).
+
 ### Multi-cliente (planificado)
 
 Con un segundo cliente (la [estación holográfica](estacion-holografica.md),

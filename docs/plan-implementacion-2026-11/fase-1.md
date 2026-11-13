@@ -601,6 +601,7 @@ El job de CI corre solo `test_limits.py`. Los tests rotos de R-194 (`test_health
 
 ### 3.12 P-07a — Conexión visible en el cliente
 
+- **Estado (2026-11-13).** PR 1 (contrato `IObservableTransport`, `onStateChange` y `send()` que rechaza sin conexión, con la enmienda del ADR 0013) en el PR #127. Queda el PR 2 (banner y envío deshabilitado en el cliente). Diferencias con lo escrito abajo: el estado inicial con `autoConnect: false` es `closed`, `close()` es idempotente y un listener puede cerrar o reconectar durante una notificación sin dejar a otros con un estado falso.
 - **Objetivo.** Que Pipe vea cuándo Shiro no está conectada, que no pueda escribir ni hablar a la nada, y que la UI no se quede en «pensando» para siempre si el bus se cae a mitad de turno.
 - **Qué cierra.** L-BUG-10 (R-068, R-082, R-118, R-120) y L-PROD-05 en su parte de conexión (R-282, R-298, R-287, R-284 parcial). **No cierra** R-306 (comandos del Setup que suponen un clon del repo): queda en el lote para un PR aparte, porque el criterio del plan no lo pide y depende de cómo arranque el binario.
 - **PRs (2):**

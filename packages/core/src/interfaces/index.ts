@@ -5,7 +5,13 @@
  */
 
 export type { IEventBus, EventHandler, Unsubscribe } from './IEventBus.js';
-export type { ITransport, TransportReceiveHandler } from './ITransport.js';
+export type {
+  ITransport,
+  IObservableTransport,
+  TransportReceiveHandler,
+  TransportState,
+  TransportStateHandler,
+} from './ITransport.js';
 export type {
   ILLMModule,
   LLMRequest,

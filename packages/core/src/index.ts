@@ -33,6 +33,8 @@ export type { EventBusOptions } from './core/event-bus.js';
 
 export { InProcessTransport } from './core/transports/in-process-transport.js';
 
+export { TransportNotOpenError } from './core/transports/errors.js';
+
 export { WebSocketTransport } from './core/transports/websocket-transport.js';
 export type {
   WebSocketTransportOptions,

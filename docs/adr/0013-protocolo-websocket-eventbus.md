@@ -202,3 +202,19 @@ V1 no decide nada de esto — sale del scope.
 - [ADR 0005](0005-typed-events-string-literals.md) — `EventMap` es la fuente de verdad de qué eventos existen.
 - [ADR 0012](0012-split-cliente-server-core-host.md) — la decisión de partir cliente/server que motiva este protocolo.
 - [WebSocket Protocol RFC 6455](https://datatracker.ietf.org/doc/html/rfc6455) — la base sobre la que corre todo.
+
+## Enmienda (2026-11-13): estado de conexión del transport cliente
+
+Plan de mejora P-07a (lote L-BUG-10). La decisión de fondo no cambia: el
+mensaje enviado con la conexión caída **sigue sin cola** ni reintento a nivel
+de aplicación. Cambia cómo se entera cada parte:
+
+- `send()` de `WebSocketTransport` con la conexión no abierta **rechaza** con
+  `TransportNotOpenError` (antes resolvía en silencio). Mantiene el `logger.warn`.
+  `EventBus.emit` ya captura y loguea el rechazo, así que ningún emisor se rompe.
+- El transport cliente implementa `IObservableTransport` (`getState()` y
+  `onStateChange(handler)`, tipos en `ITransport.ts`; `ITransport` no cambia).
+  La UI pinta «conectando» / «reconectando» a partir de ahí: es el estado
+  «reconectando» que este ADR ya preveía en «Al reconectar».
+- Solo se detecta el **cierre** del socket; un socket medio abierto exige un
+  heartbeat, fuera de esta enmienda (ADR 0033).
