@@ -130,6 +130,38 @@ test('admite un ancla que apunta a un encabezado de los bloques extraídos', () 
   assert.ok(buildAgentsMd(claude).includes('(#regla-uno)'));
 });
 
+test('ignora marcadores y enlaces de ejemplo dentro de vallas de código', () => {
+  const fence = '```';
+  const claude = [
+    '# T',
+    '',
+    '## Cómo se marca',
+    '',
+    fence,
+    START,
+    END,
+    fence,
+    '',
+    START,
+    '',
+    '## Regla',
+    '',
+    'Texto.',
+    '',
+    fence,
+    START,
+    '[ejemplo](#no-existe)',
+    fence,
+    '',
+    END,
+    '',
+  ].join('\n');
+  const out = buildAgentsMd(claude);
+  assert.ok(out.includes('## Regla'));
+  assert.ok(out.includes('(#no-existe)'));
+  assert.ok(!out.includes('Cómo se marca'));
+});
+
 test('--check sale con 1 si AGENTS.md no coincide y con 0 si coincide', () => {
   const expected = buildAgentsMd(SAMPLE);
   const ok = runCli(SAMPLE, expected, ['--check']);

@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 
 const START_MARKER = '<!-- agents-md:start -->';
 const END_MARKER = '<!-- agents-md:end -->';
+const FENCE = /^\s*(```|~~~)/;
 const CLI_FLAGS = new Set(['--check']);
 const CLI_OPTIONS = new Set(['--claude', '--agents']);
 const DIFF_LINES = 5;
@@ -60,15 +61,23 @@ function slugify(heading) {
  * @param {string[]} lines líneas de los tramos extraídos
  */
 function assertAnchorsResolve(lines) {
+  // Aproximación deliberada: no cuenta los sufijos `-1` de encabezados
+  // repetidos ni replica los emojis de GitHub; basta para detectar anclas rotas.
   let inFence = false;
   const slugs = new Set();
+  const prose = [];
   for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
-    const heading = !inFence && /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (FENCE.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    prose.push(line);
+    const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) slugs.add(slugify(heading[1]));
   }
   const missing = new Set();
-  for (const match of lines.join('\n').matchAll(/\]\(#([^)\s]*)\)/g)) {
+  for (const match of prose.join('\n').matchAll(/\]\(#([^)\s]*)\)/g)) {
     if (!slugs.has(match[1])) missing.add(`#${match[1]}`);
   }
   if (missing.size > 0) {
@@ -92,8 +101,11 @@ export function buildAgentsMd(claudeMd) {
   /** @type {string[] | null} */
   let open = null;
   let openAt = 0;
+  let inFence = false;
   lines.forEach((line, index) => {
-    const marker = line.trim();
+    if (FENCE.test(line)) inFence = !inFence;
+    // Los marcadores dentro de una valla de código son texto de ejemplo.
+    const marker = inFence ? '' : line.trim();
     const at = index + 1;
     if (marker === START_MARKER) {
       if (open)

@@ -40,7 +40,8 @@ jobs:
       # core primero para que TypeScript resuelva los tipos cross-package
       # (sin eso, ESLint type-aware ve `unknown` y dispara no-unsafe-*, ADR
       # 0011) y luego corre format:check, lint, typecheck, test, build y los
-      # tests de los scripts de la raíz.
+      # tests de los scripts de la raíz y la comprobación de que AGENTS.md
+      # está al día con CLAUDE.md.
       - name: Verify (formato, lint, tipos, tests y build)
         run: npm run verify
 

@@ -134,12 +134,11 @@ npm run verify
 Hace los mismos pasos que el CI, en el mismo orden, y se detiene en el primero
 que falla: compila core (`npm run build -w @proyecto-shiro/core`) y luego
 ejecuta `format:check`, `lint`, `typecheck`, `test`, `build`, `test:scripts` y
-`agents:check` (que comprueba que AGENTS.md coincide con lo que genera este
-archivo: si tocas un bloque marcado con `agents-md`, ejecuta
+`agents:check` (que comprueba que AGENTS.md coincide con lo que genera
+CLAUDE.md: si tocas un bloque marcado con `agents-md`, ejecuta
 `npm run agents:sync`). Compilar core primero es obligatorio: los demás
 paquetes leen sus tipos de `packages/core/dist`, que no se versiona. El CI
-ejecuta además
-`npm run audit:prod` (avisos `high` o `critical` en dependencias de
+ejecuta además `npm run audit:prod` (avisos `high` o `critical` en dependencias de
 producción), que necesita red.
 
 ## Calidad de código
