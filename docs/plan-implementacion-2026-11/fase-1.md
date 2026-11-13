@@ -94,7 +94,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
   2. `fix: el logger serializa Error con message, stack y cause`
   3. PR3a `chore: añade npm run verify como único paso previo al push` (solo `package.json`)
   4. PR3b `docs: cita npm run verify en README y CLAUDE.md` (después de P-03a; se omite si P-03a ya lo dejó así)
-- **Estado (2026-11-13).** PR1 **hecho** (PR #101). Quedan PR2 (logger), PR3a (`verify`) y PR3b (la cita en los documentos); P-02 no se tacha hasta fusionar el último.
+- **Estado (2026-11-13).** **Hecho.** PR1 en el PR #101, PR2 (logger) en el PR #104, y PR3a y PR3b juntos en el PR #106 (`verify` y su cita en los documentos, sin esperar a P-03a: AGENTS.md se editó a mano).
 
 **Archivos a tocar**
 
