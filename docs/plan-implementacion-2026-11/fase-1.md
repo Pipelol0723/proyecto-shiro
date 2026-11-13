@@ -36,7 +36,7 @@ Choques de archivos que la tabla evita:
 
 - Rama `feat/pipe/<tarea>` desde `develop`, PR a `develop`, prefijo de commit de CLAUDE.md. Diff ≤ 300 líneas de código y tests (aquí no se cuentan el lockfile ni el texto de los ADR; criterio de este plan, a confirmar con el ADR 0029); si un PR se pasa, se parte como dice su encargo.
 - **Test rojo primero:** el commit con los tests nuevos falla por la razón correcta; el arreglo lo pone en verde. Donde el rojo no se puede ver en CI (P-06b), se demuestra en local y se pega la salida en el PR.
-- `npm run verify` antes de pedir revisión (P-02 PR3a; mientras no exista, la secuencia de CLAUDE.md «Antes de pushear»).
+- `npm run verify` antes de pedir revisión.
 - Las pruebas manuales con I/O real (red, memoria, binario, modal, log) las hace el agente antes de fusionar; a Pipe solo se le piden las que necesitan su oído o su voz. El agente fusiona cuando el CI está en verde y un segundo agente ha revisado el diff (§2.0, A2 y A3).
 - Nadie toca README.md, CLAUDE.md, AGENTS.md ni el ADR 0029 mientras P-03a esté abierto; lo que haga falta cambiar ahí está en §3.14.
 - Las enmiendas de ADR viajan en el mismo PR que el código que las motiva.
@@ -94,7 +94,7 @@ Dos tablas: la A (filas D1-D18) para red y fronteras, la B (filas B1-B12) para c
   2. `fix: el logger serializa Error con message, stack y cause`
   3. PR3a `chore: añade npm run verify como único paso previo al push` (solo `package.json`)
   4. PR3b `docs: cita npm run verify en README y CLAUDE.md` (después de P-03a; se omite si P-03a ya lo dejó así)
-- **Estado (2026-11-13).** PR1 **hecho** (PR #101). Quedan PR2 (logger), PR3a (`verify`) y PR3b (la cita en los documentos); P-02 no se tacha hasta fusionar el último.
+- **Estado (2026-11-13).** **Hecho.** PR1 en el PR #101, PR2 (logger) en el PR #104, y PR3a y PR3b juntos en el PR #106 (`verify` y su cita en los documentos, sin esperar a P-03a: AGENTS.md se editó a mano).
 
 **Archivos a tocar**
 

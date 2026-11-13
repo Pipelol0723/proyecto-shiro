@@ -68,7 +68,7 @@ Riesgo: B = bajo, M = medio, A = alto. «Salto»: parche, menor o mayor (en 0.x,
 
 Reglas comunes a todos los lotes:
 
-- Un PR por fila, base `develop`, con el prefijo de commit indicado. Antes de pedir revisión: `npm run verify` (P-02 PR3a; mientras no exista, la secuencia de CLAUDE.md «Antes de pushear»). Cuenta para el límite de 2 PRs de agente abiertos.
+- Un PR por fila, base `develop`, con el prefijo de commit indicado. Antes de pedir revisión: `npm run verify`. Cuenta para el límite de 2 PRs de agente abiertos.
 - El `package-lock.json` se regenera con `npm install` en el mismo PR. Nunca `npm audit fix --force`.
 - Reversión por defecto: `git revert` del commit de merge y `npm ci`. Ningún lote cambia datos persistentes salvo donde se dice.
 - Prueba manual de Pipe solo donde hay I/O real (voz, memoria, binario), por la regla «pedir al usuario que pruebe antes de declarar hecho».

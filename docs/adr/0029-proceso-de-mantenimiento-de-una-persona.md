@@ -221,3 +221,7 @@ El dueño aprobó la Fase 1 del plan de mejora y fijó tres reglas de proceso:
   voz.
 - **`main` por fast-forward.** Al publicar un tag, `main` avanza por
   fast-forward hasta ese tag.
+
+El 2026-11-13 se creó `npm run verify` (P-02), así que el pendiente de
+«Consecuencias» queda cumplido: «checks en verde» significa `npm run verify`
+en verde.

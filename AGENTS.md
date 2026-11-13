@@ -24,13 +24,11 @@ Antes de algo estructural, lee CLAUDE.md, [`docs/architecture.md`](docs/architec
 
 ## Antes de pushear
 
-Los mismos pasos que el CI, en el mismo orden. Si alguno falla, no pushes.
+Ejecuta `npm run verify`. Si falla, no pushes.
 
 ```bash
-npm run build -w @proyecto-shiro/core
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run build
+npm run verify
 ```
+
+Hace los mismos pasos que el CI, en el mismo orden: compila core y luego
+ejecuta `format:check`, `lint`, `typecheck`, `test` y `build`.

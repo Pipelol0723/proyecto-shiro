@@ -119,20 +119,17 @@ de cada hito, lee [`docs/architecture.md`](docs/architecture.md) y su ADR.
 
 ## Antes de pushear
 
-Ejecuta los mismos pasos que el CI, en el mismo orden. Si alguno falla, no pushes: arregla primero.
+Ejecuta `npm run verify`. Si falla, no pushes: arregla primero.
 
 ```bash
-npm run build -w @proyecto-shiro/core
-npm run format:check
-npm run lint
-npm run typecheck
-npm test
-npm run build
+npm run verify
 ```
 
-Compilar core primero es obligatorio: los demás paquetes leen sus tipos de
-`packages/core/dist`, que no se versiona. `npm run verify` (ítem P-02 del plan)
-todavía no existe.
+Hace los mismos pasos que el CI, en el mismo orden, y se detiene en el primero
+que falla: compila core (`npm run build -w @proyecto-shiro/core`) y luego
+ejecuta `format:check`, `lint`, `typecheck`, `test` y `build`. Compilar core
+primero es obligatorio: los demás paquetes leen sus tipos de
+`packages/core/dist`, que no se versiona.
 
 ## Calidad de código
 
