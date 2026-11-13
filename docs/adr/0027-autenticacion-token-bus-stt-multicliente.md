@@ -1,6 +1,6 @@
 # ADR 0027: Autenticación por token compartido en el bus y el STT
 
-- **Status**: Accepted (sin implementar)
+- **Status**: Accepted (2a en curso, 2b sin implementar)
 - **Fecha**: 2026-08-18
 - **Decidido por**: Pipelol
 - **Supersede a**: [ADR 0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)
@@ -175,3 +175,59 @@ cualquiera de estas:
 - Errata conocida, que se corrige en la enmienda que viaja con el código (P-05 del plan de mejora): §4, en Tauri 2 sobre Windows el origen del webview es `http://tauri.localhost` (a confirmar con el binario), no `tauri://localhost`; en las Notas, el `ApprovalGate` está en `packages/core-host/src/pipeline/approval-gate.ts`, no en `.../tools/approval-gate.ts`; §1, `secrets.env` solo gestiona `MANAGED_KEYS` (las dos API keys, en `packages/core-host/src/secrets/secrets-file.ts`), así que guardar ahí el token exige ampliar esa lista sin que `secrets:save` lo acepte desde el bus; §6, `WHISPER_HOST` no tiene efecto en Docker: el cierre allí es publicar `127.0.0.1:8765:8765` en compose.
 - No define cómo recibe el token un cliente o servicio en otra máquina que no sea la estación: lo cubrirá la enmienda para remotos (P-38/P-40).
 - Secuencia propuesta por el plan, pendiente de aprobación: la parte local (bind, Origin, topes de Whisper, `approved` estrictamente booleano) en su Fase 1; token, `clientId` y aprobaciones por cliente en su Fase 5.
+
+## Enmienda (2026-11-13): secuencia 2a/2b y correcciones
+
+La decisión no cambia. Esta enmienda la parte en dos entregas y corrige tres
+datos que el código desmiente. Viaja con el PR que hace el bind del bus
+(P-05 del plan de mejora).
+
+### Secuencia
+
+- **2a — ya, sin token.** Todo lo que se puede cerrar sin tocar el protocolo:
+  - Bind a `127.0.0.1` del bus y de `/audio`, con `SHIRO_BIND_HOST` como
+    opt-in (hecho en el PR de esta enmienda). Con un host que no es loopback
+    el core-host avisa en el log: el bus queda sin auth en esa red hasta 2b.
+  - Allowlist de `Origin` en el WebSocket y en `/audio`, y `ApprovalGate`
+    que solo aprueba con `approved === true` (PR siguiente de P-05).
+  - Letta y Whisper publicados solo en loopback, y topes de Whisper (P-06a y
+    P-06b).
+- **2b — tras el gate óptico de la estación.** Lo que exige cambiar el
+  protocolo: `hello` con token, `clientId` y propiedad de la aprobación
+  (P-38 y P-40).
+
+**Regla de `Origin` mientras dure 2a.** El punto 4 de la decisión acepta una
+conexión sin `Origin` «solo si el token es válido». Sin token todavía, en 2a
+una conexión **sin** `Origin` se acepta porque el bind es loopback; un
+`Origin` presente y no reconocido se rechaza siempre. Al llegar 2b vuelve la
+regla original.
+
+### Correcciones
+
+- **Allowlist (punto 4).** En Tauri 2 sobre Windows, sin `useHttpsScheme`, el
+  origen del webview es `http://tauri.localhost`, no `tauri://localhost`. La
+  allowlist es `http://tauri.localhost`, `http://localhost:5173` y
+  `http://127.0.0.1:5173`. Se confirma con el binario compilado en el PR de
+  `Origin`.
+- **Ruta del `ApprovalGate`.** Está en
+  `packages/core-host/src/pipeline/approval-gate.ts`, no donde decían las
+  notas de implementación.
+- **Whisper.** El `CMD` del Dockerfile pasa `--host 0.0.0.0` a uvicorn y por
+  eso ignora `WHISPER_HOST`: dentro del contenedor se queda en `0.0.0.0` y lo
+  que se acota es la publicación del puerto en compose (`127.0.0.1:8765:8765`).
+
+### Trampa para 2b
+
+`secrets-file.ts` solo lee y escribe las claves de `MANAGED_KEYS` (hoy, las
+dos API keys). Un `SHIRO_BUS_TOKEN` guardado en `secrets.env` se ignoraría al
+arrancar y se perdería en el siguiente `secrets:save`. 2b tiene que añadirlo
+a esa lista.
+
+### Residuos aceptados hasta 2b
+
+- Un proceso local, que no manda `Origin`, puede conectarse al bus, recibir
+  el `memory:snapshot` que `bootstrap.ts` emite al conectar y mandar
+  `secrets:save`.
+- Con `SHIRO_BIND_HOST` fuera de loopback, el bus queda abierto a esa red sin
+  auth, y `/audio` sigue anunciando `http://localhost:<puerto>`, así que un
+  cliente remoto no oiría nada.
