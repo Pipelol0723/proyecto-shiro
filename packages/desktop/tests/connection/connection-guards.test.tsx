@@ -24,7 +24,7 @@ import { SetupScreen } from '../../src/screens/Setup/SetupScreen';
 import { useSecretsSave } from '../../src/health/useSecretsSave';
 
 const pttMock = vi.hoisted(() => ({
-  state: 'recording' as 'recording' | 'requesting',
+  state: 'recording',
   stop: vi.fn(() => Promise.resolve()),
   cancel: vi.fn(),
 }));
