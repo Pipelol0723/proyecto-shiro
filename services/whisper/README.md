@@ -77,9 +77,11 @@ El servicio (Python standalone) trae defaults conservadores; el `docker-compose.
 | `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`              | `2500`          | Cada cuánto retranscribir el buffer para emitir un partial. Más alto = menos cómputo acumulado por turno.                                                                                                                                      |
 | `WHISPER_HOTWORDS`              | `""` (sin hotwords) | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Faster-whisper ≥1.1.0. Sesga sin filtrarse al output — usar esto en vez de un prompt completo evita que Whisper escupa la frase como transcripción cuando el audio es ambiguo. |
 | `WHISPER_SAMPLE_RATE`           | `16000`             | `16000`         | Sample rate esperado del PCM Int16 LE mono que envía el cliente.                                                                                                                                                                               |
-| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765`  | mismo           | Bind del servidor.                                                                                                                                                                                                                             |
+| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765`  | (sin efecto)    | Bind del servidor **solo sin Docker** (`python -m services.whisper.main`). En Docker el `CMD` del `Dockerfile` fija `--host 0.0.0.0 --port 8765` y la exposición la decide `ports:` de compose (hoy `8765:8765`, todas las interfaces).        |
 
-> **Sobre `compute_type` y Tensor Cores**: `int8_float16` y `int8_bfloat16` son ~2× más rápidos que `int8` puro, pero requieren **Tensor Cores** — los tienen RTX 2060+, Tesla T4, A100, H100, RTX 50-series, etc. La **GTX 1650** y **GTX 1660** son Turing **sin** Tensor Cores: solo aceptan `int8`, `float16`, `float32`. Por eso el default conservador es `int8`. Si tienes Tensor Cores, pon `WHISPER_COMPUTE_TYPE=int8_float16` en tu `.env` para ganar el speedup.
+Sin compose el servicio usa sus propios defaults (`auto`, 1500 ms y sin hotwords). Para igualar compose exporta `WHISPER_COMPUTE_TYPE=int8`, `WHISPER_PARTIAL_INTERVAL_MS=2500` y `WHISPER_HOTWORDS=Shiro`.
+
+> **Sobre `compute_type` y Tensor Cores**: `int8_float16` y `int8_bfloat16` son ~2× más rápidos que `int8` puro, pero requieren **Tensor Cores** — los tienen RTX 2060+, Tesla T4, A100, H100, RTX 50-series, etc. La **GTX 1650** y **GTX 1660** son Turing **sin** Tensor Cores: solo aceptan `int8`, `float16`, `float32`. Por eso el default conservador es `int8`. Si tienes Tensor Cores, pon `WHISPER_COMPUTE_TYPE=int8_float16` en tu `.env` para ganar el speedup. Las GPU Pascal (GTX 10xx) tampoco tienen Tensor Cores: usa `int8`.
 
 ## Protocolo del WebSocket (`/stt`)
 
@@ -107,15 +109,18 @@ Diseñado para que el **cliente desktop** lo consuma directamente — el
 ## Desarrollo local (sin Docker)
 
 Útil para iterar el código del servicio. Requiere Python 3.11 y, si
-quieres CUDA, los toolkits NVIDIA instalados nativamente.
+quieres CUDA, los toolkits NVIDIA instalados nativamente. Ejecuta todo
+**desde la raíz del repo** (el paquete `services.whisper` solo se resuelve
+desde ahí):
 
 ```bash
-cd services/whisper
-python -m venv .venv
-source .venv/bin/activate    # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+python -m venv services/whisper/.venv
+source services/whisper/.venv/bin/activate    # Windows: services/whisper/.venv/Scripts/activate
+pip install -r services/whisper/requirements.txt
 python -m services.whisper.main
 ```
+
+Ojo: `.venv` todavía no está en `.gitignore`; no lo commitees.
 
 Tests:
 
@@ -123,9 +128,9 @@ Tests:
 pytest services/whisper/tests
 ```
 
-Los tests NO están en el CI principal (que es Vitest sobre el monorepo
-TS); ejecútalos cuando toques este servicio. Si más adelante el
-servicio crece, añadimos un workflow GitHub Actions específico.
+Los tests de Python no corren en el CI y la revisión de 2026-11 los encontró
+probablemente rotos (R-194). El plan de mejora propone un job mínimo de pytest
+(P-06b) y la suite completa en CI (P-18), sin implementar.
 
 ## Notas operativas
 
@@ -141,8 +146,9 @@ servicio crece, añadimos un workflow GitHub Actions específico.
   agentes ni sesiones que sobrevivan.
 - **Seguridad (deuda local diferida)**: el servicio escucha en `0.0.0.0` con
   CORS `*`, sin autenticación, y el buffer del WS `/stt` no tiene tope (audio
-  ilimitado → DoS de memoria/CPU). Es aceptable en el modelo local-solo-yo;
-  antes de exponerlo fuera de `localhost` hay que bindear a `127.0.0.1`, topar
-  el buffer y añadir auth. Ver `SEC-02` en
-  [`docs/security-review-2026-07.md`](../../docs/security-review-2026-07.md) y
-  [ADR 0025](../../docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md).
+  ilimitado → DoS de memoria/CPU). La decisión vigente es
+  [ADR 0027](../../docs/adr/0027-autenticacion-token-bus-stt-multicliente.md)
+  (token en el handshake, `WHISPER_HOST` a `127.0.0.1` y tope de buffer con
+  cierre 1009), Accepted y **sin implementar**. Estado en la fila SEC-02 de la
+  tabla viva de
+  [`docs/security-review-2026-07.md`](../../docs/security-review-2026-07.md).

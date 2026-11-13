@@ -268,3 +268,11 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
 - [Tauri 2.0 — Updater](https://tauri.app/v2/plugin/updater/) — auto-updater.
 - [Tauri 2.0 — Capabilities](https://tauri.app/v2/security/capabilities/) — modelo de permisos.
 - [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg) — fork mantenido de `pkg` para empaquetar Node.
+
+## Nota 2026-11-12
+
+- §3 modo overlay: aplazado por el dueño, sin fecha.
+- §4: el auto-updater está en el código pero nunca ha servido una actualización; el único release (v0.1.0) sigue en borrador.
+- §8: [ADR 0029](0029-proceso-de-mantenimiento-de-una-persona.md) fija que las versiones son tags `vX.Y.Z` sobre `develop`, que `main` solo avanza al publicar un tag y una checklist pre-release antes del próximo tag.
+- «ADR 0022/0023 (Proposed)» del Contexto refleja el momento de escribirlo; ambos están Accepted.
+- Enmiendas planificadas en el plan de mejora, sin implementar: rotación y custodia de la clave del updater (P-09), §5 capability recortada (P-22), `SHIRO_PACKAGED` (P-25b) y override de config en `app_local_data_dir` (P-34).

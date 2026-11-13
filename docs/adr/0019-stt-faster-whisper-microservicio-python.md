@@ -238,3 +238,10 @@ Mapa de archivos a tocar por PR (ver tasks #8-#14):
 - faster-whisper: <https://github.com/SYSTRAN/faster-whisper>
 - Silero VAD: <https://github.com/snakers4/silero-vad> · port JS: <https://github.com/ricky0123/vad>
 - Modelos Whisper: <https://huggingface.co/openai/whisper-large-v3> · `distil-large-v3`: <https://huggingface.co/distil-whisper/distil-large-v3>
+
+## Nota 2026-11-12
+
+- La RTX 5080 que este ADR esperaba no existe; el desarrollo sigue en una GTX 1650 de 4 GB. Donde dice «cuando llegue la 5080», léase «cuando haya una GPU con más VRAM».
+- `WHISPER_HOST`/`WHISPER_PORT` solo tienen efecto sin Docker (`python -m services.whisper.main`): en Docker el `CMD` del `Dockerfile` fija `--host 0.0.0.0 --port 8765` y compose publica `8765:8765` en todas las interfaces. Sin auth ni tope de buffer (SEC-02).
+- Los defaults del servicio (`compute_type` `auto`, partials cada 1500 ms, sin hotwords) difieren de los de compose (`int8`, 2500 ms, `Shiro`).
+- Enmiendas planificadas en el plan de mejora, sin implementar: topes y bind (P-06b) y URL de STT publicada por el core-host (P-35).

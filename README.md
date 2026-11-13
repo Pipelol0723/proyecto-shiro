@@ -4,53 +4,63 @@ AI Companion modular con avatar tipo VTuber, voz en tiempo real, memoria
 persistente y sistema de módulos intercambiables. Diseñado para crecer:
 empieza como asistente desktop, escala a IoT, móvil, Arduino y robots.
 
-> **Estado**: hito **Self-improvement** ✅ completo — Shiro pasa de agente a
-> **contribuidora de su propio repo**: propone Pull Requests a su propio código
-> (_propose-only_ — el humano siempre mergea). Un `SelfDevSession` crea un
-> **worktree git aislado**, genera el cambio con Claude, lo valida con el eval
-> (rebuild + format/lint/typecheck/test) y —solo si está verde— abre un **PR**
-> vía `gh`, todo detrás de modales de aprobación y con **archivos inmutables**
-> (carácter, ADRs, permisos) que no puede tocar. Nunca mergea ni pushea a
-> develop/main. Dev-only. Ver
-> [ADR 0023](docs/adr/0023-shiro-self-improvement-propose-only.md). Antes, el
-> hito **Agentic tools** dio la capacidad ejecutiva base: leer/modificar
-> archivos (`fs:*`) y ejecutar comandos allowlisted (`shell:exec`) en un **loop
-> tool-use** con Claude, con modal de aprobación y permisos mixtos
-> ([ADR 0022](docs/adr/0022-shiro-agentic-tools-fs-shell.md)). Hitos previos:
-> **Setup**, **Core**, **Cliente desktop**, **LLM**, **Memoria**, **STT**,
-> **TTS**, **Avatar Live2D**, **Packaging Tauri**, **Agentic tools**.
-> Arquitectura viva en [`docs/architecture.md`](docs/architecture.md);
-> historial de decisiones en [`docs/adr/`](docs/adr/).
+> **Estado (2026-11-12)**: hitos 1 a 11 hechos; el 12 (estación holográfica)
+> está planificado y sin empezar. Lo que toca ahora es el
+> [plan de mejora](docs/plan-mejora-2026-11.md), una propuesta pendiente de
+> aprobación ítem a ítem que sale de la
+> [revisión del estado](docs/revision-estado-2026-11.md) (fichas en el
+> [anexo](docs/revision-estado-2026-11-anexo.md)). El estado vive solo en la
+> tabla de la sección [Roadmap](#roadmap). Lo mantiene una persona,
+> 4-6 h/semana, con agentes de IA como apoyo. Arquitectura viva en
+> [`docs/architecture.md`](docs/architecture.md); historial de decisiones en
+> [`docs/adr/`](docs/adr/).
+
+<a id="roadmap"></a>
 
 ## 🗺️ Roadmap
 
-Las fases originales del [plan inicial](plan-modular-ai-companion.md) usaban
-numeración (Fase 0–11). A partir de ADRs 0008-0010 pasamos a **nombres**
-porque el cliente desktop se intercaló entre Core y LLM, y los números se
-hicieron confusos. La numeración del plan original se conserva en el
-histórico.
+Esta tabla es la **única fuente** del estado de los hitos y de la hoja de ruta
+([ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md)): los
+demás documentos enlazan aquí y no la copian. Los hitos van numerados por
+orden de la tabla (1 a 12, numeración de `CLAUDE.md` desde ADR 0008); la
+numeración Fase 0-7 del [plan inicial](plan-modular-ai-companion.md) queda en
+el histórico. «Ahora» y «Siguiente» siguen el
+[plan de mejora](docs/plan-mejora-2026-11.md), propuesta pendiente de
+aprobación ítem a ítem.
 
-| Hito                  | Estado      | Notas                                                                                                                                                                                                                                                                                                                                                            |
-| --------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Setup**             | ✅ completo | Monorepo, CI, branch protection, ADRs, CLAUDE.md                                                                                                                                                                                                                                                                                                                 |
-| **Core**              | ✅ completo | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                                                                                                                                                                                               |
-| **Cliente desktop**   | ✅ completo | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                                                                                                                                                                                                   |
-| **LLM**               | ✅ completo | `core-host` server Node, WebSocket transport, OllamaLLM, AnthropicLLM, HybridRouter, pipeline conversacional                                                                                                                                                                                                                                                     |
-| **Memoria**           | ✅ completo | Letta (SDK oficial + Ollama embeddings) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. ADRs 0017 y 0018.                                                                                                                                                                                                                                          |
-| **STT**               | ✅ completo | faster-whisper en microservicio Python (Docker + CUDA), captura Web Audio con AudioWorklet, push-to-talk + WS directo cliente↔servicio. ADR 0019.                                                                                                                                                                                                                |
-| **TTS**               | ✅ completo | ElevenLabs primary + SystemTTS fallback, in-process en core-host. Audio HTTP efímero, cliente reproduce. Cancelable mid-speech, mute por cliente. ADR 0020.                                                                                                                                                                                                      |
-| **Avatar Live2D**     | ✅ completo | Render de Hiyori (`pixi-live2d-display-lipsyncpatch` + PixiJS v7, Cubism Core **4.2.2**) con fallback al orbe, lip-sync con el audio del TTS y expresiones faciales por emoción. ADR 0021.                                                                                                                                                                       |
-| **Packaging Tauri**   | ✅ completo | Binario Tauri 2.0 (Windows): sidecar `core-host` (ncc+pkg), tray + close-to-tray + single-instance, auto-updater firmado (ed25519 + GitHub Releases), CI release por tag, setup wizard con healthcheck + API keys en runtime (`secrets.env`). Overlay diferido a post-MVP. ADR 0024.                                                                             |
-| **Agentic tools**     | ✅ completo | Slot `tools:` (FS read/list auto, write/delete confirm con `FsScope`; `shell:exec` con allowlist), loop tool-use en Claude, modal de aprobación (`tool:requires-approval`/`tool:approval`), persistencia `role:'tool'` y router con dimensión `requires_tools`. ADR 0022.                                                                                        |
-| **Self-improvement**  | ✅ completo | Shiro propone PRs a su propio repo (propose-only, ADR 0023). `SelfDevSession` en `core-host`: worktree aislado, sub-loop de generación con fs scoped + denylist de inmutables, eval gate (rebuild de core + format/lint/typecheck/test con fix-loop), commit/push a `shiro/<topic>` y `gh:pr-create` tras aprobación. Dev-only. Panel de progreso en el cliente. |
-| **Post-MVP**          |             |                                                                                                                                                                                                                                                                                                                                                                  |
-| Modo overlay          | ⏳ futuro   | Toggle a ventana flotante always-on-top transparente estilo VTuber (ADR 0024 §3)                                                                                                                                                                                                                                                                                 |
-| Persistencia self-dev | ⏳ futuro   | Persistir en Letta qué propuso/planeó cada sesión de self-dev, para retomar y recordar (ADR 0023, Fase 2).                                                                                                                                                                                                                                                       |
-| Plugins               | ⏳ futuro   | Sistema de extensiones                                                                                                                                                                                                                                                                                                                                           |
-| Móvil                 | ⏳ futuro   | `@proyecto-shiro/mobile` consumiendo el core via WebSocket                                                                                                                                                                                                                                                                                                       |
-| Avatar 3D (VRM)       | ⏳ futuro   | `@pixiv/three-vrm`                                                                                                                                                                                                                                                                                                                                               |
-| Arduino bridge        | ⏳ futuro   | `@proyecto-shiro/arduino-bridge` (Serial USB)                                                                                                                                                                                                                                                                                                                    |
-| IoT bridge            | ⏳ futuro   | MQTT, Home Assistant                                                                                                                                                                                                                                                                                                                                             |
+| Hito                                                         | Estado                                                                      | ADR                              | Notas                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Setup**                                                    | ✅ completo                                                                 | 0002                             | Monorepo, CI (solo Ubuntu), ADRs, CLAUDE.md. `develop` aún no exige check de CI.                                                                                                                                                                                                                                                     |
+| **Core**                                                     | ✅ completo                                                                 | 0001, 0003-0007                  | EventBus, Orchestrator, ModuleLoader, 9 interfaces                                                                                                                                                                                                                                                                                   |
+| **Cliente desktop**                                          | ✅ completo                                                                 | 0008-0011                        | Vite + React + TS, orbe, 3 temas, 5 pantallas, EventBus wiring                                                                                                                                                                                                                                                                       |
+| **LLM**                                                      | ✅ completo                                                                 | 0012-0016                        | `core-host` (Node + WebSocket), OllamaLLM (`qwen2.5:3b`), AnthropicLLM (`claude-sonnet-4-6`), HybridRouter, pipeline conversacional                                                                                                                                                                                                  |
+| **Memoria**                                                  | ✅ completo                                                                 | 0017, 0018                       | Letta (SDK oficial, embeddings `mxbai-embed-large` en Ollama) + WAL SQLite con drainer, auto-provisión y `memory:snapshot`. Aún sin backup.                                                                                                                                                                                          |
+| **STT**                                                      | ✅ completo                                                                 | 0019                             | faster-whisper (`small`, `int8`) en microservicio Python (Docker + CUDA), AudioWorklet, push-to-talk y WS directo cliente↔servicio                                                                                                                                                                                                   |
+| **TTS**                                                      | ✅ completo                                                                 | 0020                             | ElevenLabs + SystemTTS de respaldo, in-process en core-host; audio HTTP efímero, cancelable, mute por cliente                                                                                                                                                                                                                        |
+| **Avatar Live2D**                                            | ✅ completo                                                                 | 0021                             | Hiyori (provisional) con `pixi-live2d-display-lipsyncpatch` y Cubism Core 4.2.2, fallback al orbe, lip-sync y expresiones                                                                                                                                                                                                            |
+| **Packaging Tauri**                                          | ✅ completo                                                                 | 0024                             | Binario Windows con sidecar `core-host`, tray, setup wizard con API keys. El auto-updater está en el código pero nunca ha servido una actualización: el release v0.1.0 sigue en borrador.                                                                                                                                            |
+| **Agentic tools**                                            | ✅ completo                                                                 | 0022                             | fs y shell con allowlist, loop tool-use en Claude, modal de aprobación, turnos `role:'tool'`                                                                                                                                                                                                                                         |
+| **Self-improvement**                                         | ✅ completo                                                                 | 0023                             | PRs propose-only desde un worktree aislado, eval gate, solo en dev. El resultado de cada sesión se guarda en memoria (PR #94); retomar una sesión sigue pendiente.                                                                                                                                                                   |
+| **Estación holográfica** (hito 12)                           | ⏳ planificado, sin empezar                                                 | 0026, 0027                       | Pepper ghost + cliente ligero; plan en [`docs/estacion-holografica.md`](docs/estacion-holografica.md). Su prerrequisito, ADR 0027 (token, bind, Origin), está Accepted y sin implementar.                                                                                                                                            |
+| **Ahora**                                                    |                                                                             |                                  |                                                                                                                                                                                                                                                                                                                                      |
+| Plan de mejora — Fase 1: contención y red cerrada            | 🚧 ahora (ADR 0029 aprobado; el resto, pendiente de aprobación ítem a ítem) | 0029                             | Todo sin implementar: self-dev apagado por defecto (P-01), suite verde y `npm run verify` por crear (P-02), CI con audit y check obligatorio (P-04), bus y audio en loopback con Origin, Whisper con topes, conexión visible y audio que no se corta, docs al día. Ver [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md). |
+| **Siguiente** (plan de mejora, en este orden)                |                                                                             |                                  |                                                                                                                                                                                                                                                                                                                                      |
+| Plan de mejora — Fase 2: datos a salvo y diagnóstico         | ⏳ siguiente                                                                | —                                | Backup de la memoria fuera del portátil con restauración ensayada, health «listo», push-to-talk fiable, latencia medida, CI también en Windows.                                                                                                                                                                                      |
+| Plan de mejora — Fase 3: fronteras de agentes                | ⏳ siguiente                                                                | enmiendas de 0022, 0023 y 0024   | Suite «contrato de seguridad», push de self-dev tras la aprobación, eval aislado; self-dev se reactiva al cerrarla.                                                                                                                                                                                                                  |
+| Plan de mejora — Fase 4: turno correcto y topología saliente | ⏳ siguiente                                                                | ADR nuevos propuestos en el plan | Tool-loop honesto, SDK de Anthropic 1.x, datos separados de instrucciones en el contexto, URLs de servicios por entorno.                                                                                                                                                                                                             |
+| Plan de mejora — Fase 5: protocolo multicliente y token      | ⏳ siguiente                                                                | 0027 (+ ADR nuevo propuesto)     | Implementa ADR 0027: token en el handshake, `clientId`, aprobaciones por cliente y unicast. Es la puerta de la estación holográfica.                                                                                                                                                                                                 |
+| **Ideas y aplazados** (sin compromiso)                       |                                                                             |                                  |                                                                                                                                                                                                                                                                                                                                      |
+| Modo overlay                                                 | ⏸️ aplazado                                                                 | 0024 §3                          | Ventana flotante always-on-top estilo VTuber.                                                                                                                                                                                                                                                                                        |
+| Avatar por capas (chibi) y motores intercambiables           | ⏸️ aplazado                                                                 | 0028                             | Accepted, sin implementar; prototipo en [`docs/design/chibi-prototype/`](docs/design/chibi-prototype/).                                                                                                                                                                                                                              |
+| Avatar 3D (VRM)                                              | 💡 idea                                                                     | —                                | `@pixiv/three-vrm`.                                                                                                                                                                                                                                                                                                                  |
+| Retomar sesiones de self-dev                                 | 💡 idea                                                                     | 0023                             | Hoy se guarda el resultado de la sesión, no su plan.                                                                                                                                                                                                                                                                                 |
+| Tool de edición por parche                                   | 💡 idea                                                                     | —                                | Hoy self-dev reescribe el archivo entero.                                                                                                                                                                                                                                                                                            |
+| Orquestación multi-agente / multi-modelo                     | 💡 idea                                                                     | —                                | Antes hacen falta: contabilidad del gasto en cloud, la tool de parche, varias sesiones reales de self-dev y un ADR de router por roles.                                                                                                                                                                                              |
+| Modelos locales mayores y voz sintética local (UTAU)         | 💡 cuando haya una GPU con más VRAM                                         | 0020                             | Hoy todo corre en una GTX 1650 de 4 GB.                                                                                                                                                                                                                                                                                              |
+| Plugins                                                      | 💡 idea                                                                     | —                                | Sistema de extensiones.                                                                                                                                                                                                                                                                                                              |
+| Móvil                                                        | 💡 idea                                                                     | —                                | `@proyecto-shiro/mobile` por WebSocket; necesita la Fase 5 del plan.                                                                                                                                                                                                                                                                 |
+| Arduino bridge                                               | 💡 idea                                                                     | —                                | `@proyecto-shiro/arduino-bridge` (Serial USB).                                                                                                                                                                                                                                                                                       |
+| IoT bridge                                                   | 💡 idea                                                                     | —                                | MQTT, Home Assistant.                                                                                                                                                                                                                                                                                                                |
 
 ## Stack
 
@@ -68,11 +78,13 @@ histórico.
 
 ## Requisitos
 
-- Node.js >= 20 (probado con 22)
+- Node.js >= 20; se recomienda 22, que es la que usan el CI y el sidecar
 - npm >= 10
 - **Rust 1.77+** (solo para `tauri:dev` y `tauri:build` — el modo dev de Vite no lo requiere). Instala desde [rustup.rs](https://rustup.rs/).
 - En Windows: **Microsoft C++ Build Tools** + **WebView2 Runtime** (preinstalado en Windows 11). Tauri lo verifica al primer `tauri:dev`.
-- (Más adelante) Docker, Python 3.11+, Ollama
+- **Ollama** (LLM local y embeddings de la memoria) y **Docker Desktop** (Letta y Whisper): necesarios para los hitos LLM, Memoria y STT (ver sus secciones).
+- Python 3.11 solo si corres Whisper sin Docker.
+- Hardware de referencia: un portátil con una GTX 1650 de 4 GB. La config por defecto (`qwen2.5:3b`, Whisper `small` en `int8`, avatar a 30 fps) está pensada para él.
 
 ## Setup local
 
@@ -86,6 +98,9 @@ git checkout develop
 
 # Instalar dependencias (npm instala todos los workspaces)
 npm install
+
+# Compilar core primero: core-host y desktop importan sus tipos desde packages/core/dist
+npm run build -w @proyecto-shiro/core
 
 # Verificar que todo compila
 npm run typecheck
@@ -101,8 +116,8 @@ de un binario Tauri 2.0 con tray icon y close-to-tray. Para arrancarlo
 en modo dev:
 
 ```bash
-# Generar iconos placeholder una sola vez (ver packages/desktop/src-tauri/icons/README.md)
-npx @tauri-apps/cli icon path/to/cualquier-square.png
+# Los iconos ya están commiteados en packages/desktop/src-tauri/icons/.
+# Solo si cambias el logo: npx @tauri-apps/cli icon <png-cuadrado> (los sobrescribe; ver su README)
 
 # Arrancar Tauri (esto compila Rust la primera vez — ~3-5 min)
 npm run tauri:dev -w @proyecto-shiro/desktop
@@ -171,13 +186,19 @@ El binario sale en `packages/desktop/src-tauri/target/release/bundle/msi/`.
 
 El workflow `.github/workflows/release.yml` construye el binario Windows
 **firmado** y lo publica como Release en GitHub (con los artefactos del
-auto-updater). Se dispara al pushear un tag de versión:
+auto-updater). Se dispara al pushear un tag de versión.
+
+> El único release, v0.1.0, sigue en **borrador**: el auto-updater existe pero
+> nunca ha servido una actualización. Las versiones son tags `vX.Y.Z` sobre
+> `develop` y no se corta ninguno nuevo sin la checklist pre-release de
+> [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md) (ver
+> [`CONTRIBUTING.md`](CONTRIBUTING.md)).
 
 ```bash
 # Sube la versión en packages/desktop/src-tauri/tauri.conf.json y Cargo.toml,
 # luego:
-git tag v0.1.0
-git push origin v0.1.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 El CI deja el Release como **borrador**: revisa los assets (`.msi`, `.exe`,
@@ -211,10 +232,17 @@ npm run dev -w @proyecto-shiro/desktop     # solo el cliente
 Configurable por env (ver `.env.example`):
 
 - `ANTHROPIC_API_KEY` — sin esto, el slot cloud no responde y el `HybridRouter` cae a Ollama solo. Conseguir una key en [console.anthropic.com](https://console.anthropic.com).
+- `ELEVENLABS_API_KEY` — voz neuronal; sin ella todo sale por SystemTTS
+- `LETTA_SERVER_PASSWORD` — ver [Memoria](#requisitos-para-el-hito-memoria-letta)
 - `SHIRO_HOST_PORT` — puerto del WS (default 9876)
 - `VITE_SHIRO_HOST_URL` — URL que usa el cliente (default `ws://localhost:9876/bus`)
-- `OLLAMA_HOST` — endpoint de Ollama (default `http://localhost:11434`)
 - `LOG_LEVEL` — `debug` | `info` | `warn` | `error`
+- `SHIRO_MODULES_CONFIG` — ruta al YAML de módulos (default `../../config/modules.config.yaml`, relativa a `packages/core-host`)
+- `SHIRO_CHARACTER` — ruta al YAML del personaje (default `../core/src/character/characters/default.yaml`)
+
+El host de Ollama no se lee del entorno: sale de `llm.local.config.host` en
+`config/modules.config.yaml`. Las variables `WHISPER_*` las lee docker-compose
+del mismo `.env` (ver STT).
 
 El `.env` se carga automáticamente al arrancar el server (flag `--env-file-if-exists` en el script `dev`). Copia `.env.example` a `.env` y rellena.
 
@@ -288,12 +316,12 @@ Para activarlo:
 
 **Tunings disponibles** (todos opcionales en `.env`, defaults en el compose):
 
-| Variable                      | Default compose | Para qué                                                                                     |
-| ----------------------------- | --------------- | -------------------------------------------------------------------------------------------- |
-| `WHISPER_MODEL`               | `small`         | Sube a `large-v3` cuando tengas Tensor Cores (RTX 2060+).                                    |
-| `WHISPER_COMPUTE_TYPE`        | `int8`          | Con Tensor Cores cambia a `int8_float16` para ~2× speedup.                                   |
-| `WHISPER_PARTIAL_INTERVAL_MS` | `2500`          | Cuánto tarda en emitir partials. Bajar gasta más CPU/GPU; subir te da subtítulos más lentos. |
-| `WHISPER_HOTWORDS`            | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Útil para nombres propios.   |
+| Variable                      | Default compose | Para qué                                                                                         |
+| ----------------------------- | --------------- | ------------------------------------------------------------------------------------------------ |
+| `WHISPER_MODEL`               | `small`         | Sube a `large-v3` cuando tengas Tensor Cores (RTX 2060+).                                        |
+| `WHISPER_COMPUTE_TYPE`        | `int8`          | Con Tensor Cores cambia a `int8_float16` para ~2× speedup. En GPUs Pascal (GTX 10xx) usa `int8`. |
+| `WHISPER_PARTIAL_INTERVAL_MS` | `2500`          | Cuánto tarda en emitir partials. Bajar gasta más CPU/GPU; subir te da subtítulos más lentos.     |
+| `WHISPER_HOTWORDS`            | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Útil para nombres propios.       |
 
 Ver `services/whisper/README.md` para detalles del microservicio.
 
@@ -355,13 +383,13 @@ El **`stability` por turno** lo lee el TTS del bloque `emotions:` del character 
 
 **Cancelable mid-speech**: si interrumpes a Shiro (apretas el mic durante speaking, o tipeas Enter), el audio actual se corta y arranca el nuevo turno.
 
-**Multi-device**: cada cliente conectado recibe `tts:audio`. Por defecto el primer cliente reproduce y los demás llevan el toggle "audio off". Cada cliente persiste su preferencia en `localStorage`. La lógica de "elegir dispositivo activo" queda para ADR futuro cuando llegue el segundo cliente.
+**Varios clientes**: hoy todos los clientes conectados reciben `tts:audio` y lo reproducen, salvo los que tengan el mute activo (cada uno lo guarda en `localStorage`). No hay lógica de «primer cliente». El enrutado por cliente de origen lo decide el `OutputRouter` de [ADR 0026 §6](docs/adr/0026-estacion-holografica-pepper-ghost-cliente-ligero.md), sin implementar.
 
 ### Requisitos para el hito Avatar Live2D
 
-El avatar visual usa **`pixi-live2d-display-lipsyncpatch`** (fork mantenido de `pixi-live2d-display`, sobre **PixiJS v7**) renderizando el modelo dentro del componente `<Avatar>`. Si el SDK o el modelo no están instalados, `<Avatar>` cae al `<Orb>` (ADR 0009) automáticamente — el companion sigue 100% funcional sin avatar visual. La boca del modelo hace **lip-sync** con la voz del TTS. Ver [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md).
+El avatar visual usa **`pixi-live2d-display-lipsyncpatch`** (fork mantenido de `pixi-live2d-display`, sobre **PixiJS v7**) renderizando el modelo dentro del componente `<Avatar>`. Si el SDK o el modelo no están instalados, `<Avatar>` cae al `<Orb>` (ADR 0009) automáticamente — el companion sigue 100% funcional sin avatar visual. La boca del modelo hace **lip-sync** con la voz del TTS. Ver [ADR 0021](docs/adr/0021-avatar-live2d-pixi-display-fallback-orbe.md). El formato definitivo del avatar (motores intercambiables y chibi por capas) está decidido en [ADR 0028](docs/adr/0028-avatar-motores-y-manifiesto.md), Accepted y sin implementar: su integración en el cliente está aplazada.
 
-> ⚠️ **Versión del Cubism Core: usa el SDK 4 (Core 4.2.2), NO el 5.** El Cubism Core que trae el "Cubism SDK for Web **5**" reporta versión **6.0.1** y **crashea el renderer** (`Cannot read properties of undefined (reading '0')` en `doDrawModel`) con `pixi-live2d-display-lipsyncpatch`. Usa el **Cubism SDK for Web 4** (release 4-r.x), cuyo Core es **4.2.2** y sí funciona. El Core está gitignored y cada dev baja el suyo, así que es fácil de equivocar — si ves ese crash, casi seguro tienes un Core demasiado nuevo. Atajo: pídele el `live2dcubismcore.js` a un compañero que ya lo tenga funcionando.
+> ⚠️ **Versión del Cubism Core: usa el SDK 4 (Core 4.2.2), NO el 5.** El Cubism Core que trae el "Cubism SDK for Web **5**" reporta versión **6.0.1** y **crashea el renderer** (`Cannot read properties of undefined (reading '0')` en `doDrawModel`) con `pixi-live2d-display-lipsyncpatch`. Usa el **Cubism SDK for Web 4** (release 4-r.x), cuyo Core es **4.2.2** y sí funciona. El Core está gitignored y cada dev baja el suyo, así que es fácil de equivocar — si ves ese crash, casi seguro tienes un Core demasiado nuevo.
 
 **Lo propietario (no entra al repo)**:
 
@@ -392,7 +420,7 @@ El avatar visual usa **`pixi-live2d-display-lipsyncpatch`** (fork mantenido de `
 | ----------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `model_path`      | `/live2d/models/Hiyori/Hiyori.model3.json` | URL del `.model3.json`. Cámbialo cuando bajes el modelo definitivo de Shiro.                                                       |
 | `cubism_core_url` | `/live2d/Core/live2dcubismcore.js`         | URL del Cubism Core JS (versión **4.2.2** — ver aviso arriba).                                                                     |
-| `max_fps`         | `30`                                       | Cap del render. 30 para GTX 1650; sube a 60 con la 5080.                                                                           |
+| `max_fps`         | `30`                                       | Cap del render. 30 para la GTX 1650; súbelo a 60 cuando haya una GPU con más VRAM.                                                 |
 | `idle_animation`  | `false`                                    | Motions idle de cuerpo. **OFF por default**: tocan `ParamMouthOpenY` y compiten con el lip-sync. El modelo igual respira/parpadea. |
 | `idle_expression` | `idle`                                     | Expresión por defecto. Para Hiyori se traduce a `default` via alias en el código.                                                  |
 
@@ -420,8 +448,12 @@ Para ejecutar un script solo en un paquete:
 
 ```bash
 npm run typecheck -w @proyecto-shiro/core
-npm test -w @proyecto-shiro/core
+npx vitest run --project core
 ```
+
+Los paquetes no tienen script `test` propio; los proyectos de Vitest son
+`core`, `core-host` y `desktop`. El typecheck de `core-host` y `desktop`
+necesita `packages/core/dist`: compila core antes.
 
 ## Cómo correr los tests y checks
 
@@ -430,16 +462,21 @@ CI) y la **verificación manual** de cambios con UI o I/O real.
 
 ### 1. Checks automáticos — antes de cada push
 
-Estos cinco son los que corre el CI. Si alguno falla, **no pushees**:
-arregla primero. Córrelos en orden desde la raíz del repo:
+Son los mismos pasos que corre el CI, en el mismo orden. Si alguno falla,
+**no pushees**: arregla primero.
 
 ```bash
+npm run build -w @proyecto-shiro/core   # tipos de core para el resto (dist no se versiona)
 npm run format:check   # formato (Prettier)
 npm run lint           # ESLint en todo el monorepo
 npm run typecheck      # TypeScript en core, core-host y desktop
 npm test               # Vitest — toda la suite
 npm run build          # compila los tres paquetes
 ```
+
+En Windows, `npm test` tiene hoy un fallo conocido por timeout en
+`shell-tool.test.ts`. Un único `npm run verify` que haga todo esto está
+planificado (ítem P-02 del plan de mejora) y todavía no existe.
 
 Atajo para arreglar formato y lint automáticamente antes de revisar:
 
@@ -525,9 +562,17 @@ proyecto-shiro/
 │   ├── modules.config.yaml
 │   └── devices.config.yaml
 │
+├── services/whisper/               ← Microservicio STT (Python + faster-whisper, ADR 0019)
+├── docker-compose.yml              ← Letta y Whisper
+│
 ├── docs/
 │   ├── architecture.md             ← Arquitectura viva (fuente de verdad actual)
 │   ├── adr/                        ← Architecture Decision Records (0001…)
+│   ├── estacion-holografica.md     ← Plan de la estación holográfica
+│   ├── security-review-2026-07.md  ← Revisión de seguridad y tabla viva SEC-xx
+│   ├── revision-estado-2026-11.md  ← Revisión del estado (+ su anexo con las fichas)
+│   ├── plan-mejora-2026-11.md      ← Plan de mejora
+│   ├── design/                     ← Biblia del personaje y diseño
 │   └── design-mockup/              ← Bundle de Claude Design (referencia, no código)
 │
 ├── .github/workflows/              ← CI
@@ -546,7 +591,8 @@ tooling (TS, ESLint, Prettier, Vitest) desde la raíz. Ver
 [ADR 0002](docs/adr/0002-monorepo-npm-workspaces.md).
 
 Futuros paquetes previstos: `@proyecto-shiro/mobile`, `@proyecto-shiro/arduino-bridge`,
-`@proyecto-shiro/iot-bridge`. Todos consumirán el `core` vía interfaces y se
+`@proyecto-shiro/iot-bridge` y `@proyecto-shiro/station` (cliente de la estación
+holográfica, ver [`docs/estacion-holografica.md`](docs/estacion-holografica.md)). Todos consumirán el `core` vía interfaces y se
 conectarán al `core-host` por WebSocket (mismo patrón que el cliente desktop).
 
 ## Configuración
@@ -557,13 +603,16 @@ Cambiar de proveedor (p.ej. ElevenLabs → SystemTTS) es una sola línea. Ver
 
 El personaje se define en
 [packages/core/src/character/characters/default.yaml](packages/core/src/character/characters/default.yaml).
+La identidad visual y el tono del personaje están en la
+[biblia del personaje](docs/design/shiro-character-bible.md).
 
 ## Flujo de trabajo
 
-- `main` → código estable
-- `develop` → integración (rama por defecto)
-- `feat/<nombre>/<tarea>` → trabajo individual
-- Todo entra por **Pull Request** hacia `develop`. Nadie pushea directo.
+- `develop` → única rama de integración (rama por defecto). Todo entra por **Pull Request** pequeño hacia `develop`; nadie pushea directo, y la rama se borra al fusionar.
+- Versiones: tags `vX.Y.Z` sobre `develop`.
+- `main` no es una rama «estable»: solo avanza al publicar un tag. Hoy va unos 260 commits por detrás de `develop` porque aún no se ha publicado ninguna versión.
+- `feat/<nombre>/<tarea>` → trabajo individual.
+- Sin issue tracker: el seguimiento es la tabla [Roadmap](#roadmap), las casillas del plan de mejora y la tabla SEC-xx de la revisión de seguridad. Detalle en [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md).
 
 Convenciones de commit: `feat:`, `fix:`, `test:`, `docs:`, `refac:`, `chore:`, `ci:`.
 
@@ -590,12 +639,14 @@ nunca hardcodeada en el código ni commiteada. Plantilla en `.env.example`.
 
 ### Seguridad
 
-Modelo de amenaza actual: **local, un solo usuario**. La revisión transversal
-de seguridad vive en
-[`docs/security-review-2026-07.md`](docs/security-review-2026-07.md); el
-modelo de confianza local y su trigger de reversión (cuando llegue el primer
-cliente de red) están en
-[ADR 0025](docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md).
+Modelo de amenaza actual: **local, un solo usuario**, pero hoy el bus,
+`/audio`, Whisper y Letta escuchan en todas las interfaces, sin token ni
+comprobación de `Origin`. La decisión vigente es
+[ADR 0027](docs/adr/0027-autenticacion-token-bus-stt-multicliente.md) (token,
+bind a `127.0.0.1` y Origin), Accepted y **sin implementar**; sustituyó al
+[ADR 0025](docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md),
+que nunca se implementó. El estado de cada hallazgo vive en la tabla SEC-xx de
+[`docs/security-review-2026-07.md`](docs/security-review-2026-07.md).
 
 ## Licencia
 

@@ -10,11 +10,38 @@
 
 > **Nota metodológica:** no se ejecutó ningún exploit. Los escenarios se siguen leyendo el código; las líneas citadas son reales. `npm audit` se corrió con acceso a red (solo consulta de avisos, sin subir código).
 
+## Estado vivo (tabla SEC-xx)
+
+Desde el 2026-11-12 esta tabla es la fuente del estado de seguridad ([ADR 0029](adr/0029-proceso-de-mantenimiento-de-una-persona.md)). Todo PR que toque una frontera de confianza actualiza su fila en el mismo PR (al cerrar: «Cerrado» con PR y fecha). El resto del documento es la foto del 2026-07-15 y no se reescribe. SEC-14 a SEC-17 son nuevos de la [revisión de 2026-11](revision-estado-2026-11.md) (fichas en el [anexo](revision-estado-2026-11-anexo.md)); la columna «Lo cierra» remite al [plan de mejora](plan-mejora-2026-11.md), pendiente de aprobación.
+
+| ID             | Severidad          | Estado (2026-11-12)                                            | Qué hay hoy                                                                                                                                                                       | Hallazgos 2026-11                 | Lo cierra                   |
+| -------------- | ------------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | --------------------------- |
+| SEC-01         | 🟠 Media → 🔴 Alta | Abierto                                                        | bus y `/audio` en todas las interfaces, sin Origin ni token; el `memory:snapshot` entrega el historial al conectar (la allowlist correcta en Windows es `http://tauri.localhost`) | R-002, R-003, R-004, R-005        | P-05, P-40                  |
+| SEC-02         | 🟠 → 🔴            | Abierto                                                        | Whisper en `0.0.0.0` (fijado por el CMD del Dockerfile), CORS `*`, buffer sin tope y `POST /transcribe` sin límite                                                                | R-006, R-031, R-032, R-033        | P-06a, P-06b, P-40          |
+| SEC-03         | 🟠 Media           | Abierto (agravado)                                             | además de las mayúsculas, se salta con `::$DATA`, nombres 8.3 y el archivo `.git` del worktree                                                                                    | R-024, R-025, R-026, R-027, R-028 | P-23                        |
+| SEC-04         | 🟡 Baja            | Abierto                                                        | sin cambios                                                                                                                                                                       | R-021, R-045                      | P-26b                       |
+| SEC-05         | 🟡 → 🟠            | Abierto (ya explotable)                                        | el patrón git por defecto permite `diff --no-index` y `--output` fuera del sandbox                                                                                                | R-009, R-010, R-029, R-048        | P-26a                       |
+| SEC-06         | 🟠 Media           | Abierto (agravado)                                             | además, el logger serializa los `Error` como `{}`                                                                                                                                 | R-042, R-057                      | P-02, P-17                  |
+| SEC-07         | 🟡 Baja            | Abierto                                                        | además, `saveSecretsEnv` acepta saltos de línea                                                                                                                                   | R-039, R-056                      | P-17                        |
+| SEC-08         | 🟡 Baja            | Abierto                                                        | los turnos tool guardan args y salida completos y se reenvían al conectar                                                                                                         | R-038                             | P-10, P-33                  |
+| SEC-09         | 🟠 Media           | Abierto                                                        | plugins fs y dialog registrados sin uso y sin test de la ACL                                                                                                                      | R-049, R-050, R-204               | P-22                        |
+| SEC-10         | 🔵 Info            | Vigente (a mantener)                                           | CSP y chat sin sinks de HTML siguen igual                                                                                                                                         | —                                 | —                           |
+| SEC-11         | 🟠 Media           | Abierto                                                        | clave sin passphrase, Actions por tag móvil, release sin tests previos                                                                                                            | R-007, R-008, R-211               | P-09 (antes del primer tag) |
+| SEC-12         | 🟠 Media           | Abierto (agravado)                                             | `npm audit`: 31 avisos el 2026-11-12 (10 en julio); en producción solo zod y form-data; CI sin audit ni dependabot                                                                | R-011, R-012, R-019, R-055, R-209 | P-04, P-31a                 |
+| SEC-13         | 🟡 Baja            | Abierto                                                        | imagen como root, Letta `:latest`, base CUDA y modelo sin fijar                                                                                                                   | R-052, R-053, R-054, R-213        | P-06a, P-06b                |
+| SEC-14 (nuevo) | 🟠 Media           | Abierto                                                        | self-dev puede escribir `.github/` y hace push a `shiro/<topic>` antes del modal del PR, que solo muestra el `--stat`                                                             | R-001, R-022, R-023               | P-01, P-23                  |
+| SEC-15 (nuevo) | 🟠 Media           | Abierto                                                        | el eval de self-dev ejecuta código generado con las API keys en el entorno, y el fix-loop puede debilitar tests                                                                   | R-017, R-018                      | P-01, P-25a                 |
+| SEC-16 (nuevo) | 🟠 Media           | Abierto                                                        | el `ApprovalGate` acepta `tool:approval` de cualquier cliente y no exige `approved` booleano; el modal enfoca «Permitir una vez»                                                  | R-013, R-030                      | P-05, P-08, P-40            |
+| SEC-17 (nuevo) | 🟠 Media           | Abierto                                                        | memoria y salida de tools entran en el canal system sin delimitar (inyección indirecta persistente)                                                                               | R-016, R-020, R-036, R-043, R-044 | P-33                        |
+| BUG-01         | 🟡 Baja            | Abierto (sobrestimado: con `panic=abort` no ocurre en release) | —                                                                                                                                                                                 | R-116, R-124                      | cola P-42                   |
+| BUG-02         | 🟠                 | Abierto                                                        | —                                                                                                                                                                                 | R-014, R-015, R-037               | P-27                        |
+| BUG-03         | 🟡 Baja            | Abierto                                                        | —                                                                                                                                                                                 | R-047                             | P-23                        |
+
 ---
 
 ## Resumen ejecutivo
 
-Shiro tiene una **postura de seguridad deliberada y por encima de lo habitual** para un proyecto de 2 personas: spawn sin shell, allowlists, denylist de inmutables hardcodeada, gate de aprobación con timeout, cota de vueltas del tool-loop, `randomUUID` para las URLs de audio, CSP sin `unsafe-eval`, y chat que renderiza texto plano (sin sinks de HTML). Eso se nota y conviene mantenerlo.
+Shiro tiene una **postura de seguridad deliberada y por encima de lo habitual** para un proyecto de una persona: spawn sin shell, allowlists, denylist de inmutables hardcodeada, gate de aprobación con timeout, cota de vueltas del tool-loop, `randomUUID` para las URLs de audio, CSP sin `unsafe-eval`, y chat que renderiza texto plano (sin sinks de HTML). Eso se nota y conviene mantenerlo.
 
 Los hallazgos se concentran en **dos frentes**:
 
@@ -53,10 +80,10 @@ Bugs / calidad no-seguridad: **BUG-01..03** al final.
 
 **Ubicación:**
 
-- [`packages/core-host/src/transports/websocket-server-transport.ts:98`](packages/core-host/src/transports/websocket-server-transport.ts) — `this.httpServer.listen(options.port)` sin argumento `host` → Node bindea a **todas** las interfaces (`::` / `0.0.0.0`).
+- [`packages/core-host/src/transports/websocket-server-transport.ts:98`](../packages/core-host/src/transports/websocket-server-transport.ts) — `this.httpServer.listen(options.port)` sin argumento `host` → Node bindea a **todas** las interfaces (`::` / `0.0.0.0`).
 - No hay validación de `Origin` en el upgrade (`handleConnection`, línea 230).
-- [`packages/core-host/src/audio/audio-route.ts:47,55`](packages/core-host/src/audio/audio-route.ts) — `Access-Control-Allow-Origin: *`.
-- Handlers sin auth: `secrets:save` ([`bootstrap.ts:254`](packages/core-host/src/bootstrap.ts)), `tool:approval` ([`approval-gate.ts:45`](packages/core-host/src/pipeline/approval-gate.ts)).
+- [`packages/core-host/src/audio/audio-route.ts:47,55`](../packages/core-host/src/audio/audio-route.ts) — `Access-Control-Allow-Origin: *`.
+- Handlers sin auth: `secrets:save` ([`bootstrap.ts:254`](../packages/core-host/src/bootstrap.ts)), `tool:approval` ([`approval-gate.ts:45`](../packages/core-host/src/pipeline/approval-gate.ts)).
 
 **Escenario.** El core-host acepta cualquier WebSocket a `ws://<tu-ip>:9876/bus` sin credencial y sin comprobar de dónde viene. Como los WebSocket **no** están sujetos a same-origin para conectar, **cualquier página web que abras** mientras Shiro corre puede hacer `new WebSocket('ws://localhost:9876/bus')` y, una vez dentro:
 
@@ -84,10 +111,10 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Ubicación:**
 
-- [`services/whisper/config.py:67`](services/whisper/config.py) — `host` default `0.0.0.0`.
-- [`services/whisper/main.py:75-80`](services/whisper/main.py) — CORS `allow_origins=["*"]`.
-- [`services/whisper/main.py:137,150`](services/whisper/main.py) — `buffer = bytearray()` que crece con cada chunk **sin límite**; cada partial re-transcribe el buffer entero (coste O(n²) en CPU/GPU conforme crece).
-- [`docker-compose.yml:71`](docker-compose.yml) — `'8765:8765'` publica en `0.0.0.0` del host.
+- [`services/whisper/config.py:67`](../services/whisper/config.py) — `host` default `0.0.0.0`.
+- [`services/whisper/main.py:75-80`](../services/whisper/main.py) — CORS `allow_origins=["*"]`.
+- [`services/whisper/main.py:137,150`](../services/whisper/main.py) — `buffer = bytearray()` que crece con cada chunk **sin límite**; cada partial re-transcribe el buffer entero (coste O(n²) en CPU/GPU conforme crece).
+- [`docker-compose.yml:71`](../docker-compose.yml) — `'8765:8765'` publica en `0.0.0.0` del host.
 
 **Escenario.** El WS `/stt` acepta binario ilimitado. Un cliente (web local o host de LAN — los WS no validan CORS al conectar) puede enviar audio indefinidamente hasta agotar RAM, o mantener un buffer grande que dispara re-transcripciones caras y satura la GPU/CPU. Sin auth, es un DoS trivial contra el micro y, por extensión, contra el resto del sistema que comparte esa GPU. Coincide con la deuda ya anotada (`whisper-stt-security-deferred`).
 
@@ -105,8 +132,8 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Ubicación:**
 
-- [`packages/core/src/modules/tools/selfdev/immutable-paths.ts:37,52`](packages/core/src/modules/tools/selfdev/immutable-paths.ts) — comparación **case-sensitive**: `IMMUTABLE_FILES = new Set(['CLAUDE.md', '.gitignore'])`, prefijos literales `'config/'`, `'docs/adr/'`, `'packages/core/src/character/'`, `'safety/'`.
-- Aplicada por [`selfdev-tools.ts:127`](packages/core/src/modules/tools/selfdev/selfdev-tools.ts) (`SelfDevWriteGuard`), en tier **`auto`** (sin modal).
+- [`packages/core/src/modules/tools/selfdev/immutable-paths.ts:37,52`](../packages/core/src/modules/tools/selfdev/immutable-paths.ts) — comparación **case-sensitive**: `IMMUTABLE_FILES = new Set(['CLAUDE.md', '.gitignore'])`, prefijos literales `'config/'`, `'docs/adr/'`, `'packages/core/src/character/'`, `'safety/'`.
+- Aplicada por [`selfdev-tools.ts:127`](../packages/core/src/modules/tools/selfdev/selfdev-tools.ts) (`SelfDevWriteGuard`), en tier **`auto`** (sin modal).
 
 **Escenario.** El filesystem de Windows (donde desarrollas — ver perfil) es **case-insensitive**. `isImmutable('Config/modules.config.yaml')` → normaliza a `Config/…`, que **no** empieza por `config/` (minúscula) → devuelve `false` → el guard deja pasar la escritura, y `fs.writeFile` aterriza en el `config/` real. Lo mismo con `CLAUDE.MD`, `Docs/adr/0001-….md`, `Packages/Core/Src/Character/default.yaml`, `.ENV`. Como en self-dev las escrituras van sin modal, Shiro podría —vía un topic malicioso o una alucinación— modificar su propio carácter, un ADR, la config de permisos o `.env` dentro del worktree, y meterlo en un PR. La denylist es, según el ADR 0023, una **frontera estructural**, no un diálogo; esta fuga la degrada a "estructural salvo que uses mayúsculas".
 
@@ -124,8 +151,8 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Ubicación:**
 
-- [`packages/core/src/modules/tools/fs/fs-scope.ts:118-141`](packages/core/src/modules/tools/fs/fs-scope.ts) — en creación (`mustExist=false`) se hace `realpath` solo del **directorio padre existente**, no del componente final; devuelve `abs` (no el realpath del target).
-- [`packages/core/src/modules/tools/fs/fs-tools.ts:141-142`](packages/core/src/modules/tools/fs/fs-tools.ts) — `fs.writeFile(r.abs, …)` sigue symlinks.
+- [`packages/core/src/modules/tools/fs/fs-scope.ts:118-141`](../packages/core/src/modules/tools/fs/fs-scope.ts) — en creación (`mustExist=false`) se hace `realpath` solo del **directorio padre existente**, no del componente final; devuelve `abs` (no el realpath del target).
+- [`packages/core/src/modules/tools/fs/fs-tools.ts:141-142`](../packages/core/src/modules/tools/fs/fs-tools.ts) — `fs.writeFile(r.abs, …)` sigue symlinks.
 
 **Escenario.** El anti-symlink del `FsScope` corta el caso "un directorio intermedio es un symlink a fuera del scope". Pero si el **archivo destino ya existe como symlink** dentro del scope apuntando fuera (p.ej. `~/shiro-workspace/notas.txt` → `C:\Windows\…\algo`), el padre resuelve dentro del scope (OK) y `writeFile` **sigue** el symlink, escribiendo fuera del sandbox. Requiere que alguien haya plantado el symlink antes; en el modelo local es bajo, pero es un hueco real en una defensa que el código presenta como completa.
 
@@ -139,9 +166,9 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Ubicación:**
 
-- [`packages/core/src/modules/tools/shell/shell-tool.ts:87-96`](packages/core/src/modules/tools/shell/shell-tool.ts) — `ShellAllowlist.check` hace `pattern.test(argsStr)` con `argsStr = cmdArgs.join(' ')`.
+- [`packages/core/src/modules/tools/shell/shell-tool.ts:87-96`](../packages/core/src/modules/tools/shell/shell-tool.ts) — `ShellAllowlist.check` hace `pattern.test(argsStr)` con `argsStr = cmdArgs.join(' ')`.
 
-**Escenario / por qué importa.** Hoy **no es explotable**: el shell del usuario por defecto es solo git de lectura ([`modules.config.yaml:180`](config/modules.config.yaml)), el push de self-dev está bien anclado (`shiro/[A-Za-z0-9._-]+$`), y en self-dev los args los fija el orquestador, no el LLM. Pero el diseño tiene dos aristas que muerden cuando **amplíes** el allowlist:
+**Escenario / por qué importa.** Hoy **no es explotable**: el shell del usuario por defecto es solo git de lectura ([`modules.config.yaml:180`](../config/modules.config.yaml)), el push de self-dev está bien anclado (`shiro/[A-Za-z0-9._-]+$`), y en self-dev los args los fija el orquestador, no el LLM. Pero el diseño tiene dos aristas que muerden cuando **amplíes** el allowlist:
 
 1. **Args unidos por espacio**: la regex razona sobre tokens separados por espacio, pero los argv reales van separados. Un argumento que contenga un espacio desincroniza lo que valida la regex de lo que se ejecuta.
 2. **Sin anclar al final**: un patrón como `'^push origin shiro/'` (sin `$`) matchearía `push origin shiro/x --force …`. El `$` del ejemplo actual es lo que lo salva; nada en el código lo obliga.
@@ -154,9 +181,9 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Severidad:** 🟠 Media · **Área:** secretos / observabilidad
 
-**Ubicación:** [`packages/core/src/core/logger.ts:123`](packages/core/src/core/logger.ts) — `safeStringify` es `JSON.stringify` pelado; sin lista de claves sensibles.
+**Ubicación:** [`packages/core/src/core/logger.ts:123`](../packages/core/src/core/logger.ts) — `safeStringify` es `JSON.stringify` pelado; sin lista de claves sensibles.
 
-**Escenario.** Muchos sitios loguean objetos de error: `logger.error('…', { err })` en el transport, el pipeline, los módulos LLM/TTS, etc. Los errores del SDK de Anthropic/ElevenLabs y de `undici` a veces incluyen detalles del request (URL, a veces cabeceras). Con `LOG_LEVEL=debug` se serializa aún más. Una API key o un `Authorization: Bearer …` podría acabar en stdout / archivo de log (el sidecar drena stdout/stderr al log de Tauri, [`lib.rs:163-167`](packages/desktop/src-tauri/src/lib.rs), que persiste a disco). Nota: el código **propio** es cuidadoso (nunca loguea el valor de las keys; `loadSecretsEnv` devuelve solo nombres), así que el riesgo es indirecto vía objetos de terceros.
+**Escenario.** Muchos sitios loguean objetos de error: `logger.error('…', { err })` en el transport, el pipeline, los módulos LLM/TTS, etc. Los errores del SDK de Anthropic/ElevenLabs y de `undici` a veces incluyen detalles del request (URL, a veces cabeceras). Con `LOG_LEVEL=debug` se serializa aún más. Una API key o un `Authorization: Bearer …` podría acabar en stdout / archivo de log (el sidecar drena stdout/stderr al log de Tauri, [`lib.rs:163-167`](../packages/desktop/src-tauri/src/lib.rs), que persiste a disco). Nota: el código **propio** es cuidadoso (nunca loguea el valor de las keys; `loadSecretsEnv` devuelve solo nombres), así que el riesgo es indirecto vía objetos de terceros.
 
 **Remediación.** Un serializador con redacción en el logger: enmascarar `MANAGED_KEYS`, y cualquier valor que matchee `sk-…`/`Bearer …`/`api[_-]?key`. Barato y cubre toda la superficie de una.
 
@@ -166,7 +193,7 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Severidad:** 🟡 Baja · **Área:** secretos
 
-**Ubicación:** [`packages/core-host/src/secrets/secrets-file.ts:105`](packages/core-host/src/secrets/secrets-file.ts) — `writeFileSync(path, after, { mode: 0o600 })`.
+**Ubicación:** [`packages/core-host/src/secrets/secrets-file.ts:105`](../packages/core-host/src/secrets/secrets-file.ts) — `writeFileSync(path, after, { mode: 0o600 })`.
 
 **Escenario.** En Windows los bits de modo POSIX no se traducen a ACL de NTFS; el `0o600` no restringe nada. El archivo hereda la ACL del `app_local_data_dir` (perfil de usuario), que **normalmente** ya es user-only, así que en la práctica está bien — pero el `0o600` da una falsa sensación de blindaje y no es la defensa que aparenta.
 
@@ -178,7 +205,7 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Severidad:** 🟡 Baja (local) · **Área:** datos en reposo
 
-**Ubicación:** [`local-memory.ts`](packages/core/src/modules/memory/local-memory.ts) (SQLite WAL, `data/memory.db`), Letta; turnos `role:'tool'` con `metadata.args`/`result` en [`tool-loop.ts:77-85`](packages/core-host/src/pipeline/tool-loop.ts).
+**Ubicación:** [`local-memory.ts`](../packages/core/src/modules/memory/local-memory.ts) (SQLite WAL, `data/memory.db`), Letta; turnos `role:'tool'` con `metadata.args`/`result` en [`tool-loop.ts:77-85`](../packages/core-host/src/pipeline/tool-loop.ts).
 
 **Escenario.** Toda la conversación y las acciones (incl. `args` de `fs:write` con un `preview` del contenido, y salidas de shell) se guardan sin cifrar. En local es aceptable, pero: (a) `data/memory.db` hereda permisos del cwd; (b) si alguna vez pasa por ahí algo sensible (una key que el usuario pegó en el chat, un archivo con secretos leído por `fs:read`), queda en claro y se sincroniza a Letta. `.gitignore` ya cubre `data/`/`*.db` (bien).
 
@@ -192,8 +219,8 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Ubicación:**
 
-- [`packages/desktop/src-tauri/src/lib.rs:58-60`](packages/desktop/src-tauri/src/lib.rs) — `.plugin(tauri_plugin_fs::init())`, `shell`, `dialog` registrados.
-- [`packages/desktop/src-tauri/capabilities/default.json`](packages/desktop/src-tauri/capabilities/default.json) — no concede ninguno de sus permisos (esa ausencia es lo único que los deniega).
+- [`packages/desktop/src-tauri/src/lib.rs:58-60`](../packages/desktop/src-tauri/src/lib.rs) — `.plugin(tauri_plugin_fs::init())`, `shell`, `dialog` registrados.
+- [`packages/desktop/src-tauri/capabilities/default.json`](../packages/desktop/src-tauri/capabilities/default.json) — no concede ninguno de sus permisos (esa ausencia es lo único que los deniega).
 
 **Escenario.** El equipo lo documenta bien: en Tauri 2 cada plugin expone sus comandos IPC al webview, y sin permiso en la capability la ACL los rechaza. El riesgo es la **fragilidad**: una sola línea de más (`"shell:allow-execute"`, `"fs:allow-write-file"`) volvería esos comandos invocables desde **cualquier** código del webview. Combinado con SEC-01 (una web puede hablarle al bus, no al IPC de Tauri directamente — pero el día que el hito agentic los active, la superficie crece), conviene un candado explícito.
 
@@ -209,7 +236,7 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Severidad:** 🔵 Info · **Área:** desktop/Tauri
 
-**Observación (positivo).** La CSP ([`tauri.conf.json:31`](packages/desktop/src-tauri/tauri.conf.json)) es razonable: `default-src 'self'`, `script-src 'self' 'wasm-unsafe-eval'` (sin `unsafe-eval` ni `unsafe-inline` para scripts), `connect-src` acotado a `localhost`/`ipc`. El único aflojado es `style-src 'unsafe-inline'` (común, bajo riesgo). El chat **no** usa `dangerouslySetInnerHTML`, `innerHTML`, `eval` ni un renderer de markdown (grep limpio en `packages/desktop/src`) — los mensajes del LLM se pintan como texto plano, que React escapa. Buena defensa contra XSS del texto que genera el modelo.
+**Observación (positivo).** La CSP ([`tauri.conf.json:31`](../packages/desktop/src-tauri/tauri.conf.json)) es razonable: `default-src 'self'`, `script-src 'self' 'wasm-unsafe-eval'` (sin `unsafe-eval` ni `unsafe-inline` para scripts), `connect-src` acotado a `localhost`/`ipc`. El único aflojado es `style-src 'unsafe-inline'` (común, bajo riesgo). El chat **no** usa `dangerouslySetInnerHTML`, `innerHTML`, `eval` ni un renderer de markdown (grep limpio en `packages/desktop/src`) — los mensajes del LLM se pintan como texto plano, que React escapa. Buena defensa contra XSS del texto que genera el modelo.
 
 **Recomendación.** Mantenerlo. Si algún día añades render de markdown al chat, sanitiza (p.ej. `rehype-sanitize`) — sería el punto donde el texto del LLM podría inyectar HTML.
 
@@ -221,7 +248,7 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Ubicación:**
 
-- [`.github/workflows/release.yml:70`](.github/workflows/release.yml) — `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''` (passphrase vacía, documentada).
+- [`.github/workflows/release.yml:70`](../.github/workflows/release.yml) — `TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''` (passphrase vacía, documentada).
 - Actions por tag, no por SHA: `tauri-apps/tauri-action@v0`, `dtolnay/rust-toolchain@stable`, `swatinem/rust-cache@v2`, `actions/*@v4`.
 - `permissions: contents: write` a nivel workflow.
 
@@ -255,7 +282,7 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Escenario.** La mayoría es tooling de desarrollo (vitest/vite/esbuild/pkg) — impacto real bajo salvo que expongas el dev server o la UI de vitest. Las dos que importan para producción son **transitivas de los SDKs HTTP** (`form-data`, `undici`): revisá por dónde entran (`npm ls form-data undici`) y si el binario empaquetado las incluye.
 
-**Remediación.** `npm audit fix`; bump de `vitest`/`vite` (semver-major, requiere probar); confirmar resolución de `form-data`/`undici`. **Añadir escaneo a CI**: hoy [`ci.yml`](.github/workflows/ci.yml) no corre `npm audit` ni CodeQL ni tiene dependabot.
+**Remediación.** `npm audit fix`; bump de `vitest`/`vite` (semver-major, requiere probar); confirmar resolución de `form-data`/`undici`. **Añadir escaneo a CI**: hoy [`ci.yml`](../.github/workflows/ci.yml) no corre `npm audit` ni CodeQL ni tiene dependabot.
 
 ---
 
@@ -263,7 +290,7 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 **Severidad:** 🟡 Baja · **Área:** Docker
 
-**Ubicación:** [`services/whisper/Dockerfile`](services/whisper/Dockerfile) — sin `USER`, corre como root; [`docker-compose.yml:26`](docker-compose.yml) — `letta:latest` (el propio compose ya tiene un TODO para pinar).
+**Ubicación:** [`services/whisper/Dockerfile`](../services/whisper/Dockerfile) — sin `USER`, corre como root; [`docker-compose.yml:26`](../docker-compose.yml) — `letta:latest` (el propio compose ya tiene un TODO para pinar).
 
 **Remediación.** Añadir un usuario no-root al Dockerfile; pinar `letta` y la base CUDA a un digest. Bajo, contenedor local.
 
@@ -271,9 +298,9 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 
 ## Bugs y calidad (no-seguridad)
 
-- **BUG-01 — `Mutex::lock().unwrap()` en el sidecar.** [`lib.rs:156,189`](packages/desktop/src-tauri/src/lib.rs): si un hilo paniquea sosteniendo el lock, el `unwrap()` sobre un mutex envenenado paniquea la app al matar el sidecar. Usar `lock().unwrap_or_else(|e| e.into_inner())` o manejar el poison. Robustez, no seguridad.
+- **BUG-01 — `Mutex::lock().unwrap()` en el sidecar.** [`lib.rs:156,189`](../packages/desktop/src-tauri/src/lib.rs): si un hilo paniquea sosteniendo el lock, el `unwrap()` sobre un mutex envenenado paniquea la app al matar el sidecar. Usar `lock().unwrap_or_else(|e| e.into_inner())` o manejar el poison. Robustez, no seguridad.
 
-- **BUG-02 — El modal de aprobación trunca los args a 200 chars.** [`tool-loop.ts:47`](packages/core-host/src/pipeline/tool-loop.ts) (`previewArgs`): para `fs:write`/`shell:exec` el humano aprueba **sin ver** el contenido/args completos. Gap de UX-seguridad: estás autorizando algo que no ves entero. Considerá mostrar el contenido completo (o un resumen mejor) para tier `confirm`.
+- **BUG-02 — El modal de aprobación trunca los args a 200 chars.** [`tool-loop.ts:47`](../packages/core-host/src/pipeline/tool-loop.ts) (`previewArgs`): para `fs:write`/`shell:exec` el humano aprueba **sin ver** el contenido/args completos. Gap de UX-seguridad: estás autorizando algo que no ves entero. Considerá mostrar el contenido completo (o un resumen mejor) para tier `confirm`.
 
 - **BUG-03 — `.env` anidados no protegidos por la denylist.** Ver SEC-03: solo `.env`/`.env.*` en la raíz del repo se marcan inmutables; `packages/*/​.env` o `secrets.env` no. Cerralo junto con SEC-03.
 
@@ -310,3 +337,5 @@ _Deuda si sale a red:_ esto pasa a ser el hallazgo #1 a resolver **antes** de co
 ## Seguimiento propuesto (ADR)
 
 Varios hallazgos (SEC-01, SEC-02, y en parte SEC-08/-09) no son "bugs" sino una **decisión de modelo de confianza**: _"mientras el despliegue sea local y de un solo usuario, aceptamos WS/STT sin autenticar"_. Eso merece un ADR que lo deje explícito con su **trigger de reversión** (el primer cliente que no sea el desktop local en la misma máquina). Se propone `docs/adr/0025-modelo-de-confianza-local-y-superficie-de-red.md` (borrador aparte, en estado `Proposed` hasta que lo revises).
+
+> **Nota 2026-11-12**: ese ADR se escribió (0025), quedó Superseded by [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) sin implementarse, y 0027 tampoco está implementado. Ver la tabla de estado al principio.

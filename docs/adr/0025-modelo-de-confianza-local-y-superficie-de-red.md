@@ -1,6 +1,6 @@
 # ADR 0025: Modelo de confianza local y superficie de red
 
-- **Status**: Superseded by [0027](0027-autenticacion-token-bus-stt-multicliente.md)
+- **Status**: Superseded by [0027](0027-autenticacion-token-bus-stt-multicliente.md) (nunca implementado)
 - **Fecha**: 2026-07-15
 - **Decidido por**: Pipelol (pendiente de acuerdo con el compañero)
 
@@ -118,3 +118,9 @@ bridge Arduino/IoT), este ADR se supersede por otro que introduzca
   EventBus.
 - [ADR 0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) —
   multi-device ya diferido en el eje TTS/cliente-activo.
+
+## Nota 2026-11-12
+
+- Este ADR nunca se implementó: el bus, `/audio`, Whisper y Letta siguen escuchando en todas las interfaces, sin Origin ni tope de buffer. Sus puntos los absorbe [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md), que tampoco está implementado. El plan de mejora propone hacer ya la parte local (bind a loopback, Origin y topes: P-05, P-06a, P-06b) sin esperar a la estación.
+- Errata: en Tauri 2 sobre Windows el origen del webview es `http://tauri.localhost`, no `tauri://localhost` (a confirmar con el binario en P-05).
+- «Pendiente de acuerdo con el compañero»: el proyecto lo mantiene hoy una persona; no queda acuerdo pendiente.

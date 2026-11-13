@@ -1,9 +1,28 @@
 # Contribuir a Proyecto Shiro
 
-Guía corta para el equipo. Para el flujo de ramas/commits y los checks
-previos al push, ver [`CLAUDE.md`](CLAUDE.md) y la sección
+Guía corta para contribuir. El proyecto lo mantiene una persona, con
+agentes de IA como apoyo; las instrucciones para agentes están en
+[`CLAUDE.md`](CLAUDE.md). Los checks previos al push están en la sección
 "[Cómo correr los tests y checks](README.md#cómo-correr-los-tests-y-checks)"
 del README.
+
+## Ramas, PRs y versiones
+
+- `develop` es la única rama de integración. Todo entra por PR pequeño con
+  base `develop`; la rama se borra al fusionar.
+- Las versiones son tags `vX.Y.Z` sobre `develop`. `main` no es una rama
+  "estable": solo avanza al publicar un tag. Hoy va unos 260 commits por
+  detrás porque aún no se ha publicado ninguna versión.
+- Sin issue tracker: el seguimiento son las casillas del
+  [plan de mejora](docs/plan-mejora-2026-11.md), la tabla
+  [Roadmap](README.md#roadmap) y la tabla SEC-xx de
+  [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md).
+- PRs de agentes o de self-dev: citan el lote L-xxx y los R-xxx que cierran,
+  diff de 300 líneas como máximo, test rojo→verde y checks en verde; como
+  mucho 2 PRs de agente abiertos a la vez.
+- Un ADR nuevo va en un PR `docs:` propio, fusionado antes que su código; la
+  enmienda de un ADR existente viaja con el código. Detalle en
+  [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md).
 
 ## Firma del auto-updater (Tauri)
 
@@ -31,6 +50,8 @@ en `tauri.conf.json` → `plugins.updater.pubkey`.
 > ⚠️ Si regeneras la clave, **todos los binarios ya instalados dejan de
 > poder auto-actualizarse** (la firma vieja ya no valida) — los usuarios
 > tendrán que reinstalar a mano una vez. Regenera solo si es necesario.
+> Hoy el coste es nulo: el v0.1.0 nunca se publicó, así que el
+> auto-updater no ha servido ninguna actualización.
 
 ### Secrets de GitHub Actions (para el release CI)
 
@@ -53,8 +74,8 @@ del secret.
 > firma sin segundo factor — quien obtenga el archivo de la clave puede forjar
 > actualizaciones que el auto-updater instala solo. Está anotado como deuda en
 > [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md);
-> regenerar la clave **con** passphrase es la remediación recomendada antes de
-> distribuir el binario a terceros.
+> regenerar la clave **con** passphrase es obligatorio antes del próximo tag
+> (checklist pre-release).
 
 Para volcar la privada al portapapeles y pegarla en el secret:
 
@@ -78,6 +99,19 @@ npm run tauri:build -w @proyecto-shiro/desktop
 
 Sin esas env vars, el build normal funciona pero **no** produce los
 artefactos firmados del updater (Tauri lo avisa con un warning).
+
+## Checklist pre-release (antes del primer tag)
+
+El único release, v0.1.0, sigue en borrador y el auto-updater nunca ha
+servido una actualización. No se publica ningún tag nuevo hasta cumplir todo
+esto; hoy se comprueba a mano (llevarlo al CI es trabajo del plan de mejora,
+sin implementar):
+
+- [ ] El CI construye el sidecar (`build:sidecar`) y el binario de Tauri.
+- [ ] El tag coincide con la versión de `tauri.conf.json` y `Cargo.toml`.
+- [ ] Los tests pasan antes de firmar (hoy `release.yml` no los corre).
+- [ ] La clave del updater está rotada, con passphrase, y custodiada.
+- [ ] Hay un `LICENSE` en la raíz.
 
 ## Qué NO se commitea
 

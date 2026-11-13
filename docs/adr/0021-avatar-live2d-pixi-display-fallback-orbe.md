@@ -271,3 +271,9 @@ Con esto el hito **Avatar Live2D queda completo** (render + fallback + lip-sync 
 - [Cubism SDK for Web](https://www.live2d.com/sdk/download/web/) — descarga oficial del SDK.
 - [pixi-live2d-display](https://github.com/guansss/pixi-live2d-display) — wrapper.
 - [`character/characters/default.yaml`](../../packages/core/src/character/characters/default.yaml) — fuente de `avatar_expression` por emoción.
+
+## Nota 2026-11-12
+
+- [ADR 0028](0028-avatar-motores-y-manifiesto.md) (Accepted, sin implementar; integración aplazada) sustituirá el selector Live2D/orbe de §3 por un selector de motores con manifiesto.
+- La RTX 5080 de §4 no existe: subir a 60 fps queda para cuando haya una GPU con más VRAM.
+- El supuesto «proyecto de uso personal» se revisará antes de distribuir un binario con avatar (licencia y avisos de terceros: ADR 0030 propuesto en el plan de mejora, P-20).
