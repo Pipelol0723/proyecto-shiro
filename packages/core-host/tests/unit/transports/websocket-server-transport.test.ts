@@ -1,3 +1,4 @@
+import { networkInterfaces } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Logger, serializeEnvelope } from '@proyecto-shiro/core';
 import { WebSocket, type RawData } from 'ws';
@@ -22,6 +23,15 @@ function rawToString(data: RawData): string {
   return Buffer.from(data).toString('utf8');
 }
 
+/** Primera IPv4 de la máquina que no es loopback, si la hay. */
+function findExternalIPv4(): string | undefined {
+  for (const addresses of Object.values(networkInterfaces())) {
+    const found = addresses?.find((a) => a.family === 'IPv4' && !a.internal);
+    if (found) return found.address;
+  }
+  return undefined;
+}
+
 describe('WebSocketServerTransport', () => {
   const cleanup: (() => void | Promise<void>)[] = [];
 
@@ -38,6 +48,43 @@ describe('WebSocketServerTransport', () => {
     await t.ready();
     expect(t.id).toBe('websocket-server');
   });
+
+  it('escucha en 127.0.0.1 por defecto', async () => {
+    const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+    expect(t.address).toBe('127.0.0.1');
+  });
+
+  it('respeta un host explícito', async () => {
+    const t = new WebSocketServerTransport({ port: 0, host: '0.0.0.0', logger: makeLogger() });
+    cleanup.push(() => t.close());
+    await t.ready();
+    expect(t.address).toBe('0.0.0.0');
+  });
+
+  // Sin interfaz no-loopback en este runner no hay por dónde probarlo.
+  const externalIp = findExternalIPv4();
+  it.skipIf(externalIp === undefined)(
+    'no acepta conexiones por una IP no-loopback de la máquina',
+    { timeout: 15_000 },
+    async () => {
+      const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+      cleanup.push(() => t.close());
+      await t.ready();
+
+      const client = new WebSocket(`ws://${externalIp ?? ''}:${t.port}/bus`);
+      cleanup.push(() => {
+        client.terminate();
+      });
+      const outcome = await new Promise<string>((resolve) => {
+        client.once('open', () => resolve('open'));
+        client.once('error', (err: NodeJS.ErrnoException) => resolve(err.code ?? err.message));
+      });
+      expect(outcome).toBe('ECONNREFUSED');
+      expect(t.clientCount).toBe(0);
+    },
+  );
 
   it('ready() resuelve cuando el server está escuchando', async () => {
     const t = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
