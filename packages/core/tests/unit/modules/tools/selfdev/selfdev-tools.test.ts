@@ -31,6 +31,7 @@ function ctx(): ToolContext {
 describe('parseSelfDevConfig', () => {
   it('aplica defaults con config vacía', () => {
     const c = parseSelfDevConfig({});
+    expect(c.enabled).toBe(false);
     expect(c.worktree_path).toBe('../shiro-selfdev');
     expect(c.branch_prefix).toBe('shiro/');
     expect(c.eval_commands).toContain('test');
