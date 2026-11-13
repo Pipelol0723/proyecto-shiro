@@ -4,7 +4,9 @@ node_modules/
 
 # Build
 dist/
-build/
+# Anclado a la raíz: sin ancla, `build/` ignoraría cualquier carpeta así llamada,
+# incluida una de código futura (p. ej. `src/build/`).
+/build/
 *.tsbuildinfo
 
 # Runtime
@@ -83,11 +85,16 @@ coverage/
 # Modelos pesados (Whisper, etc.)
 *.bin
 *.gguf
-models/
+# Anclado a la raíz (igual que `/build/` y `/data/`): `models/` sin ancla ignoraría
+# también `src/models/`.
+/models/
 
 # WAL local de memoria (LocalMemory SQLite). Persistente por dev y máquina;
 # nunca se commitea. Ver ADR 0017.
-data/
+# Anclado: `/data/` en la raíz y la carpeta que crea `core-host` al arrancar con
+# `npm run -w` (el cwd es el del paquete y `./data/memory.db` se resuelve ahí).
+/data/
+/packages/core-host/data/
 *.db
 *.db-journal
 *.db-wal
