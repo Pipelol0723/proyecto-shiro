@@ -710,6 +710,7 @@ PR2, en `packages/desktop/tests/`:
 
 - **Objetivo.** Que AGENTS.md no vuelva a divergir de CLAUDE.md, que cada encargo a un agente tenga la misma forma y que el repo no tenga ramas muertas que confundan a agentes y humanos.
 - **Qué cierra.** La parte de AGENTS.md de L-DOC-03 (dentro de P-03a) y L-TOOL-03 (R-234, R-235, R-236, R-237, R-238, R-219; R-217 la cierra el ADR 0029 de los otros agentes).
+- **Estado (2026-11-13).** PR 1 **hecho** en el PR #137: con él queda completo P-03a. Diferencias con lo escrito abajo: el extracto son las secciones de reglas y comandos de CLAUDE.md, marcadas en dos tramos («Cuándo escribir un ADR» y de «Convenciones de Git» a «Idioma»); la cabecera fija dice además qué es el proyecto y qué leer antes, sin datos que caduquen; el script rechaza un enlace a un ancla que no exista en el extracto e ignora marcadores dentro de bloques de código; `--check` ignora solo la diferencia entre CRLF y LF; y los tests son 16. En CLAUDE.md se enlazó el plan en las reglas de PR y se quitó un dato caduco. Pendientes, recortables: la plantilla de encargo (PR 2), el `.gitignore` (PR 3) y las ramas locales.
 - **PRs (3) y la limpieza de ramas:**
   1. `chore: genera AGENTS.md desde CLAUDE.md con scripts/sync-agents-md.mjs`
   2. `docs: plantilla de encargo para agentes en CONTRIBUTING`
@@ -792,6 +793,8 @@ Para no pisar al grupo que sincroniza la documentación con el ADR 0029, estas l
 | 4. Self-dev apagado con test                                                                                 | `wire-selfdev.test.ts` y `selfdev-default-config.test.ts`                                                                                                                                                           | P-01               |
 | 5. Conexión visible y voz que no se corta                                                                    | Pruebas manuales de P-07a (parar y arrancar el core-host) y de P-07b (cambiar de pantalla con la voz sonando)                                                                                                       | P-07a, P-07b       |
 | 6. AGENTS.md generado desde CLAUDE.md (si entra en F1, §2.2 #14)                                             | `npm run agents:check` sale con 0                                                                                                                                                                                   | P-03               |
+
+**Estado (2026-11-13).** Los seis puntos se cumplen: el 6, con el PR #137. De la Fase 1 quedan solo sus ítems recortables, P-03b y P-09.
 
 ### 3.16 Cifras de la Fase 1
 
