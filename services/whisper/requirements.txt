@@ -3,7 +3,7 @@ faster-whisper==1.1.1
 # dependencia; lo fijamos explícito para que el contenedor arranque.
 requests==2.33.1
 fastapi==0.115.6
-uvicorn[standard]==0.34.0
+uvicorn[standard]==0.54.0
 websockets==14.1
 numpy==2.2.1
 pytest==9.2.0
