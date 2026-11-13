@@ -37,12 +37,7 @@ import workletUrl from './pcm-capture-processor.js?url';
 const TARGET_SAMPLE_RATE = 16_000;
 
 export type MicrophonePTTState =
-  | 'idle'
-  | 'requesting'
-  | 'recording'
-  | 'finalizing'
-  | 'error'
-  | 'unsupported';
+  'idle' | 'requesting' | 'recording' | 'finalizing' | 'error' | 'unsupported';
 
 export interface UseMicrophonePTTOptions {
   /** EventBus del cliente — los eventos `stt:*` se publican aquí. */

@@ -102,8 +102,7 @@ export class Logger {
     const payloadStr = payload ? ` ${safeStringify(payload)}` : '';
     const line = `${timestamp} ${levelTag} ${ctxStr}${msg}${payloadStr}`;
 
-    const sink = console[level];
-    sink(line);
+    console[level](line);
   }
 }
 
