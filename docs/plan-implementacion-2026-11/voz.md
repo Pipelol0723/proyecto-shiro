@@ -18,6 +18,7 @@ Pipe quiere diseñar una voz nueva para Shiro y pregunta si se puede crear una v
 - **Modelos rápidos:** se prueban también (`eleven_flash_v2_5` y `eleven_v4_turbo`, §5.7).
 - **Cómo se opera:** el agente usa la API o el navegador de Pipe, lo que le resulte más fácil.
 - **Proveedor nuevo:** adoptar Gemini u otro exigiría un ADR nuevo y un módulo nuevo; eso no está decidido.
+- **Resultado de la primera prueba (2026-11-13):** el dueño escuchó las tres voces diseñadas de Gemini y eligió la tercera, «Precisa». La propuesta de adoptarla está en [ADR 0034](../adr/0034-tts-gemini-voz-disenada.md), pendiente de su visto bueno. El ejercicio reducido de ElevenLabs no se ha hecho.
 
 La comparativa de opciones (gratis, pago y local) está en [voz-alternativas.md](voz-alternativas.md).
 
