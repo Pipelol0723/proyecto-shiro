@@ -26,10 +26,13 @@
 #   curl http://127.0.0.1:8765/health          # Whisper
 #
 # Subir Letta de versión: es un cambio con riesgo para los datos. Antes,
-# copia de seguridad del volumen `letta_pgdata`; después cambia el digest
-# de abajo, `docker compose pull letta`, `docker compose up -d letta` y una
-# prueba de humo (health y que el agente y sus recuerdos siguen ahí). Súbela
-# junto al SDK `@letta-ai/letta-client`. Nunca `docker compose down -v`.
+# copia de seguridad del volumen `letta_pgdata` con Letta parado
+# (`docker compose stop letta`) o un volcado con `pg_dump`; después cambia el
+# digest de abajo, `docker compose pull letta`, `docker compose up -d letta` y
+# una prueba de humo (health y que el agente y sus recuerdos siguen ahí).
+# Una versión nueva puede migrar el esquema: volver al digest anterior no lo
+# deshace, la vuelta atrás es restaurar la copia. Súbela junto al SDK
+# `@letta-ai/letta-client`. Nunca `docker compose down -v`.
 
 services:
   letta:

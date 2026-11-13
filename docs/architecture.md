@@ -8,10 +8,11 @@ detalle de **por qué** se decidió algo, ver [`adr/`](adr/).
 > documento describe lo que hay construido (hitos 1 a 11); lo planificado
 > (estación holográfica, multi-cliente) se marca como tal.
 >
-> **Seguridad**: hoy el bus, `/audio`, Whisper y Letta escuchan en todas las
-> interfaces, sin token ni Origin. La decisión vigente es
-> [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md), Accepted y
-> sin implementar. Estado de cada hallazgo en la tabla SEC-xx de
+> **Seguridad**: el bus y `/audio` escuchan solo en `127.0.0.1` y validan el
+> `Origin`, y compose publica Letta y Whisper solo en `127.0.0.1`; todo sigue
+> sin token, y Whisper sin topes ni validación de `Origin`. La decisión vigente
+> es [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md), Accepted
+> y en curso. Estado de cada hallazgo en la tabla SEC-xx de
 > [`security-review-2026-07.md`](security-review-2026-07.md). Ver
 > [Seguridad y modelo de confianza](#seguridad-y-modelo-de-confianza).
 
