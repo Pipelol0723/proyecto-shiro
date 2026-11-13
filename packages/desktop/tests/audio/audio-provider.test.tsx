@@ -21,10 +21,14 @@ import { BusProvider } from '../../src/bus-context';
 import { CompanionProvider } from '../../src/state/companion-context';
 import { AudioProvider } from '../../src/audio/audio-context';
 import { useAudio } from '../../src/audio/use-audio';
+import { AvatarScreen } from '../../src/screens/Avatar/AvatarScreen';
 import { ConversationScreen } from '../../src/screens/Conversation/ConversationScreen';
 
+// El Avatar mockeado deja ver qué `audioElement` recibe (riesgo B11).
 vi.mock('../../src/components/Avatar', () => ({
-  Avatar: () => <div data-testid="avatar" />,
+  Avatar: ({ audioElement }: { audioElement?: unknown }) => (
+    <div data-testid="avatar" data-has-audio={audioElement ? 'yes' : 'no'} />
+  ),
 }));
 
 class FakeAudio {
@@ -153,9 +157,34 @@ describe('AudioProvider', () => {
     });
   });
 
-  it('useAudio fuera de AudioProvider lanza un error claro', () => {
-    expect(() => renderHook(() => useAudio())).toThrow(
-      'useAudio debe usarse dentro de AudioProvider',
+  it('AvatarScreen dentro de AudioProvider pasa el audio que suena al Avatar', async () => {
+    const bus = makeBus();
+    render(
+      <BusProvider bus={bus}>
+        <CompanionProvider>
+          <AudioProvider>
+            <AvatarScreen />
+          </AudioProvider>
+        </CompanionProvider>
+      </BusProvider>,
     );
+    expect(screen.getByTestId('avatar').getAttribute('data-has-audio')).toBe('no');
+
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO);
+    });
+    expect(screen.getByTestId('avatar').getAttribute('data-has-audio')).toBe('yes');
+  });
+
+  it('useAudio fuera de AudioProvider lanza un error claro', () => {
+    // React vuelca el error esperado a stderr; se silencia para no ensuciar vitest.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() => renderHook(() => useAudio())).toThrow(
+        'useAudio debe usarse dentro de AudioProvider',
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -444,4 +444,61 @@ describe('useTtsPlayback', () => {
     expect(window.localStorage.getItem('shiro:tts:muted')).toBe('true');
     window.localStorage.removeItem('shiro:tts:muted');
   });
+
+  it('desmontar el hook con un audio sonando emite tts:audio-ended para no dejar speaking colgado', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (p) => {
+      ended.push(p);
+    });
+    const { unmount } = renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO_A);
+    });
+
+    unmount();
+
+    await waitFor(() => {
+      expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+    });
+  });
+
+  it('si play() rechaza y además salta error, emite un solo tts:audio-ended', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    audio.play = () => Promise.reject(new Error('NotSupportedError'));
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (p) => {
+      ended.push(p);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO_A);
+    });
+    act(() => {
+      audio.trigger('error');
+    });
+
+    await waitFor(() => {
+      expect(ended).toHaveLength(1);
+    });
+  });
 });
