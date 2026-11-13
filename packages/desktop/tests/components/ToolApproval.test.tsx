@@ -8,7 +8,8 @@
  */
 
 import { render, renderHook, act, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { ReactNode } from 'react';
 import { EventBus, InProcessTransport, Logger, type EventMap } from '@proyecto-shiro/core';
 import { BusProvider } from '../../src/bus-context';
@@ -122,5 +123,66 @@ describe('ToolApprovalModal', () => {
 
     expect(approvals[0]).toMatchObject({ requestId: 'r1', approved: false });
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('ToolApprovalModal — seguro por defecto (R-030)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function openModal(bus: EventBus<EventMap>): Promise<EventMap['tool:approval'][]> {
+    const approvals: EventMap['tool:approval'][] = [];
+    bus.on('tool:approval', (p) => {
+      approvals.push(p);
+    });
+    render(<ToolApprovalModal />, { wrapper: wrapper(bus) });
+    await act(async () => {
+      await bus.emit('tool:requires-approval', REQ);
+    });
+    return approvals;
+  }
+
+  it('el foco inicial está en Cancelar', async () => {
+    await openModal(makeBus());
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancelar' }));
+  });
+
+  it('Space al abrir no emite approved:true', async () => {
+    const user = userEvent.setup();
+    const approvals = await openModal(makeBus());
+    await user.keyboard(' ');
+    expect(approvals.filter((a) => a.approved)).toHaveLength(0);
+  });
+
+  it('Enter al abrir no emite approved:true', async () => {
+    const user = userEvent.setup();
+    const approvals = await openModal(makeBus());
+    await user.keyboard('{Enter}');
+    expect(approvals.filter((a) => a.approved)).toHaveLength(0);
+  });
+
+  it('Enter y Space en Permitir antes de 500 ms no aprueban', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const approvals = await openModal(makeBus());
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Permitir una vez' }));
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(approvals.filter((a) => a.approved)).toHaveLength(0);
+  });
+
+  it('tras 500 ms, Tab hasta Permitir y Enter sí aprueba', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const approvals = await openModal(makeBus());
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Permitir una vez' }));
+    await user.keyboard('{Enter}');
+    expect(approvals.filter((a) => a.approved)).toHaveLength(1);
   });
 });
