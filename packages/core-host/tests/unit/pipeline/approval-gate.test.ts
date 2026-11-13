@@ -69,6 +69,29 @@ describe('createApprovalGate', () => {
     gate.dispose();
   });
 
+  // El payload llega de un cliente por el bus: nada garantiza que sea booleano.
+  it.each([
+    ['la cadena "false"', 'false'],
+    ['la cadena "true"', 'true'],
+    ['el número 1', 1],
+    ['un objeto', {}],
+  ])('no aprueba si approved es %s', async (_label, value) => {
+    const bus = makeBus();
+    const gate = createApprovalGate(bus, new Logger('error'));
+    const captured = captureRequestId(bus);
+
+    const decision = gate.requestApproval(req);
+    const requestId = await captured;
+    await bus.emit('tool:approval', {
+      requestId,
+      approved: value as unknown as boolean,
+      userId: 'me',
+    });
+
+    await expect(decision).resolves.toBe(false);
+    gate.dispose();
+  });
+
   it('ignora un tool:approval con requestId que no casa', async () => {
     const bus = makeBus();
     const gate = createApprovalGate(bus, new Logger('error'));
