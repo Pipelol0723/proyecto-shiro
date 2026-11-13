@@ -1,6 +1,6 @@
 # ADR 0027: Autenticación por token compartido en el bus y el STT
 
-- **Status**: Accepted (2a en curso, 2b sin implementar)
+- **Status**: Accepted (2a implementado, 2b sin implementar)
 - **Fecha**: 2026-08-18
 - **Decidido por**: Pipelol
 - **Supersede a**: [ADR 0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)
@@ -246,3 +246,16 @@ clave. 2b tiene que añadirlo a esa lista.
   audio si conoce su id. El id es un UUID aleatorio que solo viaja por el
   bus, y el bus sí queda protegido porque un WebSocket siempre manda
   `Origin`. Se cierra validando `Host` cuando llegue el token.
+
+## Nota 2026-11-13: entrega 2a completa
+
+- Con los PR de P-06a y P-06b queda hecha la entrega 2a: Letta y Whisper se
+  publican solo en loopback, y Whisper corta por tope de audio (1009) y por
+  inactividad (1001), responde 413 en `/transcribe`, rechaza un `Origin`
+  ajeno antes de aceptar el WebSocket y corre sin root. Sigue pendiente 2b
+  (token).
+- La corrección «Whisper» de la enmienda queda superada: el `CMD` del
+  Dockerfile ya no fija el host. Arranca `python -m services.whisper.main`,
+  que respeta `WHISPER_HOST`. Por defecto es `127.0.0.1`; la imagen lo pone a
+  `0.0.0.0` porque dentro del contenedor tiene que ser así. La frontera sigue
+  estando en la publicación del puerto de compose.

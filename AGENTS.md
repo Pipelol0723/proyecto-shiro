@@ -8,7 +8,7 @@ AI Companion modular tipo VTuber con voz, memoria y avatar animado. Lo mantiene 
 
 El estado de los hitos y la hoja de ruta viven **solo** en la tabla [Roadmap del README](README.md#roadmap). Lo que toca ahora es el plan de mejora: la Fase 1 está aprobada desde el 2026-11-13 y en ejecución; las demás fases, pendientes de aprobación.
 
-Antes de algo estructural, lee CLAUDE.md, [`docs/architecture.md`](docs/architecture.md) y [`docs/adr/`](docs/adr/). Antes de tocar fronteras de confianza, lee la tabla SEC-xx de [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md) y [ADR 0027](docs/adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted, en curso: el bus y `/audio` ya tienen bind y `Origin`; falta el token, y Whisper sigue sin topes ni `Origin`).
+Antes de algo estructural, lee CLAUDE.md, [`docs/architecture.md`](docs/architecture.md) y [`docs/adr/`](docs/adr/). Antes de tocar fronteras de confianza, lee la tabla SEC-xx de [`docs/security-review-2026-07.md`](docs/security-review-2026-07.md) y [ADR 0027](docs/adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted, en curso: el bus, `/audio` y Whisper ya tienen bind y `Origin`, y Whisper topes; falta el token).
 
 ## Reglas duras
 

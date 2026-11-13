@@ -14,3 +14,7 @@ docs/design-mockup/**
 # (prettier no hereda .gitignore, hay que listarlo aquí también.)
 .wwebjs_cache/**
 .wwebjs_auth/**
+
+# Caché de pytest (tests del servicio Whisper): la crea cualquier ejecución
+# local y su README no pasa el formato.
+**/.pytest_cache/**
