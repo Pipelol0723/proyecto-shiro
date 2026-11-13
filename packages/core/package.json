@@ -26,7 +26,7 @@
     "better-sqlite3": "^11.7.0",
     "say": "^0.16.0",
     "yaml": "^2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12"
