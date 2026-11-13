@@ -88,9 +88,15 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0027](0027-autenticacion-token-bus-stt-multicliente.md)                 | Autenticación por token compartido en el bus y el STT          | Accepted (2a en curso, 2b sin implementar)       |
 | [0028](0028-avatar-motores-y-manifiesto.md)                              | Avatar — motores intercambiables, manifiesto y motor de capas  | Accepted (sin implementar; integración aplazada) |
 | [0029](0029-proceso-de-mantenimiento-de-una-persona.md)                  | Proceso de mantenimiento de una persona                        | Accepted                                         |
+| [0034](0034-tts-gemini-voz-disenada.md)                                  | TTS — voz diseñada de Gemini; ElevenLabs y SystemTTS detrás    | Proposed                                         |
 
 «Sin implementar» = decisión vigente sin código todavía. El estado de los
 hitos vive en la tabla [Roadmap del README](../../README.md#roadmap).
+
+Los números 0030 a 0033 no están libres: el
+[plan de mejora](../plan-mejora-2026-11.md) los reserva para ADR ya previstos
+(licencia y privacidad, datos frente a instrucciones, topología por entorno y
+protocolo multicliente).
 
 ## Referencias externas
 
