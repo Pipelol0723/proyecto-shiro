@@ -80,12 +80,7 @@ export interface WhisperSttClientOptions {
 }
 
 export type WhisperSttClientState =
-  | 'idle'
-  | 'connecting'
-  | 'streaming'
-  | 'stopping'
-  | 'closed'
-  | 'error';
+  'idle' | 'connecting' | 'streaming' | 'stopping' | 'closed' | 'error';
 
 export class WhisperSttClient {
   private readonly url: string;
@@ -102,9 +97,9 @@ export class WhisperSttClient {
    * rejection cuando un `error` o un cierre temprano llegan.
    */
   private terminal:
-    | { kind: 'pending' }
-    | { kind: 'final'; text: string }
-    | { kind: 'failed'; reason: string } = { kind: 'pending' };
+    { kind: 'pending' } | { kind: 'final'; text: string } | { kind: 'failed'; reason: string } = {
+    kind: 'pending',
+  };
   /** Settle del `stop()` actual, si hay alguno esperando. */
   private stopResolve: (() => void) | null = null;
   private stopReject: ((err: Error) => void) | null = null;

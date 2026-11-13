@@ -1012,7 +1012,7 @@
 
 `packages/core-host/src/bootstrap.ts:308` · categoría homelab · esfuerzo S · lote L-HOME-02 · lente homelab-fit (20-oct) · severidad original medio
 
-- **Evidencia.** `const serverOrigin = ttsRealEnabled ? `http://localhost:${String(transport.port)}` : undefined;` → conversation-flow.ts:461 arma `url: `${serverOrigin}${relativeUrl}``, que se hace broadcast, y useTtsPlayback.ts:150 hace `audio.src = payload.url`.
+- **Evidencia.** ``const serverOrigin = ttsRealEnabled ? `http://localhost:${String(transport.port)}` : undefined;`` → conversation-flow.ts:461 arma `` url: `${serverOrigin}${relativeUrl}` ``, que se hace broadcast, y useTtsPlayback.ts:150 hace `audio.src = payload.url`.
 - **Impacto.** Si el core-host corre en el homelab y el desktop en el portátil, o si la estación holográfica (o el homelab haciendo de estación) se conecta al core-host del portátil, el cliente pide `localhost` en su propia máquina: el audio falla o, peor, lo sirve otro core-host local. Bloquea la Fase 3 del ADR 0026 y cualquier escenario con el core-host en el homelab.
 - **Arreglo.** Emitir la URL relativa (`/audio/<id>.<ext>`) y que el cliente la resuelva contra la URL del bus que ya conoce (`new URL(rel, busUrl.replace(/^ws/, 'http'))`). Alternativa: `SHIRO_PUBLIC_ORIGIN`. Añadir un test con dos orígenes.
 - **Verificación.** sonnet: confirmed → alto · opus (2.º voto): confirmed → alto
