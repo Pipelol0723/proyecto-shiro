@@ -242,6 +242,7 @@ Nota: `config/` es inmutable para self-dev (`immutable-paths.ts`), así que Shir
 
 ### 3.7 P-04 — CI que vigila: permisos, dependabot, audit de producción y zod
 
+- **Estado (2026-11-13).** **Hecho.** PR1 en el PR #107 y PR2 en el PR #108. Diferencias con lo escrito abajo: no hay paso de CI aparte para `test:scripts` (ya va dentro de `verify`), `npm audit` se lanza con `shell: true` en todas las plataformas, el script acepta `--exceptions <archivo>` y los tests son 12. El check `verify` es obligatorio en `develop` y las alertas y actualizaciones de seguridad de Dependabot están activas.
 - **Fuente única.** Este encargo es la única definición de P-04 (PR1 mínimo y PR2 de CI) y del `dependabot.yml`. El resto de subidas dentro de rango es el lote V1 de §4, que va **después** de P-04 PR1.
 - **Objetivo.** Que una vulnerabilidad de producción high o crítica ponga el CI en rojo, que el token del CI no tenga más permisos que leer, que las dependencias se propongan solas en lotes pequeños y que `develop` no acepte un PR en rojo.
 - **Qué cierra.** L-TOOL-01 (R-209, R-220) y L-SEG-06 (R-019, R-011, R-012, R-055).
