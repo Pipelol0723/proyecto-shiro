@@ -7,6 +7,8 @@
 > arreglo definidos aquí. Los identificadores `R-xxx` (hallazgo) y `L-TEMA-NN` (lote de arreglo) son
 > los mismos en los dos documentos. Las fichas con la evidencia de cada hallazgo están en
 > [`revision-estado-2026-11-anexo.md`](revision-estado-2026-11-anexo.md).
+>
+> Las direcciones de la red local están sustituidas por `IP_PORTATIL`, `IP_HOMELAB`, `IP_LAPTOP_PRESTADA` y `SUBRED_ENLACE`.
 
 ## 1. Resumen ejecutivo
 
@@ -153,7 +155,7 @@ La revisión de seguridad de julio de 2026 sigue casi entera abierta: SEC-01, 02
 - **L-SEG-07.** Pipe tiene que ver la ruta, el comando y el contenido reales, y qué lecturas precedieron a la propuesta. Cambia el payload de tool:requires-approval, que es un contrato entre core, core-host y desktop; basta una enmienda corta del ADR 0022.
 - **L-SEG-08.** Mismo archivo (shell-tool.ts) y el YAML: anclar los patrones, denegar --no-index, --output, --upload-pack, -c y -D, rechazar metacaracteres en los batch y spawnear por ruta resuelta. Hay que añadir un test que cargue el YAML real. Cierra la exfiltración de la clave SSH del homelab.
 - **L-SEG-09.** Un solo archivo (fs-scope.ts) con tests concretos. Sustituir el return silencioso por it.skipIf hace visible la cobertura real.
-- **L-SEG-10.** Todo está en services/whisper (main.py, config.py, Dockerfile, compose) y aplica ADR 0027 §6. Deja la variante homelab (bind a 192.168.137.2) documentada para cuando se decida mover Whisper. La validación del token queda enganchada al lote del handshake.
+- **L-SEG-10.** Todo está en services/whisper (main.py, config.py, Dockerfile, compose) y aplica ADR 0027 §6. Deja la variante homelab (bind a IP_HOMELAB) documentada para cuando se decida mover Whisper. La validación del token queda enganchada al lote del handshake.
 - **L-SEG-11.** Hay que sacar la memoria del canal system, delimitarla y escaparla, guardar en text un resumen sin la salida cruda, redactar la metadata y no tratar como «Usuario» los pasajes sin rol. Cambia cómo todos los LLM (Anthropic y Ollama) reciben el contexto: es un patrón que siguen varios módulos.
 - **L-SEG-12.** El eval ejecuta código generado con las keys y las credenciales de git y gh del usuario, y el fix-loop puede borrar tests. Mitigarlo, o aceptar el riesgo por escrito, modifica las afirmaciones del ADR 0023 (§«robusta frente a jailbreaking»). SHIRO_PACKAGED desde lib.rs es una línea.
 - **L-SEG-13.** Mismo ámbito (secrets-file.ts, logger, SetupScreen). Hay que hacerlo antes de que SHIRO_BUS_TOKEN viva en secrets.env, para que no se loguee, no se inyecte y no se prometa un cifrado que no existe. El replacer de Error arregla de paso la observabilidad.
@@ -1052,7 +1054,7 @@ El stack está escrito suponiendo que todo corre en el portátil, en localhost: 
 
 DISEÑO RESUMIDO (homelab como destino), por orden de migración y con el mínimo de cambios:
 
-0. Requisitos previos, comunes a todo: bind y firewall (R-318), enmienda del ADR 0027 para el token entre máquinas (R-316) y config por entorno/perfiles (R-325). Sin esto no se debe exponer nada en 192.168.137.0/24.
+0. Requisitos previos, comunes a todo: bind y firewall (R-318), enmienda del ADR 0027 para el token entre máquinas (R-316) y config por entorno/perfiles (R-325). Sin esto no se debe exponer nada en SUBRED_ENLACE.
 
 1. Whisper: lo único que merece la pena mover, y primero. No tiene estado, el fallo solo degrada a texto, y Python 3.11, CUDA 12 y ffmpeg ya están en el escritorio. Libera en la GTX 1650 del portátil entre 0,5 y 1,2 GB de VRAM para qwen2.5:3b, mxbai y Live2D. Cambios: URL de STT en el cliente y CSP (R-331/R-321/R-320), timeouts del cliente (hallazgo 3), health con `device` (hallazgo 4), script nativo y tarea programada (R-333/R-324/R-334), `small` en int8 por el reparto de VRAM con el otro proyecto (R-339) y perfiles de compose para no levantar el Whisper local (R-327). La latencia por la red no importa: el PCM a 16 kHz son unos 32 KB/s por un cable gigabit, despreciable frente a la inferencia.
 
@@ -1064,8 +1066,8 @@ DISEÑO RESUMIDO (homelab como destino), por orden de migración y con el mínim
 
 RIESGOS OPERATIVOS sin línea concreta en el repo:
 (a) el script de apagado del homelab, fuera del repo, se niega a apagar si hay procesos python: un Whisper de Shiro como servicio bloquearía siempre el apagado (exit 2). Habría que excluirlo por ruta o nombre de tarea, o pararlo antes.
-(b) Sospecha sin verificar: con el cable desconectado, Windows puede quitar la ruta on-link de 192.168.137.0/24 y mandar los SYN a 192.168.137.2 por la ruta por defecto del Wi-Fi. Eso explicaría conexiones colgadas en vez de rechazadas. Si el Wi-Fi fuera otro hotspot de Windows (también usa 192.168.137.0/24), el cliente podría enviar audio del micrófono a un equipo ajeno: otro motivo para el token en el STT (ADR 0027) y para tener en el cliente la IP esperada y no un nombre.
-(c) La laptop prestada comparte el puerto Ethernet y está prevista en 192.168.137.3: mientras esté enchufada, el STT remoto no existe, y el hallazgo 3 lo cubre en la experiencia de uso.
+(b) Sospecha sin verificar: con el cable desconectado, Windows puede quitar la ruta on-link de SUBRED_ENLACE y mandar los SYN a IP_HOMELAB por la ruta por defecto del Wi-Fi. Eso explicaría conexiones colgadas en vez de rechazadas. Si el Wi-Fi fuera otro hotspot de Windows (también usa SUBRED_ENLACE), el cliente podría enviar audio del micrófono a un equipo ajeno: otro motivo para el token en el STT (ADR 0027) y para tener en el cliente la IP esperada y no un nombre.
+(c) La laptop prestada comparte el puerto Ethernet y está prevista en IP_LAPTOP_PRESTADA: mientras esté enchufada, el STT remoto no existe, y el hallazgo 3 lo cubre en la experiencia de uso.
 (d) La contraseña de Letta (Bearer) viajaría en claro por el cable si Letta fuera remoto. El enlace es punto a punto, así que es aceptable, pero conviene anotarlo en el ADR.
 
 NO PUDE MIRAR: el timeout real de conexión de WebSocket en WebView2; el consumo exacto de VRAM en la GTX 1060 (no ejecuté nada); si la API de Letta permite modificar `embedding_config` de un agente existente; el estado real del escritorio (no lo consulté por SSH, porque la revisión es de solo lectura sobre el repo).
@@ -1120,7 +1122,7 @@ NO PUDE MIRAR: el timeout real de conexión de WebSocket en WebView2; el consumo
 | R-315 | medio | docker-compose usa `letta/letta:latest` sin pin y publica Letta y Whisper en todas las interfaces                                                                                                              | `docker-compose.yml:26`                                              | S    | 2     | L-HOME-01 |
 | R-316 | medio | El ADR 0027 da por hecho que el core-host está en la misma máquina que el desktop: no define cómo recibe el token un cliente o servicio en otra máquina, y el Origin de Tauri en Windows probablemente es otro | `docs/adr/0027-autenticacion-token-bus-stt-multicliente.md:44`       | S    | 1     | L-HOME-06 |
 | R-317 | medio | Sin fallback local→cloud: con Ollama en el escritorio apagado, Shiro deja de responder aunque haya key de Claude _(duplicado de R-063)_                                                                        | `packages/core-host/src/pipeline/conversation-flow.ts:231`           | M    | 1     | L-HOME-10 |
-| R-318 | medio | El cable 192.168.137.0/24 no es frontera de confianza: un homelab sin parches con internet vía ICS es un pivote hacia el core-host del portátil, que escucha sin auth en 0.0.0.0 _(duplicado de R-003)_        | `packages/core-host/src/transports/websocket-server-transport.ts:98` | M    | 1     | L-HOME-06 |
+| R-318 | medio | El cable SUBRED*ENLACE no es frontera de confianza: un homelab sin parches con internet vía ICS es un pivote hacia el core-host del portátil, que escucha sin auth en 0.0.0.0 *(duplicado de R-003)\_          | `packages/core-host/src/transports/websocket-server-transport.ts:98` | M    | 1     | L-HOME-06 |
 | R-319 | medio | El embedding*endpoint queda guardado en el agente Letta al crearlo: mover Ollama o sacar Letta de Docker rompe los embeddings sin avisar *(duplicado de R-162)\_                                               | `packages/core/src/modules/memory/memory-manager.ts:389`             | S    | 1     | L-HOME-04 |
 | R-320 | medio | El binario Tauri no puede funcionar como cliente remoto: CSP solo para localhost, URL del bus fijada al compilar y sidecar siempre local                                                                       | `packages/desktop/src-tauri/tauri.conf.json:31`                      | M    | 1     | L-HOME-11 |
 | R-321 | medio | El cliente desktop llama a Whisper en `ws://localhost:8765/stt` fijo; `stt.service_url` del YAML solo lo lee el core-host                                                                                      | `packages/desktop/src/audio/useMicrophonePTT.ts:95`                  | S    | 1     | L-HOME-07 |
