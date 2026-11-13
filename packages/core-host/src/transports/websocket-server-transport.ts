@@ -159,6 +159,18 @@ export class WebSocketServerTransport implements ITransport {
     return addr.port;
   }
 
+  /**
+   * IP realmente vinculada (p. ej. `127.0.0.1`). Solo válida después de
+   * que `ready()` resuelva, igual que `port`.
+   */
+  get address(): string {
+    const addr = this.httpServer.address();
+    if (!addr || typeof addr === 'string') {
+      throw new Error('WebSocketServerTransport: server no vinculado todavía');
+    }
+    return addr.address;
+  }
+
   /** Snapshot del número de clientes conectados actualmente. */
   get clientCount(): number {
     return this.clients.size;
