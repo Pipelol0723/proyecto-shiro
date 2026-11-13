@@ -325,9 +325,10 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     ...(audioCache !== undefined && serverOrigin !== undefined ? { audioCache, serverOrigin } : {}),
   });
 
-  // 8. Self-improvement (ADR 0023). Solo se activa en entorno de desarrollo
-  //    (repo clonado + git/gh en el PATH); en el binario instalado queda
-  //    apagado (lo auto-detecta `wireSelfDev`). El reporte hablado reusa la
+  // 8. Self-improvement (ADR 0023). Solo se activa con `selfdev.enabled: true`
+  //    (apagado por defecto, P-01) y en entorno de desarrollo (repo clonado +
+  //    git/gh en el PATH); en el binario instalado queda apagado (lo
+  //    auto-detecta `wireSelfDev`). El reporte hablado reusa la
   //    cadena TTS vía `announce`; el PR final pasa por un gate DEDICADO
   //    (`selfDevGate`) — distinto del gate del pipeline conversacional pero
   //    escuchando el mismo `tool:approval`, así reusa el modal del cliente.

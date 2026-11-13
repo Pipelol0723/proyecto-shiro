@@ -90,7 +90,8 @@ export class SelfDevProposeTool implements IToolModule {
 
 /**
  * Registra `selfdev:propose` en el registry agéntico del usuario (el del chat).
- * Lo llama `wireSelfDev` cuando el entorno soporta self-dev (repo + git/gh/npm).
+ * Lo llama `wireSelfDev` cuando `selfdev.enabled` es true y el entorno soporta
+ * self-dev (repo + git/gh/npm).
  */
 export function registerSelfDevTrigger(
   registry: IToolsRegistry,

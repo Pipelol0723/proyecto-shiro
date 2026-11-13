@@ -194,10 +194,14 @@ character:
 # Self-improvement (ADR 0023) — Shiro propone PRs a su propio repo.
 # Config SEPARADA del slot `tools` del usuario: estas tools operan SOLO
 # dentro del worktree aislado `../shiro-selfdev`, nunca en tu working tree.
-# Solo se activa en entorno de desarrollo (repo clonado + git/gh/npm); el
-# `SelfDevSession` lo auto-detecta y queda apagado en el binario instalado.
+# Solo se activa si `enabled: true` Y hay entorno de desarrollo (repo clonado
+# + git/gh/npm); el `SelfDevSession` lo auto-detecta y queda apagado en el
+# binario instalado.
 # ─────────────────────────────────────────────────────────────
 selfdev:
+  # Apagado hasta el gate de F3 (P-29). Ponerlo a true solo a mano y sabiendo
+  # que el eval corre con tus credenciales (R-017).
+  enabled: false
   # Worktree aislado (relativo a la raíz del repo) donde Shiro genera sus
   # cambios. `git worktree add` lo crea por sesión.
   worktree_path: '../shiro-selfdev'

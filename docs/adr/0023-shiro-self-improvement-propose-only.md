@@ -228,3 +228,7 @@ Sin fechas — `Status: Proposed`. La implementación requiere primero que ADR 0
 - Persistencia (punto 6 de las Notas y «Diferido a Fase 2» de la cabecera): el resultado de cada sesión ya se guarda en memoria (`packages/core-host/src/selfdev/selfdev-memory.ts`, PR #94). Retomar una sesión sigue sin implementar.
 - Errata conocida (revisión 2026-11): el push a `shiro/<topic>` ocurre antes del modal del PR, que solo muestra el `--stat`; la denylist no cubre `.github/` y se salta en NTFS; el eval corre con las API keys en el entorno (SEC-03, SEC-14, SEC-15). El plan de mejora propone apagar self-dev por defecto (P-01) y enmendar este ADR en P-23 y P-25a; nada de eso está implementado.
 - La RTX 5080 que citan el Contexto y las Alternativas no existe: evaluar un modelo local queda para cuando haya una GPU con más VRAM.
+
+## Enmienda 2026-11-13 (P-01)
+
+Self-dev pasa a estar **apagado por defecto**: el bloque `selfdev:` de la config tiene la clave `enabled` (default `false`) y `wireSelfDev` sale antes de detectar el entorno si no es `true`, de modo que la tool `selfdev:propose` no se registra. Se reactiva a mano (`selfdev.enabled: true`) o, de forma ordenada, en P-29, al pasar el gate de la Fase 3. El resto del ADR no cambia. Esto deja implementado el P-01 que la errata anterior daba por pendiente; P-23 y P-25a siguen sin implementar.
