@@ -1,0 +1,40 @@
+# Único dependabot.yml del repo (ítem P-04 del plan de mejora). Como mucho
+# 5 PRs abiertos a la vez entre todos los ecosistemas. Docker queda fuera a
+# propósito: Letta se fija por digest y sus subidas exigen backup previo.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 2
+    cooldown: { default-days: 7 }
+    ignore:
+      # Las majors van por los lotes de versiones planificados, con tests.
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      npm-produccion:
+        dependency-type: production
+        update-types: [minor, patch]
+      npm-desarrollo:
+        dependency-type: development
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    groups:
+      actions: { patterns: ['*'] }
+  - package-ecosystem: cargo
+    directory: /packages/desktop/src-tauri
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      tauri: { patterns: ['tauri*'] }
+  - package-ecosystem: pip
+    directory: /services/whisper
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
