@@ -222,7 +222,7 @@ Sobre `claude-haiku-5-5` como alternativa barata:
 
 PR `chore: actualiza Tauri en bloque y fija la toolchain de Rust`.
 
-**Lleva un arreglo de seguridad (2026-11-13).** Las alertas de Dependabot, activas desde ese día, marcan el crate `zip` 4.6.1 con un aviso critical y otro high. Entra solo por `tauri-plugin-updater` 2.10.1; la 2.14.1 ya pide `zip ^9` (parcheado en 9.0.5), pero exige `tauri ^2.12` y `reqwest ^0.13`, así que no es una subida suelta: va en este lote. `npm audit` no ve el lado Rust.
+**Hecho en parte (2026-11-13, PR #126).** Tauri subió a 2.12 en bloque (crates y paquetes JS), con `zip` 9.4.1 y `rustls` 0.23.46, porque las alertas de Dependabot marcaban `zip` 4.6.1 con un aviso critical y otro high; `npm audit` no ve el lado Rust. El binario se compiló y se probó en local. De este lote queda fijar la toolchain de Rust con `rust-toolchain.toml` y la prueba de actualización real, que va con la release de P-09.
 
 Qué sube:
 
