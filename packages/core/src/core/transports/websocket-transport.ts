@@ -256,6 +256,9 @@ export class WebSocketTransport implements IObservableTransport {
       );
       this.socket = null;
       this.setState('closed');
+      // Un listener pudo reconectar (o cerrar) al recibir 'closed': si el
+      // estado ya no es ese, no se programa otra reconexión encima.
+      if (this.state !== 'closed') return;
       this.scheduleReconnect();
     };
   }
