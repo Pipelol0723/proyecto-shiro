@@ -17,6 +17,7 @@ import { Logger } from '@proyecto-shiro/core';
 import { CharacterLoader, ConfigLoader } from '@proyecto-shiro/core/node';
 import { bootstrap } from './bootstrap.js';
 import { loadSecretsEnv } from './secrets/secrets-file.js';
+import { resolveBindHost } from './transports/bind-host.js';
 
 const DEFAULT_PORT = 9876;
 /**
@@ -56,7 +57,13 @@ async function main(): Promise<void> {
   const characterPath = process.env.SHIRO_CHARACTER ?? DEFAULT_CHARACTER_PATH;
   const config = new ConfigLoader({ logger }).loadModulesConfig(configPath);
   const character = new CharacterLoader({ logger }).loadFromFile(characterPath);
-  const result = await bootstrap({ port, config, character, logger });
+  const bind = resolveBindHost(process.env);
+  if (!bind.isLoopback) {
+    logger.warn(
+      `SHIRO_BIND_HOST=${bind.host} no es loopback: el bus queda sin auth en la red hasta P-40 (ADR 0027 2b)`,
+    );
+  }
+  const result = await bootstrap({ port, host: bind.host, config, character, logger });
 
   const shutdown = (signal: string): void => {
     console.log(`\nrecibido ${signal}, apagando…`);

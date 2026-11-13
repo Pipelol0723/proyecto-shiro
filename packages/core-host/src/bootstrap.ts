@@ -63,6 +63,8 @@ import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/
 export interface BootstrapOptions {
   /** Puerto WS. `0` para que el SO asigne uno (útil en tests). */
   port: number;
+  /** Host en el que escuchar. Default `127.0.0.1`. Ver ADR 0027, 2a. */
+  host?: string;
   /** Path del endpoint WS. Default `/bus`. */
   path?: string;
   /** Config validada (ya pasada por `ConfigLoader.loadModulesConfig`). */
@@ -106,6 +108,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   // 1. Transport server-side (espera a que esté listening).
   const transport = new WebSocketServerTransport({
     port: options.port,
+    host: options.host,
     path: options.path,
     logger,
   });
