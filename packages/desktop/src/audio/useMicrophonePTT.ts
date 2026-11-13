@@ -64,6 +64,12 @@ export interface UseMicrophonePTTResult {
   start: () => Promise<void>;
   /** Detiene el turno en curso (equivalente al keyup). */
   stop: () => Promise<void>;
+  /**
+   * Corta la captura en curso SIN pedir la transcripción final: no se emite
+   * `stt:transcribed`. Para cuando se pierde la conexión con el core-host y
+   * un mensaje de voz ya no tendría a dónde ir. No hace nada si no se graba.
+   */
+  cancel: () => void;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -234,6 +240,16 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     }
   }, [setStateAndRef, teardown]);
 
+  const cancel = useCallback((): void => {
+    if (stateRef.current !== 'recording') return;
+    // Cortar la entrada y abortar el cliente: `abort()` cierra el WS sin
+    // emitir `onFinal`, así que nada llega al bus como transcripción.
+    sourceNodeRef.current?.disconnect();
+    clientRef.current?.abort();
+    teardown();
+    setStateAndRef('idle');
+  }, [setStateAndRef, teardown]);
+
   // Listeners de teclado: keydown/keyup de la tecla configurada. Ignora
   // si el foco está en un input/textarea (espacio sirve para escribir).
   useEffect(() => {
@@ -268,5 +284,5 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     };
   }, [teardown]);
 
-  return { state, error, start, stop };
+  return { state, error, start, stop, cancel };
 }

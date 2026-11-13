@@ -9,8 +9,11 @@
  * empuja al conectar.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EventMap, IEventBus, SystemHealthReport } from '@proyecto-shiro/core';
+
+/** Si el core-host no responde en este tiempo, se deja de «comprobar». */
+const HEALTH_TIMEOUT_MS = 8000;
 
 export interface UseSystemHealthOptions {
   bus: IEventBus<EventMap>;
@@ -21,6 +24,8 @@ export interface UseSystemHealthResult {
   report: SystemHealthReport | null;
   /** `true` entre que se pide un chequeo y llega el reporte. */
   checking: boolean;
+  /** `true` si pasó `HEALTH_TIMEOUT_MS` sin que llegara el reporte pedido. */
+  timedOut: boolean;
   /** Pide al core-host un (re)chequeo. */
   refresh: () => void;
 }
@@ -29,22 +34,35 @@ export function useSystemHealth(options: UseSystemHealthOptions): UseSystemHealt
   const { bus } = options;
   const [report, setReport] = useState<SystemHealthReport | null>(null);
   const [checking, setChecking] = useState(true);
+  const [timedOut, setTimedOut] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const refresh = useCallback(() => {
     setChecking(true);
+    setTimedOut(false);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      setChecking(false);
+      setTimedOut(true);
+    }, HEALTH_TIMEOUT_MS);
     void bus.emit('system:health-check', {});
   }, [bus]);
 
   useEffect(() => {
     const unsubscribe = bus.on('system:health', (payload) => {
+      clearTimeout(timer.current);
       setReport(payload);
       setChecking(false);
+      setTimedOut(false);
     });
     // Pide un chequeo al montar. El server también lo empuja al conectar,
     // así que con cualquiera de los dos el wizard se llena.
     refresh();
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      clearTimeout(timer.current);
+    };
   }, [bus, refresh]);
 
-  return { report, checking, refresh };
+  return { report, checking, timedOut, refresh };
 }

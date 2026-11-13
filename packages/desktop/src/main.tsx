@@ -24,11 +24,11 @@ import './styles/reset.css';
 
 const DEFAULT_HOST_URL = 'ws://localhost:9876/bus';
 
-function makeProductionBus(): IEventBus<EventMap> {
+function makeProductionBus(): { bus: IEventBus<EventMap>; transport: WebSocketTransport } {
   const logger = new Logger();
   const url = import.meta.env.VITE_SHIRO_HOST_URL ?? DEFAULT_HOST_URL;
   const transport = new WebSocketTransport({ url, logger });
-  return new EventBus<EventMap>({ logger, transports: [transport] });
+  return { bus: new EventBus<EventMap>({ logger, transports: [transport] }), transport };
 }
 
 const root = document.getElementById('root');
@@ -36,8 +36,10 @@ if (!root) {
   throw new Error('Element #root no encontrado en index.html');
 }
 
+const { bus, transport } = makeProductionBus();
+
 createRoot(root).render(
   <StrictMode>
-    <App bus={makeProductionBus()} />
+    <App bus={bus} connection={transport} />
   </StrictMode>,
 );
