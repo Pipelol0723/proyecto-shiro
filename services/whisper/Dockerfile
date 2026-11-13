@@ -12,13 +12,15 @@
 # el digest a propósito y prueba `docker compose build whisper`.
 FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04@sha256:5f0d2d827f6436b3cb7468fd8acbdc8c1d41261614e579ae49afe6141da51133
 
+# Dentro del contenedor el servicio tiene que escuchar en 0.0.0.0 para que el
+# puerto publicado llegue; la frontera está en `ports:` de compose (loopback).
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/home/shiro/.cache/huggingface     WHISPER_HOST=0.0.0.0     WHISPER_PORT=8765
-# Dentro del contenedor el servicio tiene que escuchar en 0.0.0.0 para que el
-# puerto publicado llegue; la frontera está en `ports:` de compose (loopback).
+    HF_HOME=/home/shiro/.cache/huggingface \
+    WHISPER_HOST=0.0.0.0 \
+    WHISPER_PORT=8765
 
 # Python 3.11 + utilidades mínimas.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -53,7 +55,9 @@ COPY services/whisper /app/services/whisper
 # Usuario sin root. El home y la caché de modelos son suyos; el código y el
 # venv (propiedad de root, legibles por todos) no necesita escribirlos. El
 # volumen de compose se monta sobre la caché y hereda este dueño al crearse.
-RUN useradd --create-home --uid 10001 shiro     && mkdir -p /home/shiro/.cache/huggingface     && chown -R shiro:shiro /home/shiro
+RUN useradd --create-home --uid 10001 shiro \
+    && mkdir -p /home/shiro/.cache/huggingface \
+    && chown -R shiro:shiro /home/shiro
 USER shiro
 
 EXPOSE 8765

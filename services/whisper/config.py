@@ -6,8 +6,11 @@ producción se sobreescriben desde docker-compose.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 def _env(name: str, default: str) -> str:
@@ -34,11 +37,25 @@ DEFAULT_ALLOWED_ORIGINS = (
 )
 
 
+def _env_positive_int(name: str, default: int) -> int:
+    """Como `_env_int`, pero un valor <= 0 vuelve al default (con aviso)."""
+    value = _env_int(name, default)
+    if value <= 0:
+        logger.warning("%s=%s no es válido (debe ser > 0); uso %s", name, value, default)
+        return default
+    return value
+
+
 def _env_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     raw = os.getenv(name)
     if raw is None or raw.strip() == "":
         return default
-    return tuple(item.strip() for item in raw.split(",") if item.strip())
+    # Se normaliza igual que el navegador envía el Origin: sin barra final y en
+    # minúsculas; si no, un valor como "http://localhost:5173/" nunca coincidiría.
+    items = tuple(item.strip().rstrip("/").lower() for item in raw.split(",") if item.strip())
+    if not items:
+        logger.warning("%s no contiene orígenes útiles: se rechazará todo Origin de navegador", name)
+    return items
 
 
 @dataclass(frozen=True)
@@ -99,9 +116,9 @@ class Config:
             host=_env("WHISPER_HOST", "127.0.0.1"),
             port=_env_int("WHISPER_PORT", 8765),
             partial_interval_ms=_env_int("WHISPER_PARTIAL_INTERVAL_MS", 1500),
-            sample_rate=_env_int("WHISPER_SAMPLE_RATE", 16000),
+            sample_rate=_env_positive_int("WHISPER_SAMPLE_RATE", 16000),
             hotwords=_env("WHISPER_HOTWORDS", ""),
-            max_audio_seconds=_env_int("WHISPER_MAX_AUDIO_SECONDS", 90),
-            idle_timeout_s=_env_int("WHISPER_IDLE_TIMEOUT_S", 15),
+            max_audio_seconds=_env_positive_int("WHISPER_MAX_AUDIO_SECONDS", 90),
+            idle_timeout_s=_env_positive_int("WHISPER_IDLE_TIMEOUT_S", 15),
             allowed_origins=_env_list("WHISPER_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS),
         )
