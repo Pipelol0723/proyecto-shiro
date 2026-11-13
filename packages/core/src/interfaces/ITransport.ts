@@ -1,8 +1,19 @@
+import type { Unsubscribe } from './IEventBus.js';
+
 /**
  * Handler de evento recibido por el transport desde "el otro lado".
  * El bus se suscribe a esto para reinyectar eventos remotos al flujo local.
  */
 export type TransportReceiveHandler = (event: string, payload: unknown) => Promise<void>;
+
+/**
+ * Estado de conexión de un transport con conexión (WebSocket, MQTT…).
+ * Mismo vocabulario que `readyState` del WebSocket.
+ */
+export type TransportState = 'connecting' | 'open' | 'closing' | 'closed';
+
+/** Listener de cambios de estado de un transport observable. */
+export type TransportStateHandler = (state: TransportState) => void;
 
 /**
  * Contrato de un Transport — la capa que decide CÓMO viaja un evento
@@ -46,4 +57,21 @@ export interface ITransport {
    * Cierra el transport limpiamente. Libera sockets, USB, conexiones MQTT.
    */
   close(): Promise<void>;
+}
+
+/**
+ * Transport que además expone su estado de conexión, para que la UI pueda
+ * pintar "conectando" / "sin conexión". `ITransport` no cambia: los
+ * transports sin conexión real (`InProcessTransport`) no lo implementan.
+ */
+export interface IObservableTransport extends ITransport {
+  /** Estado actual de la conexión. */
+  getState(): TransportState;
+
+  /**
+   * Registra un listener que se llama en cada cambio de estado (no se
+   * llama si el estado no cambia ni con el valor actual al registrarse).
+   * Devuelve la función de baja.
+   */
+  onStateChange(handler: TransportStateHandler): Unsubscribe;
 }

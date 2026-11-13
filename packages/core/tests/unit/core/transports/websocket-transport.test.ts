@@ -5,6 +5,7 @@ import {
   type Scheduler,
   type WebSocketLike,
 } from '../../../../src/core/transports/websocket-transport.js';
+import { TransportNotOpenError } from '../../../../src/core/transports/errors.js';
 import { serializeEnvelope } from '../../../../src/core/transports/wire-schema.js';
 
 /**
@@ -168,6 +169,9 @@ describe('WebSocketTransport', () => {
       logger: makeLogger(),
       webSocketCtor: MockWebSocket,
     });
+    await expect(t.send('user:message', { text: 'hola', userId: 'u1' })).rejects.toBeInstanceOf(
+      TransportNotOpenError,
+    );
     await expect(t.send('user:message', { text: 'hola', userId: 'u1' })).rejects.toMatchObject({
       name: 'TransportNotOpenError',
     });

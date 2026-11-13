@@ -11,9 +11,14 @@
  *   intento 5+ → 5 s (techo)
  *
  * Sin queue local: si `send()` se llama con la conexión caída, el mensaje
- * se descarta y se loguea. ADR 0013 lo establece — TCP/WS ya garantizan
- * orden y entrega mientras la conexión está viva; complicar el protocolo
- * con buffering no compensa para el caso de chat humano.
+ * no se guarda: se loguea y la promesa rechaza con `TransportNotOpenError`;
+ * el emisor se entera por el rechazo y la UI por `onStateChange`.
+ * ADR 0013 (y su enmienda de 2026-11-13) — TCP/WS ya garantizan orden y
+ * entrega mientras la conexión está viva; complicar el protocolo con
+ * buffering no compensa para el caso de chat humano.
+ *
+ * Solo detecta el cierre del socket, no un socket medio abierto (eso es un
+ * heartbeat, ADR 0033).
  *
  * Para tests, los dos puntos de extensión son:
  * - `webSocketCtor`: clase WebSocket-compatible (en tests Node usamos
@@ -23,8 +28,15 @@
  * Ver ADR 0013 (protocolo) y ADR 0003 (contrato ITransport).
  */
 
-import type { ITransport, TransportReceiveHandler } from '../../interfaces/ITransport.js';
+import type { Unsubscribe } from '../../interfaces/IEventBus.js';
+import type {
+  IObservableTransport,
+  TransportReceiveHandler,
+  TransportState,
+  TransportStateHandler,
+} from '../../interfaces/ITransport.js';
 import type { Logger } from '../logger.js';
+import { TransportNotOpenError } from './errors.js';
 import { parseEnvelope, serializeEnvelope } from './wire-schema.js';
 
 /**
@@ -81,12 +93,10 @@ export interface WebSocketTransportOptions {
   autoConnect?: boolean;
 }
 
-type State = 'connecting' | 'open' | 'closing' | 'closed';
-
 const BACKOFF_STEPS_MS = [250, 500, 1000, 2000, 5000] as const;
 const WS_READY_STATE_OPEN = 1;
 
-export class WebSocketTransport implements ITransport {
+export class WebSocketTransport implements IObservableTransport {
   readonly id = 'websocket-client';
 
   private readonly url: string;
@@ -96,7 +106,8 @@ export class WebSocketTransport implements ITransport {
 
   private socket: WebSocketLike | null = null;
   private receiver: TransportReceiveHandler | undefined;
-  private state: State = 'connecting';
+  private state: TransportState = 'connecting';
+  private readonly stateListeners = new Set<TransportStateHandler>();
   private reconnectAttempts = 0;
   private reconnectHandle: unknown = null;
   private userClosed = false;
@@ -122,7 +133,11 @@ export class WebSocketTransport implements ITransport {
   send(event: string, payload: unknown): Promise<void> {
     if (this.state !== 'open' || this.socket?.readyState !== WS_READY_STATE_OPEN) {
       this.logger.warn(`drop ${event} — conexión no abierta (state=${this.state})`);
-      return Promise.resolve();
+      return Promise.reject(
+        new TransportNotOpenError(
+          `no se pudo enviar ${event}: conexión no abierta (state=${this.state})`,
+        ),
+      );
     }
     try {
       this.socket.send(serializeEnvelope(event, payload));
@@ -138,7 +153,7 @@ export class WebSocketTransport implements ITransport {
 
   close(): Promise<void> {
     this.userClosed = true;
-    this.state = 'closing';
+    this.setState('closing');
     if (this.reconnectHandle !== null) {
       this.scheduler.clearTimeout(this.reconnectHandle);
       this.reconnectHandle = null;
@@ -151,7 +166,7 @@ export class WebSocketTransport implements ITransport {
       }
       this.socket = null;
     }
-    this.state = 'closed';
+    this.setState('closed');
     return Promise.resolve();
   }
 
@@ -159,8 +174,31 @@ export class WebSocketTransport implements ITransport {
    * Estado actual del transport. Útil para tests y para que la UI
    * pinte "reconectando" mientras dura el backoff.
    */
-  getState(): State {
+  getState(): TransportState {
     return this.state;
+  }
+
+  /**
+   * Registra un listener de cambios de estado. Devuelve la función de baja.
+   */
+  onStateChange(handler: TransportStateHandler): Unsubscribe {
+    this.stateListeners.add(handler);
+    return () => {
+      this.stateListeners.delete(handler);
+    };
+  }
+
+  /** Cambia el estado y avisa a los listeners solo si cambió. */
+  private setState(next: TransportState): void {
+    if (this.state === next) return;
+    this.state = next;
+    for (const listener of [...this.stateListeners]) {
+      try {
+        listener(next);
+      } catch (err) {
+        this.logger.error('listener de onStateChange lanzó', { err });
+      }
+    }
   }
 
   /**
@@ -174,13 +212,13 @@ export class WebSocketTransport implements ITransport {
     }
     if (this.socket) return;
 
-    this.state = 'connecting';
+    this.setState('connecting');
     const ws = new this.webSocketCtor(this.url);
     this.socket = ws;
 
     ws.onopen = () => {
       this.logger.info(`conectado a ${this.url}`);
-      this.state = 'open';
+      this.setState('open');
       this.reconnectAttempts = 0;
     };
 
@@ -208,8 +246,8 @@ export class WebSocketTransport implements ITransport {
       this.logger.warn(
         `conexión cerrada, programando reconexión (intento ${this.reconnectAttempts + 1})`,
       );
-      this.state = 'closed';
       this.socket = null;
+      this.setState('closed');
       this.scheduleReconnect();
     };
   }
