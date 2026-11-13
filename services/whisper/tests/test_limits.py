@@ -70,6 +70,17 @@ def _run_with_deadline(fn: Callable[[], Any], seconds: float, message: str) -> A
     return result.get("value")
 
 
+def _read_until_close(ws: Any) -> int:
+    """Lee mensajes hasta el cierre del servidor y devuelve su código."""
+    while True:
+        try:
+            msg = ws.receive()
+        except WebSocketDisconnect as err:
+            return err.code
+        if msg.get("type") == "websocket.close":
+            return int(msg.get("code", 1000))
+
+
 def test_stt_closes_1009_when_buffer_exceeds_cap(
     fake: _FakeTranscriber, small_limits: Config
 ) -> None:
@@ -80,12 +91,7 @@ def test_stt_closes_1009_when_buffer_exceeds_cap(
         with client.websocket_connect("/stt") as ws:
             for _ in range(6):  # 48 000 bytes > 32 000
                 ws.send_bytes(b"\0" * 8000)
-            try:
-                while True:
-                    ws.receive()
-            except WebSocketDisconnect as err:
-                return err.code
-        return -1
+            return _read_until_close(ws)
 
     code = _run_with_deadline(session, 5, "no cerró con 1009 en 5 s")
     assert code == 1009
@@ -113,12 +119,7 @@ def test_stt_closes_1001_when_idle(fake: _FakeTranscriber, small_limits: Config)
     def session() -> int:
         client = TestClient(app)
         with client.websocket_connect("/stt") as ws:
-            try:
-                while True:
-                    ws.receive()
-            except WebSocketDisconnect as err:
-                return err.code
-        return -1
+            return _read_until_close(ws)
 
     code = _run_with_deadline(session, 6, "no cerró por inactividad en 6 s")
     assert code == 1001

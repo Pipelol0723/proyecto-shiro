@@ -49,3 +49,27 @@ jobs:
       # `continue-on-error`: si el registro no responde, se relanza el job.
       - name: Audit de producción (high y critical)
         run: npm run audit:prod
+
+  # Tests mínimos del servicio Whisper (topes, Origin y host por defecto).
+  # No instala faster-whisper: los tests usan un transcriber falso. Las
+  # versiones son las mismas que fija services/whisper/requirements.txt; si
+  # cambian allí, cámbialas aquí. La suite completa de Python entra con P-18.
+  whisper-limits:
+    name: whisper-limits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install fastapi==0.115.6 httpx==0.28.1 numpy==2.2.1 pytest==9.2.0
+
+      - name: Tests de topes de Whisper
+        run: python -m pytest services/whisper/tests/test_limits.py -q

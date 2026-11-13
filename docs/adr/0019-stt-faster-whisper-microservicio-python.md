@@ -245,3 +245,16 @@ Mapa de archivos a tocar por PR (ver tasks #8-#14):
 - `WHISPER_HOST`/`WHISPER_PORT` solo tienen efecto sin Docker (`python -m services.whisper.main`): en Docker el `CMD` del `Dockerfile` fija `--host 0.0.0.0 --port 8765` y compose publica `8765:8765` en todas las interfaces. Sin auth ni tope de buffer (SEC-02).
 - Los defaults del servicio (`compute_type` `auto`, partials cada 1500 ms, sin hotwords) difieren de los de compose (`int8`, 2500 ms, `Shiro`).
 - Enmiendas planificadas en el plan de mejora, sin implementar: topes y bind (P-06b) y URL de STT publicada por el core-host (P-35).
+
+## Enmienda (2026-11-13): topes, bind y usuario
+
+Cambios del encargo P-06b del plan de mejora. Lo anterior del ADR no se
+reescribe; donde choque con esto, manda esta sección.
+
+- **Bind por capas.** El código escucha en `127.0.0.1` por defecto (`WHISPER_HOST`). El `Dockerfile` fija `WHISPER_HOST=0.0.0.0` porque dentro del contenedor hace falta, y la frontera la pone compose al publicar el puerto solo en loopback (`WHISPER_BIND`, P-06a). El ejemplo `ports: ['8765:8765']` de la decisión queda **superado**. El `CMD` pasa a `python -m services.whisper.main`, que lee host y puerto de la config.
+- **Topes.** El audio de un turno no pasa de `WHISPER_MAX_AUDIO_SECONDS` (90 s por defecto, 2 880 000 bytes a 16 kHz Int16): `/stt` envía un `error` y cierra con 1009; `/transcribe` responde 413, tanto por `Content-Length` como leyendo el cuerpo por trozos. Una sesión sin tráfico `WHISPER_IDLE_TIMEOUT_S` (15 s) se cierra con 1001.
+- **Origin.** `/stt` rechaza un `Origin` fuera de `WHISPER_ALLOWED_ORIGINS` (por defecto los tres del bus: `http://tauri.localhost`, `http://localhost:5173`, `http://127.0.0.1:5173`) antes de aceptar el WebSocket (1008). CORS usa la misma lista, con métodos `GET` y `POST`. Sin cabecera `Origin` se acepta: el residuo lo cierra el token de [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md).
+- **Usuario sin root y volumen nuevo.** La imagen corre como `shiro` (uid 10001) con `HF_HOME=/home/shiro/.cache/huggingface`. La caché vive en el volumen nuevo `whisper_hf_cache`; el viejo `whisper_models` (de cuando corría como root) se deja en Docker y borrarlo es decisión del dueño. El modelo `small` se descarga de nuevo la primera vez.
+- **Base CUDA por digest.** El `FROM` fija el digest de la imagen con la que se construyó la que funciona hoy, para que reconstruir no cambie la base sin avisar.
+- **Whisper nativo como alternativa.** Se puede ejecutar sin Docker (`python -m services.whisper.main`, bind loopback); ver `services/whisper/README.md`.
+- **Tests.** El job de CI `whisper-limits` ejecuta `services/whisper/tests/test_limits.py`; la suite completa de Python entra con P-18.

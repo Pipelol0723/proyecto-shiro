@@ -18,7 +18,8 @@ secas no lo levanta.
 
 La primera vez tarda varios minutos porque construye la imagen y
 descarga el modelo (`small` por defecto, ~244 MB). El cache de modelos
-queda en un volumen Docker, así que reinicios posteriores son rápidos.
+queda en el volumen Docker `whisper_hf_cache`, así que reinicios posteriores
+son rápidos. El contenedor corre sin root (usuario `shiro`, uid 10001).
 
 ### Requisitos para que use la GPU
 
@@ -71,16 +72,19 @@ Debe devolver algo como:
 
 El servicio (Python standalone) trae defaults conservadores; el `docker-compose.yml` del proyecto los afina al hardware de Shiro (CUDA esperado).
 
-| Variable                        | Default servicio    | Default compose | Descripción                                                                                                                                                                                                                                    |
-| ------------------------------- | ------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WHISPER_MODEL`                 | `small`             | `small`         | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`.                                                                                                                                                                                   |
-| `WHISPER_DEVICE`                | `auto`              | `auto`          | `auto`/`cuda`/`cpu`. `auto` detecta CUDA y degrada si no hay.                                                                                                                                                                                  |
-| `WHISPER_COMPUTE_TYPE`          | `auto`              | `int8`          | `auto`/`int8`/`int8_float16`/`int8_bfloat16`/`float16`/`float32`. `int8` es el default seguro (CPU + cualquier CUDA). Con Tensor Cores (RTX 2060+) usa `int8_float16` para ~2× más velocidad.                                                  |
-| `WHISPER_LANGUAGE`              | `es`                | `es`            | ISO 639-1.                                                                                                                                                                                                                                     |
-| `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`              | `2500`          | Cada cuánto retranscribir el buffer para emitir un partial. Más alto = menos cómputo acumulado por turno.                                                                                                                                      |
-| `WHISPER_HOTWORDS`              | `""` (sin hotwords) | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Faster-whisper ≥1.1.0. Sesga sin filtrarse al output — usar esto en vez de un prompt completo evita que Whisper escupa la frase como transcripción cuando el audio es ambiguo. |
-| `WHISPER_SAMPLE_RATE`           | `16000`             | `16000`         | Sample rate esperado del PCM Int16 LE mono que envía el cliente.                                                                                                                                                                               |
-| `WHISPER_HOST` / `WHISPER_PORT` | `0.0.0.0` / `8765`  | (sin efecto)    | Bind del servidor **solo sin Docker** (`python -m services.whisper.main`). En Docker el `CMD` del `Dockerfile` fija `--host 0.0.0.0 --port 8765` y la exposición la decide `ports:` de compose (solo `127.0.0.1` salvo `WHISPER_BIND`).        |
+| Variable                        | Default servicio       | Default compose | Descripción                                                                                                                                                                                                                                    |
+| ------------------------------- | ---------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WHISPER_MODEL`                 | `small`                | `small`         | `tiny`/`base`/`small`/`medium`/`large-v3`/`distil-large-v3`.                                                                                                                                                                                   |
+| `WHISPER_DEVICE`                | `auto`                 | `auto`          | `auto`/`cuda`/`cpu`. `auto` detecta CUDA y degrada si no hay.                                                                                                                                                                                  |
+| `WHISPER_COMPUTE_TYPE`          | `auto`                 | `int8`          | `auto`/`int8`/`int8_float16`/`int8_bfloat16`/`float16`/`float32`. `int8` es el default seguro (CPU + cualquier CUDA). Con Tensor Cores (RTX 2060+) usa `int8_float16` para ~2× más velocidad.                                                  |
+| `WHISPER_LANGUAGE`              | `es`                   | `es`            | ISO 639-1.                                                                                                                                                                                                                                     |
+| `WHISPER_PARTIAL_INTERVAL_MS`   | `1500`                 | `2500`          | Cada cuánto retranscribir el buffer para emitir un partial. Más alto = menos cómputo acumulado por turno.                                                                                                                                      |
+| `WHISPER_HOTWORDS`              | `""` (sin hotwords)    | `Shiro`         | Palabras clave que el decoder boostea (separadas por espacios). Faster-whisper ≥1.1.0. Sesga sin filtrarse al output — usar esto en vez de un prompt completo evita que Whisper escupa la frase como transcripción cuando el audio es ambiguo. |
+| `WHISPER_SAMPLE_RATE`           | `16000`                | `16000`         | Sample rate esperado del PCM Int16 LE mono que envía el cliente.                                                                                                                                                                               |
+| `WHISPER_HOST` / `WHISPER_PORT` | `127.0.0.1` / `8765`   | (sin efecto)    | Bind del servidor. Sin Docker, loopback por defecto. En Docker el `Dockerfile` fija `WHISPER_HOST=0.0.0.0` (hace falta dentro del contenedor) y la exposición la decide `ports:` de compose (solo `127.0.0.1` salvo `WHISPER_BIND`).           |
+| `WHISPER_MAX_AUDIO_SECONDS`     | `90`                   | `90`            | Tope de audio por turno. `/stt` cierra con 1009 (tras enviar un `error`) y `/transcribe` responde 413. Súbelo si tus mensajes largos se cortan.                                                                                                |
+| `WHISPER_IDLE_TIMEOUT_S`        | `15`                   | `15`            | Segundos sin recibir nada del cliente antes de cerrar `/stt` con 1001 (tras enviar un `error`).                                                                                                                                                |
+| `WHISPER_ALLOWED_ORIGINS`       | los tres de esta celda | (vacío = igual) | Orígenes permitidos (CORS y WebSocket), separados por comas: `http://tauri.localhost`, `http://localhost:5173`, `http://127.0.0.1:5173`. Un WebSocket con otro `Origin` se rechaza antes de aceptarlo (1008). Sin cabecera `Origin` se acepta. |
 
 Sin compose el servicio usa sus propios defaults (`auto`, 1500 ms y sin hotwords). Para igualar compose exporta `WHISPER_COMPUTE_TYPE=int8`, `WHISPER_PARTIAL_INTERVAL_MS=2500` y `WHISPER_HOTWORDS=Shiro`.
 
@@ -98,6 +102,17 @@ Diseñado para que el **cliente desktop** lo consuma directamente — el
 - **Frames de texto** (JSON): comandos de control.
   - `{"type": "stop"}` — fin del turno: el servidor transcribe el buffer
     completo, emite el `transcribed` final y cierra la conexión.
+
+### Cierres del servidor
+
+| Código | Cuándo                                                                    |
+| ------ | ------------------------------------------------------------------------- |
+| 1008   | `Origin` no permitido (se rechaza antes de aceptar; el handshake da 403). |
+| 1009   | El buffer pasó de `WHISPER_MAX_AUDIO_SECONDS` de audio.                   |
+| 1001   | `WHISPER_IDLE_TIMEOUT_S` segundos sin tráfico del cliente.                |
+| 1013   | El modelo aún está cargando.                                              |
+
+En 1009 y 1001 el servidor envía antes un `{"type": "error"}`.
 
 ### Servidor envía (siempre JSON)
 
@@ -131,9 +146,24 @@ Tests:
 pytest services/whisper/tests
 ```
 
-Los tests de Python no corren en el CI y la revisión de 2026-11 los encontró
-probablemente rotos (R-194). El plan de mejora propone un job mínimo de pytest
-(P-06b) y la suite completa en CI (P-18), sin implementar.
+En el CI corre solo `services/whisper/tests/test_limits.py` (job
+`whisper-limits`: topes, Origin y host por defecto, sin cargar el modelo). Hay un
+test más antiguo roto (`test_health.py::test_health_ok_when_transcriber_present`,
+R-194) y la suite completa entra en CI con P-18.
+
+### Whisper nativo en Windows (alternativa a Docker)
+
+Si Docker da problemas (o para mover el servicio a otro equipo), se puede
+ejecutar sin contenedor con el venv de arriba. Desde la raíz del repo:
+
+```bash
+python -m services.whisper.main
+```
+
+Escucha en `127.0.0.1:8765` por defecto (loopback), que es lo que espera el
+cliente. Con GPU necesita los runtimes CUDA 12 y cuDNN en el `PATH`; sin ellos,
+`WHISPER_DEVICE=cpu` y `WHISPER_COMPUTE_TYPE=int8`. Los defaults del servicio
+difieren de los de compose (ver tabla): exporta las variables que quieras igualar.
 
 ## Notas operativas
 
@@ -147,13 +177,14 @@ probablemente rotos (R-194). El plan de mejora propone un job mínimo de pytest
   embeddings. Para modelos mayores, espera a hardware más holgado.
 - **Sin estado persistente**: cada conexión WS es independiente, no hay
   agentes ni sesiones que sobrevivan.
-- **Seguridad (deuda local diferida)**: dentro del contenedor el servicio
-  escucha en `0.0.0.0`, pero compose lo publica solo en `127.0.0.1` salvo
-  `WHISPER_BIND`. Sigue con CORS `*`, sin autenticación, y el buffer del WS
-  `/stt` no tiene tope (audio ilimitado → DoS de memoria/CPU). La decisión
-  vigente es
+- **Seguridad**: dentro del contenedor el servicio escucha en `0.0.0.0`, pero
+  compose lo publica solo en `127.0.0.1` salvo `WHISPER_BIND`; el código, sin
+  Docker, escucha en `127.0.0.1`. El audio tiene tope (1009 / 413), la sesión
+  inactiva se cierra (1001), CORS y WebSocket solo aceptan los orígenes de
+  `WHISPER_ALLOWED_ORIGINS` y el contenedor corre sin root. **Sigue sin
+  autenticación**: una conexión sin cabecera `Origin` (un proceso local) se
+  acepta. La decisión vigente para cerrarlo es
   [ADR 0027](../../docs/adr/0027-autenticacion-token-bus-stt-multicliente.md)
-  (token en el handshake, `WHISPER_HOST` a `127.0.0.1` y tope de buffer con
-  cierre 1009), Accepted y **sin implementar en este servicio**. Estado en la fila SEC-02 de la
-  tabla viva de
+  (token en el handshake), Accepted y **sin implementar en este servicio**.
+  Estado en la fila SEC-02 de la tabla viva de
   [`docs/security-review-2026-07.md`](../../docs/security-review-2026-07.md).

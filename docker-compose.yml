@@ -87,8 +87,9 @@ services:
     image: shiro-whisper:local
     restart: unless-stopped
     ports:
-      # Dentro del contenedor uvicorn escucha en 0.0.0.0 (lo fija el CMD del
-      # Dockerfile); lo que se acota es la publicación en el host.
+      # Dentro del contenedor el servicio escucha en 0.0.0.0 (lo fija
+      # `WHISPER_HOST` en el Dockerfile); lo que se acota es la publicación en
+      # el host.
       - '${WHISPER_BIND:-127.0.0.1}:8765:8765'
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-small}
@@ -109,6 +110,13 @@ services:
       # Palabras clave que sesgan el decoder sin filtrarse al output.
       # Separadas por espacios. Cambialo si tu personaje no se llama Shiro.
       - WHISPER_HOTWORDS=${WHISPER_HOTWORDS:-Shiro}
+      # Topes del servicio (ADR 0019, enmienda de 2026-11-13): segundos máximos
+      # de audio por turno (pasado el tope, cierre 1009 o 413), segundos de
+      # inactividad antes de cerrar la sesión (1001) y orígenes permitidos
+      # separados por comas (vacío = los tres por defecto del servicio).
+      - WHISPER_MAX_AUDIO_SECONDS=${WHISPER_MAX_AUDIO_SECONDS:-90}
+      - WHISPER_IDLE_TIMEOUT_S=${WHISPER_IDLE_TIMEOUT_S:-15}
+      - WHISPER_ALLOWED_ORIGINS=${WHISPER_ALLOWED_ORIGINS:-}
     # Exponer la GPU NVIDIA del host al contenedor. Sin esta sección el
     # microservicio cae a CPU silenciosamente (faster-whisper detecta y
     # degrada) — el WARN "NVIDIA Driver was not detected" en los logs
@@ -125,8 +133,9 @@ services:
               capabilities: [gpu]
     volumes:
       # Cache de modelos de Hugging Face — sobrevive a `docker compose down`.
-      # `down -v` lo borra y la próxima vez re-descarga el modelo.
-      - whisper_models:/root/.cache/huggingface
+      # `down -v` lo borra y la próxima vez re-descarga el modelo. El proceso
+      # corre como el usuario `shiro` (uid 10001), dueño de este directorio.
+      - whisper_hf_cache:/home/shiro/.cache/huggingface
     healthcheck:
       test: ['CMD', 'curl', '-fsS', 'http://localhost:8765/health']
       interval: 30s
@@ -138,4 +147,7 @@ services:
 
 volumes:
   letta_pgdata:
-  whisper_models:
+  whisper_hf_cache:
+  # El volumen viejo `whisper_models` (caché de cuando Whisper corría como
+  # root) ya no lo usa ningún servicio, pero sigue existiendo en Docker con el
+  # modelo dentro. Borrarlo (`docker volume rm`) es decisión del dueño.

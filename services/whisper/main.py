@@ -27,6 +27,11 @@ Coreografía:
     `{"type": "stop"}`.
   - El servidor responde con el `transcribed` final y cierra la conexión.
 
+Topes (ADR 0019, enmienda de 2026-11-13): el buffer de audio no pasa de
+`max_audio_seconds` (cierre 1009 en /stt, 413 en /transcribe), una sesión sin
+tráfico `idle_timeout_s` se cierra con 1001 y un `Origin` ajeno se rechaza
+antes de aceptar el WebSocket (1008).
+
 Ver ADR 0019 para el detalle de la arquitectura.
 """
 
@@ -39,7 +44,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Config
@@ -74,9 +79,9 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan, title="shiro-whisper")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # entorno local; cuando haya despliegue público, restringir
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=list(config.allowed_origins),
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -95,9 +100,7 @@ async def health() -> dict[str, Any]:
 
 
 @app.post("/transcribe")
-async def transcribe_batch(
-    body: bytes = Body(..., media_type="application/octet-stream"),
-) -> dict[str, Any]:
+async def transcribe_batch(request: Request) -> dict[str, Any]:
     """Transcripción batch de un buffer PCM Int16 LE mono completo.
 
     NO es el flujo principal del chat — ese va por WebSocket directo
@@ -108,13 +111,26 @@ async def transcribe_batch(
 
     El idioma lo fija la config del servicio (`WHISPER_LANGUAGE`); no se
     parametriza por request en V1.
+
+    El cuerpo no puede pasar de `max_audio_bytes`: se rechaza con 413 por la
+    cabecera `Content-Length` y, como un cliente puede mentir u omitirla, también
+    al leer el cuerpo por trozos.
     """
+    max_bytes = config.max_audio_bytes
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > max_bytes:
+        raise HTTPException(status_code=413, detail="audio demasiado largo")
     transcriber = get_transcriber()
     if transcriber is None:
         raise HTTPException(status_code=503, detail="modelo aún cargando")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            raise HTTPException(status_code=413, detail="audio demasiado largo")
     if not body:
         return {"text": "", "isFinal": True}
-    text = await asyncio.to_thread(transcriber.transcribe_pcm, body)
+    text = await asyncio.to_thread(transcriber.transcribe_pcm, bytes(body))
     return {"text": text, "isFinal": True}
 
 
@@ -127,12 +143,23 @@ async def _emit_error(ws: WebSocket, message: str) -> None:
 
 @app.websocket("/stt")
 async def stt_endpoint(ws: WebSocket) -> None:
+    # El Origin se comprueba ANTES de aceptar: un cierre previo al accept hace
+    # que Starlette responda 403 al handshake. Sin cabecera (proceso local) se
+    # acepta; eso lo cerrará el token de ADR 0027.
+    origin = ws.headers.get("origin")
+    if origin is not None and origin not in config.allowed_origins:
+        logger.warning("conexión /stt rechazada por Origin no permitido: %s", origin)
+        await ws.close(code=1008)
+        return
     await ws.accept()
     transcriber = get_transcriber()
     if transcriber is None:
         await _emit_error(ws, "modelo aún cargando, reintenta en unos segundos")
         await ws.close(code=1013)  # "Try Again Later"
         return
+
+    max_bytes = config.max_audio_bytes
+    closed = False  # evita un segundo close() en el finally
 
     buffer = bytearray()
     last_partial = time.monotonic()
@@ -141,13 +168,24 @@ async def stt_endpoint(ws: WebSocket) -> None:
 
     try:
         while True:
-            msg = await ws.receive()
+            try:
+                msg = await asyncio.wait_for(ws.receive(), timeout=config.idle_timeout_s)
+            except asyncio.TimeoutError:
+                await _emit_error(ws, "sesión inactiva")
+                await ws.close(code=1001)  # "Going Away"
+                closed = True
+                break
             mtype = msg.get("type")
             if mtype == "websocket.disconnect":
                 break
             # Chunks binarios: acumular en buffer.
             if msg.get("bytes"):
                 buffer.extend(msg["bytes"])
+                if len(buffer) > max_bytes:
+                    await _emit_error(ws, "audio demasiado largo")
+                    await ws.close(code=1009)  # "Message Too Big"
+                    closed = True
+                    break
                 now = time.monotonic()
                 if now - last_partial >= partial_interval_s and len(buffer) >= 2:
                     # Retranscribir todo el buffer en un thread para no
@@ -192,10 +230,11 @@ async def stt_endpoint(ws: WebSocket) -> None:
         logger.exception("error en sesión STT")
         await _emit_error(ws, str(err))
     finally:
-        try:
-            await ws.close()
-        except Exception:  # noqa: BLE001
-            pass
+        if not closed:
+            try:
+                await ws.close()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def run() -> None:
