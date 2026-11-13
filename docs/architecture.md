@@ -663,8 +663,9 @@ esencial:
 - **Fronteras abiertas** (deuda): el WebSocket `/bus` y el HTTP de audio del
   `core-host` escuchan solo en `127.0.0.1` salvo `SHIRO_BIND_HOST` y rechazan
   un `Origin` ajeno, pero sin autenticación: un proceso local todavía se
-  conecta y recibe el historial (`memory:snapshot`); el WS `/stt` de Whisper
-  y Letta escuchan en todas las interfaces.
+  conecta y recibe el historial (`memory:snapshot`). Compose publica Letta y
+  Whisper solo en `127.0.0.1` salvo `LETTA_BIND` y `WHISPER_BIND`, pero el WS
+  `/stt` de Whisper sigue sin autenticación, sin topes y sin validar `Origin`.
   [ADR 0027](adr/0027-autenticacion-token-bus-stt-multicliente.md) (Accepted,
   **en curso**: ver su enmienda del 2026-11-13) decide token compartido en el handshake,
   `SHIRO_BIND_HOST` con default `127.0.0.1`, allowlist de `Origin` y
