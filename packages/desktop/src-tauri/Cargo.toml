@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Proyecto Shiro — AI Companion desktop binary"
 authors = ["Pipelol <pipelol0723@gmail.com>"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.90"
 
 # Lib config: el binario `proyecto-shiro-desktop` arranca a través de
 # `src/main.rs` que delega en `lib.rs`. Mantenerlo como lib facilita
@@ -43,10 +43,10 @@ tauri-plugin-process = "2"
 # agentic (ADR 0022) los necesite, la firma del binario YA los cubre y
 # el auto-updater no rompe la cadena de updates al añadir permisos.
 #
-# Los `capabilities/default.json` SÍ los listan con scope amplio. Lo
-# que mantiene "runtime-denied" es que ningún comando IPC custom los
-# invoca todavía — sin código que llame a `tauri::api::fs::*`, no hay
-# superficie de explotación.
+# `capabilities/default.json` no concede hoy ningún permiso de estos
+# plugins: sin permiso y sin código que los invoque no hay superficie de
+# explotación. Al añadir uno, cuidado con el identificador: tauri-build
+# valida los permisos y un nombre mal escrito hace fallar el build.
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
