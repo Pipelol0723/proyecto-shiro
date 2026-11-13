@@ -123,7 +123,7 @@ describe('audio TTS que sobrevive a una pérdida de conexión', () => {
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'hola' } });
     await act(async () => {
-      fireEvent.submit(input.closest('form') as HTMLFormElement);
+      fireEvent.submit(input.closest('form')!);
       await Promise.resolve();
     });
 
