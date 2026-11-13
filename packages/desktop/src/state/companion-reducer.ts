@@ -43,6 +43,12 @@ export interface CompanionState {
   sttLive: string;
   /** Subtítulo de Shiro mientras habla (vacío cuando no). */
   subtitle: string;
+  /**
+   * Se cortó la voz de Shiro porque se cayó la conexión mientras hablaba.
+   * Se mantiene hasta que empieza el turno siguiente (el usuario escribe o
+   * habla, o llega una respuesta nueva).
+   */
+  voiceCutByConnection: boolean;
   /** Historial completo de conversación. */
   history: CompanionMessage[];
 }
@@ -55,6 +61,7 @@ export const INITIAL_STATE: CompanionState = {
   routedTo: null,
   sttLive: '',
   subtitle: '',
+  voiceCutByConnection: false,
   history: [],
 };
 
@@ -68,6 +75,7 @@ export type CompanionAction =
   | { type: 'SPEAK_END' }
   | { type: 'LISTEN_END' }
   | { type: 'CONNECTION_LOST' }
+  | { type: 'VOICE_CUT' }
   | { type: 'SET_EMOTION'; emotion: Emotion }
   | { type: 'HYDRATE_FROM_MEMORY'; entries: MemoryEntry[] }
   | { type: 'RESET' };
@@ -105,7 +113,7 @@ function entryToMessage(entry: MemoryEntry): CompanionMessage {
 export function companionReducer(state: CompanionState, action: CompanionAction): CompanionState {
   switch (action.type) {
     case 'LISTEN_START':
-      return { ...state, listening: true, sttLive: '', subtitle: '' };
+      return { ...state, listening: true, sttLive: '', subtitle: '', voiceCutByConnection: false };
 
     case 'STT_PARTIAL':
       return { ...state, sttLive: action.text };
@@ -121,6 +129,7 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
     case 'USER_SAID':
       return {
         ...state,
+        voiceCutByConnection: false,
         history: [
           ...state.history,
           { role: 'user', text: action.text, timestamp: new Date().toISOString() },
@@ -135,6 +144,7 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         ...state,
         thinking: false,
         speaking: true,
+        voiceCutByConnection: false,
         emotion: action.emotion,
         subtitle: action.text,
         history: [
@@ -169,6 +179,11 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         sttLive: '',
         subtitle: '',
       };
+
+    case 'VOICE_CUT':
+      // Lo emite `AudioProvider` tras cortar un audio al caer la conexión;
+      // `CONNECTION_LOST` no lo toca (conserva el aviso).
+      return { ...state, voiceCutByConnection: true };
 
     case 'SET_EMOTION':
       return { ...state, emotion: action.emotion };

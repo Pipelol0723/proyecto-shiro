@@ -46,6 +46,13 @@ export interface UseTtsPlaybackResult {
    */
   cancel: () => void;
   /**
+   * Corta en local el audio que suena, sin pasar por el bus: no emite
+   * `tts:cancel` ni `tts:audio-ended`. Es el corte para cuando no hay
+   * conexión (el transport rechazaría el envío y nadie lo escucharía).
+   * Devuelve `true` si había un audio sonando y se cortó.
+   */
+  cutLocal: () => boolean;
+  /**
    * El `HTMLAudioElement` que está reproduciendo el turno actual, o
    * `null` si no hay audio sonando (o el cliente está muteado). El
    * avatar lo usa para el lip-sync: lo conecta a un `AnalyserNode` y
@@ -226,5 +233,11 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
     void bus.emit('tts:cancel', { audioId, userId });
   }, [bus]);
 
-  return { muted, setMuted, cancel, audioElement };
+  const cutLocal = useCallback((): boolean => {
+    if (audioRef.current === null) return false;
+    stopCurrent();
+    return true;
+  }, [stopCurrent]);
+
+  return { muted, setMuted, cancel, cutLocal, audioElement };
 }
