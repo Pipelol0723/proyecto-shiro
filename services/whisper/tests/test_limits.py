@@ -241,3 +241,33 @@ def test_config_allowed_origins_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("WHISPER_ALLOWED_ORIGINS", "http://a.test, http://b.test ,")
     cfg = Config.from_env()
     assert cfg.allowed_origins == ("http://a.test", "http://b.test")
+
+
+def test_stt_normal_turn_not_cut_by_idle(fake: _FakeTranscriber, small_limits: Config) -> None:
+    """Regresión: audio fluyendo y `stop` posterior dan un final, sin 1001/1009."""
+    from services.whisper.main import app
+
+    def session() -> str:
+        client = TestClient(app)
+        with client.websocket_connect("/stt") as ws:
+            for _ in range(3):  # 24 000 bytes < 32 000
+                ws.send_bytes(b"\0" * 8000)
+            ws.send_text('{"type": "stop"}')
+            return ws.receive_text()
+
+    payload = _run_with_deadline(session, 5, "no llegó el final en 5 s")
+    assert '"transcribed"' in payload
+
+
+def test_stt_closes_1009_on_single_oversized_message(
+    fake: _FakeTranscriber, small_limits: Config
+) -> None:
+    from services.whisper.main import app
+
+    def session() -> int:
+        client = TestClient(app)
+        with client.websocket_connect("/stt") as ws:
+            ws.send_bytes(b"\0" * 40000)  # un solo mensaje > 32 000
+            return _read_until_close(ws)
+
+    assert _run_with_deadline(session, 5, "no cerró con 1009 en 5 s") == 1009
