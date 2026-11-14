@@ -10,9 +10,9 @@
  * aviso de privacidad. Parte c: contador mensual de segundos sintetizados, vía
  * un `TtsUsageSink` inyectado (la persistencia vive en el `core-host`; aquí no
  * hay `node:fs`) y aviso al cruzar `monthly_warn_seconds`. No incluye estilo
- * (`annotations`): llega en una parte posterior del ADR. Un fallo de configuración no detiene
- * el arranque (el constructor solo avisa); `synthesize` falla rápido.
- * Los errores no reintentan nada (un 429 debe saltar a la cadena de respaldo).
+ * (`annotations`): llega en una parte posterior del ADR. Un fallo de
+ * configuración no detiene el arranque (el constructor solo avisa);
+ * `synthesize` falla rápido. Los errores no reintentan nada (un 429 debe saltar a la cadena de respaldo).
  *
  * Por contrato se instancia solo en el `core-host`: la clave vive en
  * `process.env.GEMINI_API_KEY` y no aparece en errores ni en logs.
@@ -210,10 +210,9 @@ export class GeminiTTS implements ITTSModule {
       throw new GeminiTTSError('GeminiTTS: el audio no es base64 válido', response.status);
     }
     const audio = Buffer.from(base64, 'base64');
+    let info: ReturnType<typeof parseWav>;
     try {
-      const info = parseWav(audio);
-      this.recordUsage(info.durationMs / 1000);
-      return { audio, mimeType: 'audio/wav', duration: info.durationMs };
+      info = parseWav(audio);
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'motivo desconocido';
       throw new GeminiTTSError(
@@ -222,6 +221,8 @@ export class GeminiTTS implements ITTSModule {
         err,
       );
     }
+    this.recordUsage(info.durationMs / 1000);
+    return { audio, mimeType: 'audio/wav', duration: info.durationMs };
   }
 
   /**

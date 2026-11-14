@@ -3,7 +3,7 @@
  * temporal del sistema: ningún test escribe en el cwd ni en el repo.
  */
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -71,6 +71,50 @@ describe('FileTtsUsageCounter', () => {
     const blocker = path.join(root, 'bloqueo');
     writeFileSync(blocker, 'x', 'utf-8');
     const counter = new FileTtsUsageCounter({ dir: path.join(blocker, 'data'), now: jan });
+    expect(() => counter.record(3)).not.toThrow();
+    expect(counter.record(2)).toBeCloseTo(5, 6);
+  });
+
+  it('ignora segundos no válidos (NaN, negativos, infinito)', () => {
+    const counter = new FileTtsUsageCounter({ dir: root, now: jan });
+    counter.record(2);
+    expect(counter.record(Number.NaN)).toBe(2);
+    expect(counter.record(-1)).toBe(2);
+    expect(counter.record(Number.POSITIVE_INFINITY)).toBe(2);
+  });
+
+  it.each([
+    ['seconds negativo', '{"month":"2026-01","seconds":-5}'],
+    ['seconds como cadena', '{"month":"2026-01","seconds":"7"}'],
+    ['month que no es cadena', '{"month":202601,"seconds":7}'],
+    ['un array', '[1,2]'],
+    ['null', 'null'],
+  ])('un archivo con %s empieza de cero', (_name, content) => {
+    writeFileSync(path.join(root, 'tts-usage.json'), content, 'utf-8');
+    const counter = new FileTtsUsageCounter({ dir: root, now: jan });
+    expect(counter.record(1)).toBeCloseTo(1, 6);
+  });
+
+  it('al cambiar de año empieza de cero', () => {
+    const dec = (): Date => new Date(2025, 11, 31, 23, 0, 0);
+    new FileTtsUsageCounter({ dir: root, now: dec }).record(9);
+    const counter = new FileTtsUsageCounter({ dir: root, now: jan });
+    expect(counter.record(1)).toBeCloseTo(1, 6);
+  });
+
+  it('un archivo de un mes futuro se reinicia al mes actual', () => {
+    writeFileSync(
+      path.join(root, 'tts-usage.json'),
+      JSON.stringify({ month: '2027-05', seconds: 40 }),
+      'utf-8',
+    );
+    const counter = new FileTtsUsageCounter({ dir: root, now: jan });
+    expect(counter.record(1)).toBeCloseTo(1, 6);
+  });
+
+  it('si el rename falla (destino es una carpeta) no lanza y sigue contando', () => {
+    mkdirSync(path.join(root, 'tts-usage.json'));
+    const counter = new FileTtsUsageCounter({ dir: root, now: jan });
     expect(() => counter.record(3)).not.toThrow();
     expect(counter.record(2)).toBeCloseTo(5, 6);
   });

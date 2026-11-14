@@ -109,6 +109,7 @@ export type { ElevenLabsTTSConfig, ElevenLabsTTSOptions } from './modules/tts/el
 // core-host server-side: la clave vive en process.env.GEMINI_API_KEY. Ver ADR 0034.
 export { GeminiTTS, GeminiTTSConfigSchema, GeminiTTSError } from './modules/tts/gemini-tts.js';
 export type { GeminiTTSConfig, GeminiTTSOptions, TtsUsageSink } from './modules/tts/gemini-tts.js';
+
 // TTS — lector puro de WAV (cabecera RIFF y duración). Ver ADR 0034 §1.
 export { parseWav, WavError } from './modules/tts/wav.js';
 export type { WavInfo } from './modules/tts/wav.js';

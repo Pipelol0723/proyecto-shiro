@@ -7,7 +7,13 @@
  *
  * Nunca lanza: la escritura es atómica (archivo temporal + `renameSync`) y, si
  * falla, se reintenta directa; si también falla, avisa una sola vez y sigue
- * contando en memoria. Un JSON roto o ilegible empieza de cero con aviso.
+ * contando en memoria. Un JSON roto o ilegible empieza de cero con aviso (y la
+ * siguiente escritura lo sobrescribe). Si la escritura directa se corta a medias
+ * queda un JSON truncado, que el siguiente arranque trata como roto.
+ *
+ * Se espera un único escritor por archivo: el estado se carga una vez y vive en
+ * memoria, así que dos instancias sobre el mismo archivo se pisarían. Crea una
+ * sola y compártela (el bootstrap carga cada proveedor una vez).
  */
 
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -89,7 +95,7 @@ export class FileTtsUsageCounter implements TtsUsageSink {
 
   private persist(state: UsageState): void {
     const json = JSON.stringify(state);
-    const tmp = `${this.file}.tmp`;
+    const tmp = `${this.file}.${String(process.pid)}.tmp`;
     try {
       mkdirSync(path.dirname(this.file), { recursive: true });
       writeFileSync(tmp, json, 'utf-8');
