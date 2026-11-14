@@ -56,7 +56,7 @@ import { buildSelfDevAnnounceTurn, buildSelfDevToolTurn } from './selfdev/selfde
 import type { SelfDevOutcome } from './selfdev/selfdev-session.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
-import { TtsWithFallback } from './tts/tts-with-fallback.js';
+import { buildTtsChain } from './tts/build-tts-chain.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
 import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
 
@@ -136,9 +136,8 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     'ElevenLabsTTS',
     (cfg, deps) => new ElevenLabsTTS(cfg, deps, { emotions: options.character.emotions }),
   );
-  // SystemTTS no recibe config del YAML (el slot `tts` solo describe el
-  // primary). Lo registramos vacío y el bootstrap lo instanciará después
-  // para envolverlo en `TtsWithFallback`. Ver ADR 0020.
+  // SystemTTS lo instancia `buildTtsChain` al final de la cadena, con
+  // `tts.providers.SystemTTS` o `{}` si no hay entrada. Ver ADR 0020 y 0034.
   loader.register('SystemTTS', (cfg, deps) => new SystemTTS(cfg, deps));
   loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
   // Live2DAvatar es lógico server-side (no carga PIXI). Recibe las
@@ -276,17 +275,18 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     })();
   });
 
-  // 5. TTS con cadena de fallback (ADR 0020). El YAML define el primary
-  //    (ElevenLabsTTS) en `tts.active`; aquí instanciamos SystemTTS
-  //    aparte y los envolvemos en un wrapper que el pipeline ve como un
-  //    solo `ITTSModule`. Si la API key de ElevenLabs no está o falla,
-  //    SystemTTS toma el turno.
+  // 5. TTS con cadena de fallback (ADR 0020, ADR 0034 §3). El primario
+  //    (`tts.active`) ya lo cargó el orquestador en `orchestrator.init`
+  //    (core/orchestrator.ts); aquí se construyen los respaldos desde
+  //    `tts.fallback_chain` y `tts.providers`, con SystemTTS siempre al
+  //    final. Un nombre inválido lanza aquí, tras `init`.
   const modules = orchestrator.getModules();
   const primaryTts = modules.tts;
-  const systemTts = new SystemTTS({}, { logger, bus });
-  const ttsChain: ITTSModule = new TtsWithFallback({
+  const ttsChain: ITTSModule = buildTtsChain({
     primary: primaryTts,
-    fallbacks: [systemTts],
+    slot: options.config.modules.tts,
+    loader,
+    deps: { logger, bus },
     logger,
   });
   child.info(`TTS cadena: ${ttsChain.id}`);

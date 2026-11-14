@@ -24,13 +24,19 @@ import { z } from 'zod';
  *
  * Ejemplo (TTS, ver ADR 0020):
  *   active: ElevenLabsTTS
- *   fallback_chain: [SystemTTS]
+ *   fallback_chain: [GeminiTTS, SystemTTS]
  *   config: { voice_id: '...', model_id: 'eleven_multilingual_v2', ... }
+ *   providers: { GeminiTTS: { voice: '...' } }
+ *
+ * `config` es la configuración del módulo activo. `providers` guarda la
+ * de los respaldos de `fallback_chain`, por nombre (ADR 0034 §3). Hoy solo
+ * lo lee el slot `tts`; el esquema es común para no duplicarlo.
  */
 const ModuleSlotSchema = z.object({
   active: z.string().min(1, 'el nombre del módulo activo no puede estar vacío'),
   fallback_chain: z.array(z.string().min(1)).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
+  providers: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 });
 
 /**
