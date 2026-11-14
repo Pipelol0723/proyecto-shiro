@@ -75,6 +75,8 @@ interface SecretRow {
   envVar: string;
   purpose: string;
   degraded: string;
+  /** Aviso fijo junto al campo (p. ej. privacidad), visible tenga o no la clave. */
+  notice?: string;
 }
 
 const SECRETS: readonly SecretRow[] = [
@@ -91,14 +93,16 @@ const SECRETS: readonly SecretRow[] = [
     name: 'ElevenLabs',
     envVar: 'ELEVENLABS_API_KEY',
     purpose: 'Voz neuronal del TTS',
-    degraded: 'Sin esta key Shiro habla con la voz del sistema operativo (SystemTTS).',
+    degraded: 'Sin esta clave, si Gemini falla o no está, hablo con la voz del sistema.',
   },
   {
     key: 'gemini',
-    name: 'Gemini',
+    name: 'Google Gemini',
     envVar: 'GEMINI_API_KEY',
-    purpose: 'Voz diseñada de Shiro (TTS primario)',
-    degraded: 'Sin esta key Shiro usa ElevenLabs o, en su defecto, la voz del sistema.',
+    purpose: 'Es mi voz principal.',
+    degraded: 'Sin esta clave hablo con ElevenLabs y, si tampoco está, con la voz del sistema.',
+    notice:
+      'Lo que digo en voz alta se envía a Google. Con una clave del nivel gratuito, Google lo usa para mejorar sus productos; con el de pago, no.',
   },
 ] as const;
 
@@ -221,6 +225,7 @@ export function SetupScreen(): JSX.Element {
                 </div>
                 <p className={styles.cardPurpose}>{sec.purpose}</p>
                 {!ok && report !== null && <p className={styles.degraded}>{sec.degraded}</p>}
+                {sec.notice !== undefined && <p className={styles.degraded}>{sec.notice}</p>}
                 <div className={styles.secretRow}>
                   <input
                     type="password"
@@ -261,8 +266,10 @@ export function SetupScreen(): JSX.Element {
           <p className={styles.secretError}>No se pudo guardar: {secrets.error}</p>
         )}
         <p className={styles.secretHint}>
-          Las keys se guardan localmente (cifrado del disco del SO) y nunca salen de tu máquina. En
-          desarrollo, el <code>.env</code> de la raíz tiene prioridad.
+          Guardo las claves en este equipo y no las cifro yo: dependen del cifrado del disco de tu
+          sistema. Solo se usan para hablar con su servicio, pero lo que digo en voz alta sí se
+          envía a Google o a ElevenLabs. En desarrollo, el <code>.env</code> de la raíz tiene
+          prioridad.
         </p>
       </div>
 
