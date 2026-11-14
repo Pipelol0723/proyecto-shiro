@@ -160,4 +160,23 @@ describe('checkSystemHealth', () => {
     expect(report.services.whisper).toBe('ok');
     expect(report.services.letta).toBe('down');
   });
+
+  it('incluye geminiVoice cuando se le pasa', async () => {
+    const geminiVoice = {
+      status: 'expiring',
+      expiresAt: '2026-12-01T00:00:00.000Z',
+      daysLeft: 17,
+    } as const;
+    const report = await checkSystemHealth({
+      ...targets,
+      geminiVoice,
+      fetchImpl: makeFetch(() => 200),
+    });
+    expect(report.geminiVoice).toEqual(geminiVoice);
+  });
+
+  it('omite geminiVoice cuando no hay estado', async () => {
+    const report = await checkSystemHealth({ ...targets, fetchImpl: makeFetch(() => 200) });
+    expect('geminiVoice' in report).toBe(false);
+  });
 });
