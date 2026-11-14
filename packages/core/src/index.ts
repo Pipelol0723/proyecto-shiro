@@ -105,6 +105,10 @@ export {
 } from './modules/tts/elevenlabs-tts.js';
 export type { ElevenLabsTTSConfig, ElevenLabsTTSOptions } from './modules/tts/elevenlabs-tts.js';
 
+// TTS — lector puro de WAV (cabecera RIFF y duración). Ver ADR 0034 §1.
+export { parseWav, WavError } from './modules/tts/wav.js';
+export type { WavInfo } from './modules/tts/wav.js';
+
 // Avatar — Live2DAvatar (módulo lógico server-side). El render real
 // vive en el cliente desktop con `pixi-live2d-display`; este módulo
 // maneja la resolución emoción → expressionName y el estado server-side.
