@@ -86,6 +86,27 @@ describe('saveSecretsEnv', () => {
     expect(changed).toBe(false);
     expect(readFileSync(join(dir, SECRETS_FILENAME), 'utf8')).toContain('ANTHROPIC_API_KEY=a1');
   });
+
+  it('rechaza un valor con un salto de línea dentro y no escribe nada', () => {
+    // Sin esto, el valor se serializa en dos líneas y la segunda se lee
+    // después como otra clave gestionada (inyección por `secrets:save`).
+    saveSecretsEnv(dir, { ANTHROPIC_API_KEY: 'a1' });
+    const injected = 'g1\nANTHROPIC_API_KEY=inyectada';
+    let message = '';
+    try {
+      saveSecretsEnv(dir, { GEMINI_API_KEY: injected });
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toMatch(/salto de línea/);
+    expect(message).not.toContain('inyectada');
+    expect(readFileSync(join(dir, SECRETS_FILENAME), 'utf8')).toBe('ANTHROPIC_API_KEY=a1\n');
+  });
+
+  it('acepta un valor pegado con un salto de línea al final', () => {
+    saveSecretsEnv(dir, { GEMINI_API_KEY: 'g1\r\n' });
+    expect(readFileSync(join(dir, SECRETS_FILENAME), 'utf8')).toBe('GEMINI_API_KEY=g1\n');
+  });
 });
 
 describe('GEMINI_API_KEY', () => {
