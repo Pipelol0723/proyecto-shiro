@@ -497,4 +497,90 @@ describe('GeminiTTS', () => {
       for (const line of [...logs, ...errors]) expect(line).not.toContain(API_KEY);
     });
   });
+
+  describe('contador de segundos (ADR 0034 §4)', () => {
+    /** Sink falso en memoria: ningún test de core toca el disco. */
+    function makeSink(): { record: ReturnType<typeof vi.fn>; total: () => number } {
+      let total = 0;
+      const record = vi.fn((seconds: number) => {
+        total += seconds;
+        return total;
+      });
+      return { record, total: () => total };
+    }
+
+    function spyWarns(): string[] {
+      const lines: string[] = [];
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation((msg: string, payload?: object) => {
+        lines.push(msg + (payload === undefined ? '' : JSON.stringify(payload)));
+      });
+      return lines;
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('suma la duración de cada síntesis correcta al sink', async () => {
+      const sink = makeSink();
+      const tts = new GeminiTTS({ voice_id: VOICE }, makeDeps(), { apiKey: API_KEY, usage: sink });
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(2))));
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(3))));
+      await tts.synthesize({ text: SPOKEN });
+      await tts.synthesize({ text: SPOKEN });
+      expect(sink.record).toHaveBeenCalledTimes(2);
+      expect(sink.total()).toBeCloseTo(5, 3);
+    });
+
+    it('no suma si la síntesis falla', async () => {
+      const sink = makeSink();
+      const tts = new GeminiTTS({ voice_id: VOICE }, makeDeps(), { apiKey: API_KEY, usage: sink });
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'x' }, 500));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ steps: [] }));
+      await tts.synthesize({ text: SPOKEN }).catch(() => undefined);
+      await tts.synthesize({ text: SPOKEN }).catch(() => undefined);
+      expect(sink.record).not.toHaveBeenCalled();
+    });
+
+    it('avisa una sola vez al cruzar monthly_warn_seconds', async () => {
+      const warns = spyWarns();
+      const sink = makeSink();
+      const tts = new GeminiTTS({ voice_id: VOICE, monthly_warn_seconds: 5 }, makeDeps(), {
+        apiKey: API_KEY,
+        usage: sink,
+      });
+      for (const secs of [2, 2, 2, 2]) {
+        fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(secs))));
+        await tts.synthesize({ text: SPOKEN });
+      }
+      const umbral = warns.filter((l) => l.includes('umbral'));
+      expect(umbral).toHaveLength(1);
+      expect(umbral[0]).toContain('6');
+      expect(umbral[0]).toContain('5');
+    });
+
+    it('un sink que lanza no rompe la síntesis y avisa una sola vez', async () => {
+      const warns = spyWarns();
+      const usage = {
+        record: vi.fn(() => {
+          throw new Error('disco lleno');
+        }),
+      };
+      const tts = new GeminiTTS({ voice_id: VOICE }, makeDeps(), { apiKey: API_KEY, usage });
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(1))));
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(1))));
+      const first = await tts.synthesize({ text: SPOKEN });
+      const second = await tts.synthesize({ text: SPOKEN });
+      expect(first.duration).toBeCloseTo(1000, 3);
+      expect(second.duration).toBeCloseTo(1000, 3);
+      expect(usage.record).toHaveBeenCalledTimes(2);
+      expect(warns.filter((l) => l.includes('contador'))).toHaveLength(1);
+    });
+
+    it('monthly_warn_seconds vale 6000 por defecto y exige un entero positivo', () => {
+      expect(GeminiTTSConfigSchema.parse({ voice_id: VOICE }).monthly_warn_seconds).toBe(6000);
+      expect(GeminiTTSConfigSchema.safeParse({ monthly_warn_seconds: 0 }).success).toBe(false);
+      expect(GeminiTTSConfigSchema.safeParse({ monthly_warn_seconds: 1.5 }).success).toBe(false);
+    });
+  });
 });
