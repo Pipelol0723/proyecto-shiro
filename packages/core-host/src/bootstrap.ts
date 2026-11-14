@@ -27,6 +27,7 @@ import {
   buildSystemPrompt,
   ElevenLabsTTS,
   EventBus,
+  GeminiTTS,
   HIYORI_EXPRESSION_ALIASES,
   HybridRouter,
   Live2DAvatar,
@@ -136,6 +137,8 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     'ElevenLabsTTS',
     (cfg, deps) => new ElevenLabsTTS(cfg, deps, { emotions: options.character.emotions }),
   );
+  // GeminiTTS (ADR 0034): solo registrado; `options` queda listo para 2c y voz-3.
+  loader.register('GeminiTTS', (cfg, deps) => new GeminiTTS(cfg, deps, {}));
   // SystemTTS lo instancia `buildTtsChain` al final de la cadena, con
   // `tts.providers.SystemTTS` o `{}` si no hay entrada. Ver ADR 0020 y 0034.
   loader.register('SystemTTS', (cfg, deps) => new SystemTTS(cfg, deps));

@@ -105,6 +105,11 @@ export {
 } from './modules/tts/elevenlabs-tts.js';
 export type { ElevenLabsTTSConfig, ElevenLabsTTSOptions } from './modules/tts/elevenlabs-tts.js';
 
+// TTS — cliente del API de Interactions de Gemini (voz diseñada). Solo
+// core-host server-side: la clave vive en process.env.GEMINI_API_KEY. Ver ADR 0034.
+export { GeminiTTS, GeminiTTSConfigSchema, GeminiTTSError } from './modules/tts/gemini-tts.js';
+export type { GeminiTTSConfig, GeminiTTSOptions } from './modules/tts/gemini-tts.js';
+
 // TTS — lector puro de WAV (cabecera RIFF y duración). Ver ADR 0034 §1.
 export { parseWav, WavError } from './modules/tts/wav.js';
 export type { WavInfo } from './modules/tts/wav.js';
