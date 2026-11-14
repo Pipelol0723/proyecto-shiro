@@ -1,0 +1,11 @@
+{
+  "voices": [
+    {
+      "id": "es-mx-assistant-2",
+      "type": "prebuilt",
+      "display_name": "Catalogo dos",
+      "language_code": "es-MX",
+      "gender": "male"
+    }
+  ]
+}
