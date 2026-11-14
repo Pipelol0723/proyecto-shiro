@@ -7,4 +7,10 @@
 export type { Emotion } from './emotions.js';
 export { EMOTIONS, isEmotion } from './emotions.js';
 
-export type { EventMap, EventName, ServiceStatus, SystemHealthReport } from './events.js';
+export type {
+  EventMap,
+  EventName,
+  GeminiVoiceStatus,
+  ServiceStatus,
+  SystemHealthReport,
+} from './events.js';

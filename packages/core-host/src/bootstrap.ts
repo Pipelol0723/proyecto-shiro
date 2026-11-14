@@ -40,6 +40,7 @@ import {
   WhisperSTT,
   type Character,
   type EventMap,
+  type GeminiVoiceStatus,
   type IEventBus,
   type ITTSModule,
   type ModulesConfig,
@@ -60,6 +61,7 @@ import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { buildTtsChain } from './tts/build-tts-chain.js';
 import { FileTtsUsageCounter } from './tts/tts-usage-counter.js';
+import { checkGeminiVoice, resolveGeminiVoiceTarget } from './health/gemini-voice-check.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
 import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
 
@@ -247,10 +249,41 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     y en respuesta a `system:health-check`. Nunca expone el valor de
   //     las keys, solo su presencia.
   const healthTargets = resolveHealthTargets(options.config);
+  // Caducidad de la voz de Gemini (ADR 0034 §5): solo si GeminiTTS está en la
+  // cadena. Se consulta UNA vez, en segundo plano (no retrasa el arranque), y
+  // el resultado se cachea para el informe de salud; por eso el aviso por log
+  // es solo al arrancar. Sin clave la consulta no hace ninguna petición.
+  let geminiVoice: GeminiVoiceStatus | undefined;
+  const geminiTarget = resolveGeminiVoiceTarget(options.config.modules.tts);
+  if (geminiTarget !== undefined) {
+    void (async (): Promise<void> => {
+      const result = await checkGeminiVoice({
+        apiKey: process.env.GEMINI_API_KEY,
+        voiceId: geminiTarget.voiceId,
+        baseUrl: geminiTarget.baseUrl,
+      });
+      geminiVoice = result;
+      if (result.status === 'expiring') {
+        child.warn(
+          `Voz de Gemini: caduca en ${String(result.daysLeft)} días (${String(result.expiresAt)}). Diseña otra voz y actualiza voice_id.`,
+        );
+      } else if (result.status === 'expired') {
+        child.warn(
+          `Voz de Gemini: caducó el ${String(result.expiresAt)}. Diseña otra voz y actualiza voice_id.`,
+        );
+      } else if (result.status === 'missing') {
+        child.warn('Voz de Gemini: el voice_id configurado ya no existe. Diseña otra voz.');
+      }
+    })();
+  }
   const checkAndEmitHealth = (): void => {
     void (async (): Promise<void> => {
       try {
-        const report = await checkSystemHealth({ ...healthTargets, logger });
+        const report = await checkSystemHealth({
+          ...healthTargets,
+          logger,
+          ...(geminiVoice !== undefined && { geminiVoice }),
+        });
         await bus.emit('system:health', report);
       } catch (err) {
         child.warn('system:health falló', { err });

@@ -13,6 +13,7 @@
  */
 
 import type {
+  GeminiVoiceStatus,
   Logger,
   ModulesConfig,
   ServiceStatus,
@@ -76,6 +77,11 @@ export interface CheckSystemHealthOptions extends HealthTargets {
   logger?: Logger;
   /** Inyectable para tests. Default `fetch` global. */
   fetchImpl?: typeof fetch;
+  /**
+   * Estado de la voz de Gemini ya consultado al arrancar (ADR 0034 §5). Se
+   * copia tal cual al informe; aquí no se vuelve a consultar.
+   */
+  geminiVoice?: GeminiVoiceStatus;
 }
 
 /**
@@ -102,6 +108,7 @@ export async function checkSystemHealth(
   return {
     services: { ollama, letta, whisper },
     secrets: readSecretPresence(),
+    ...(options.geminiVoice !== undefined && { geminiVoice: options.geminiVoice }),
     checkedAt: new Date().toISOString(),
   };
 }

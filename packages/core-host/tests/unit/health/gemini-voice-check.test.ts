@@ -56,7 +56,7 @@ function run(
 }
 
 function fetchReturning(res: Response): typeof fetch {
-  return vi.fn(() => Promise.resolve(res)) as unknown as typeof fetch;
+  return vi.fn(() => Promise.resolve(res));
 }
 
 describe('checkGeminiVoice', () => {
@@ -135,7 +135,7 @@ describe('checkGeminiVoice', () => {
 
   it('envía x-goog-api-key y consulta GET {base}/voices/{id}', async () => {
     const fetchImpl = vi.fn(() => Promise.resolve(voiceResponse(expireIn(100))));
-    await run(fetchImpl as unknown as typeof fetch);
+    await run(fetchImpl);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`${BASE}/voices/${VOICE_ID}`);
@@ -147,7 +147,7 @@ describe('checkGeminiVoice', () => {
     const results = [
       await run(fetchReturning(voiceResponse(expireIn(100)))),
       await run(fetchReturning(notFoundResponse())),
-      await run(vi.fn(() => Promise.reject(new Error(API_KEY))) as unknown as typeof fetch),
+      await run(vi.fn(() => Promise.reject(new Error(API_KEY)))),
     ];
     for (const r of results) expect(JSON.stringify(r)).not.toContain(API_KEY);
   });
