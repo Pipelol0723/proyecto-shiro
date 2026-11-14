@@ -13,6 +13,7 @@ import {
   readSecretPresence,
   resolveHealthTargets,
 } from '../../../src/health/system-health.js';
+import { MANAGED_KEYS, SECRET_FIELD_TO_ENV } from '../../../src/secrets/secrets-file.js';
 
 function makeConfig(overrides?: {
   ollamaHost?: string;
@@ -105,6 +106,18 @@ describe('readSecretPresence', () => {
     process.env.ANTHROPIC_API_KEY = '   ';
     process.env.ELEVENLABS_API_KEY = '';
     expect(readSecretPresence()).toEqual({ anthropic: false, elevenlabs: false, gemini: false });
+  });
+});
+
+describe('readSecretPresence y claves gestionadas', () => {
+  it('informa true para cada campo de SECRET_FIELD_TO_ENV cuando su clave está definida', () => {
+    for (const key of MANAGED_KEYS) process.env[key] = 'x';
+    try {
+      const presence = readSecretPresence() as Record<string, boolean>;
+      for (const field of Object.keys(SECRET_FIELD_TO_ENV)) expect(presence[field]).toBe(true);
+    } finally {
+      for (const key of MANAGED_KEYS) delete process.env[key];
+    }
   });
 });
 

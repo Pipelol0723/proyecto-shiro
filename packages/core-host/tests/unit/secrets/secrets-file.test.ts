@@ -41,6 +41,11 @@ describe('claves gestionadas', () => {
     const mapped = new Set<string>(Object.values(SECRET_FIELD_TO_ENV));
     for (const key of MANAGED_KEYS) expect(mapped.has(key)).toBe(true);
   });
+
+  it('todo valor de SECRET_FIELD_TO_ENV está en MANAGED_KEYS (si no, saveSecretsEnv lo descartaría)', () => {
+    const managed = new Set<string>(MANAGED_KEYS);
+    for (const envKey of Object.values(SECRET_FIELD_TO_ENV)) expect(managed.has(envKey)).toBe(true);
+  });
 });
 
 describe('saveSecretsEnv', () => {
