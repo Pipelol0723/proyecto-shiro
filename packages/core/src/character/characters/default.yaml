@@ -97,24 +97,31 @@ interaction_rules:
   - el afecto aumenta lentamente con el tiempo
 
 # Mapeo de emociones a parámetros del TTS y del avatar.
+# `tts_stability` lo usa ElevenLabs; `tts_style` (en inglés) lo envía Gemini
+# como estilo de la frase (ADR 0034 §2).
 # Las claves deben pertenecer al enum `Emotion` (packages/core/src/types/emotions.ts).
 emotions:
   neutral:
     tts_stability: 0.75
+    tts_style: 'calm, quiet and matter-of-fact'
     avatar_expression: 'idle'
 
   divertida:
     tts_stability: 0.65
+    tts_style: 'dry amusement, a faint half-smile in the voice, not laughing'
     avatar_expression: 'smirk'
 
   pensativa:
     tts_stability: 0.82
+    tts_style: 'thoughtful and slow, thinking out loud'
     avatar_expression: 'thinking'
 
   molesta:
     tts_stability: 0.88
+    tts_style: 'mildly annoyed but contained, flat and curt'
     avatar_expression: 'annoyed'
 
   vulnerable:
     tts_stability: 0.55
+    tts_style: 'soft, a little hesitant, quietly warm'
     avatar_expression: 'soft'

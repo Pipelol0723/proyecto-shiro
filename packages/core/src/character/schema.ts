@@ -9,7 +9,8 @@
  *   necesita para generar un prompt útil (identidad, personalidad).
  * - Los campos **opcionales** enriquecen el prompt si están, pero no
  *   son esenciales — un personaje puede definirse mínimamente.
- * - `emotions` lo lee el módulo TTS y el AvatarModule, no el LLM.
+ * - `emotions` lo leen los módulos TTS (`tts_stability` para ElevenLabs,
+ *   `tts_style` para Gemini) y el AvatarModule, no el LLM.
  */
 
 import { z } from 'zod';
@@ -44,6 +45,8 @@ const EmotionMappingSchema = z.record(
   z.string(),
   z.object({
     tts_stability: z.number().min(0).max(1).optional(),
+    /** Frase de estilo (en inglés) que GeminiTTS envía como `speech_metadata.style`. */
+    tts_style: z.string().min(1).optional(),
     avatar_expression: z.string().optional(),
   }),
 );
