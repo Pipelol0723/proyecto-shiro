@@ -249,33 +249,6 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     y en respuesta a `system:health-check`. Nunca expone el valor de
   //     las keys, solo su presencia.
   const healthTargets = resolveHealthTargets(options.config);
-  // Caducidad de la voz de Gemini (ADR 0034 §5): solo si GeminiTTS está en la
-  // cadena. Se consulta UNA vez, en segundo plano (no retrasa el arranque), y
-  // el resultado se cachea para el informe de salud; por eso el aviso por log
-  // es solo al arrancar. Sin clave la consulta no hace ninguna petición.
-  let geminiVoice: GeminiVoiceStatus | undefined;
-  const geminiTarget = resolveGeminiVoiceTarget(options.config.modules.tts);
-  if (geminiTarget !== undefined) {
-    void (async (): Promise<void> => {
-      const result = await checkGeminiVoice({
-        apiKey: process.env.GEMINI_API_KEY,
-        voiceId: geminiTarget.voiceId,
-        baseUrl: geminiTarget.baseUrl,
-      });
-      geminiVoice = result;
-      if (result.status === 'expiring') {
-        child.warn(
-          `Voz de Gemini: caduca en ${String(result.daysLeft)} días (${String(result.expiresAt)}). Diseña otra voz y actualiza voice_id.`,
-        );
-      } else if (result.status === 'expired') {
-        child.warn(
-          `Voz de Gemini: caducó el ${String(result.expiresAt)}. Diseña otra voz y actualiza voice_id.`,
-        );
-      } else if (result.status === 'missing') {
-        child.warn('Voz de Gemini: el voice_id configurado ya no existe. Diseña otra voz.');
-      }
-    })();
-  }
   const checkAndEmitHealth = (): void => {
     void (async (): Promise<void> => {
       try {
@@ -290,6 +263,41 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
       }
     })();
   };
+  // Caducidad de la voz de Gemini (ADR 0034 §5): solo si GeminiTTS está en la
+  // cadena. Se consulta UNA vez, en segundo plano (no retrasa el arranque), y
+  // el resultado se cachea para el informe de salud; por eso el aviso por log
+  // es solo al arrancar. Sin clave la consulta no hace ninguna petición. Al
+  // terminar se re-emite el informe, para que un cliente que se conectó antes
+  // reciba `geminiVoice` sin esperar a un nuevo health-check.
+  let geminiVoice: GeminiVoiceStatus | undefined;
+  const geminiTarget = resolveGeminiVoiceTarget(options.config.modules.tts);
+  if (geminiTarget !== undefined) {
+    void (async (): Promise<void> => {
+      const result = await checkGeminiVoice({
+        apiKey: process.env.GEMINI_API_KEY,
+        voiceId: geminiTarget.voiceId,
+        baseUrl: geminiTarget.baseUrl,
+      });
+      const voiceLabel = geminiTarget.voiceId ?? 'sin voice_id';
+      geminiVoice = result;
+      checkAndEmitHealth();
+      if (result.status === 'expiring') {
+        child.warn(
+          `Voz de Gemini (${voiceLabel}): caduca en ${String(result.daysLeft)} días (${String(result.expiresAt)}). Diseña otra voz y actualiza voice_id (ADR 0034).`,
+        );
+      } else if (result.status === 'expired') {
+        child.warn(
+          `Voz de Gemini (${voiceLabel}): caducó el ${String(result.expiresAt)}. Diseña otra voz y actualiza voice_id (ADR 0034).`,
+        );
+      } else if (result.status === 'missing') {
+        child.warn(
+          `Voz de Gemini (${voiceLabel}): el voice_id configurado ya no existe. Diseña otra voz y actualiza voice_id (ADR 0034).`,
+        );
+      } else if (result.status === 'unknown') {
+        child.info(`Voz de Gemini (${voiceLabel}): no se pudo comprobar su caducidad.`);
+      }
+    })();
+  }
   const unsubscribeHealth = bus.on('system:health-check', () => {
     checkAndEmitHealth();
   });

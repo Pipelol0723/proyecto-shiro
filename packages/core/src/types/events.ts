@@ -55,8 +55,9 @@ export interface SystemHealthReport {
   };
   /**
    * Caducidad de la voz diseñada de Gemini (ADR 0034 §5). Solo existe si
-   * `GeminiTTS` está en la cadena de TTS y hay clave; se consulta una vez al
-   * arrancar y se reutiliza. Estado derivado: nunca lleva la clave.
+   * `GeminiTTS` está en la cadena de TTS (con `unknown` si no se pudo
+   * comprobar, p. ej. sin clave); se consulta una vez al arrancar y se
+   * reutiliza. Puede faltar en los informes previos a que termine la consulta. Estado derivado: nunca lleva la clave.
    */
   geminiVoice?: GeminiVoiceStatus;
   /** ISO timestamp del momento del chequeo. */

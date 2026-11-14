@@ -8,7 +8,10 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { checkGeminiVoice } from '../../../src/health/gemini-voice-check.js';
+import {
+  checkGeminiVoice,
+  resolveGeminiVoiceTarget,
+} from '../../../src/health/gemini-voice-check.js';
 
 const NOW = new Date('2026-11-14T12:00:00.000Z');
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,6 +79,16 @@ describe('checkGeminiVoice', () => {
     const result = await run(fetchReturning(voiceResponse(expireIn(-2))));
     expect(result.status).toBe('expired');
     expect(result.expiresAt).toBeDefined();
+  });
+
+  it('expired justo en el instante de caducar', async () => {
+    const result = await run(fetchReturning(voiceResponse(NOW.toISOString())));
+    expect(result.status).toBe('expired');
+  });
+
+  it.each([401, 429, 500])('unknown ante HTTP %i', async (code) => {
+    const res = new Response('{}', { status: code });
+    expect(await run(fetchReturning(res))).toEqual({ status: 'unknown' });
   });
 
   it('missing ante 404', async () => {
@@ -155,5 +168,34 @@ describe('checkGeminiVoice', () => {
   it('no incluye sample_audio en el resultado', async () => {
     const result = await run(fetchReturning(voiceResponse(expireIn(100))));
     expect(Object.keys(result).sort()).toEqual(['daysLeft', 'expiresAt', 'status']);
+  });
+});
+
+describe('resolveGeminiVoiceTarget', () => {
+  type Slot = Parameters<typeof resolveGeminiVoiceTarget>[0];
+  const slot = (extra: Record<string, unknown>): Slot => ({
+    active: 'SystemTTS',
+    config: {},
+    ...extra,
+  });
+
+  it('GeminiTTS activo: toma config', () => {
+    const s = slot({ active: 'GeminiTTS', config: { voice_id: 'v1', base_url: 'http://x' } });
+    expect(resolveGeminiVoiceTarget(s)).toEqual({ voiceId: 'v1', baseUrl: 'http://x' });
+  });
+
+  it('GeminiTTS en la cadena: toma providers.GeminiTTS', () => {
+    const s = slot({ fallback_chain: ['GeminiTTS'], providers: { GeminiTTS: { voice_id: 'v2' } } });
+    expect(resolveGeminiVoiceTarget(s)).toEqual({ voiceId: 'v2', baseUrl: undefined });
+  });
+
+  it('GeminiTTS ausente: undefined', () => {
+    expect(resolveGeminiVoiceTarget(slot({ fallback_chain: ['ElevenLabsTTS'] }))).toBeUndefined();
+    expect(resolveGeminiVoiceTarget(slot({}))).toBeUndefined();
+  });
+
+  it('voice_id que no es string: undefined', () => {
+    const s = slot({ active: 'GeminiTTS', config: { voice_id: 42 } });
+    expect(resolveGeminiVoiceTarget(s)?.voiceId).toBeUndefined();
   });
 });
