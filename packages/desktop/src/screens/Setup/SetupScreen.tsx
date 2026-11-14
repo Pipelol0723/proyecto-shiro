@@ -99,10 +99,10 @@ const SECRETS: readonly SecretRow[] = [
     key: 'gemini',
     name: 'Google Gemini',
     envVar: 'GEMINI_API_KEY',
-    purpose: 'Es mi voz principal.',
+    purpose: 'Mi voz de Gemini, cuando está activada.',
     degraded: 'Sin esta clave hablo con ElevenLabs y, si tampoco está, con la voz del sistema.',
     notice:
-      'Lo que digo en voz alta se envía a Google. Con una clave del nivel gratuito, Google lo usa para mejorar sus productos; con el de pago, no. No sé de qué nivel es tu clave. Si no quieres eso, usa una del de pago.',
+      'Cuando hablo con esta voz, lo que digo en voz alta se envía a Google. Con una clave del nivel gratuito, Google lo usa para mejorar sus productos; con el de pago, no. No sé de qué nivel es tu clave. Si no quieres eso, usa una del de pago.',
   },
 ] as const;
 
