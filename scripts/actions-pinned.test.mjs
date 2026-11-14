@@ -16,12 +16,14 @@ const WORKFLOWS_DIR = new URL('../.github/workflows/', import.meta.url);
  * @param {string} file nombre del archivo, solo para el mensaje
  * @returns {string[]}
  */
-export function findUnpinnedActions(text, file) {
+function findUnpinnedActions(text, file) {
   const problems = [];
   text.split(/\r?\n/).forEach((line, index) => {
     const match = /^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/.exec(line);
     if (!match) return;
-    const [, ref, rest] = match;
+    const [, rawRef, rest] = match;
+    // YAML admite el valor entre comillas: se evalúa sin ellas.
+    const ref = rawRef.replace(/^(['"])(.*)\1$/, '$2');
     if (ref.startsWith('./')) return;
     const where = `${file}:${index + 1}`;
     if (!/^[^@\s]+@[0-9a-f]{40}$/.test(ref)) {
@@ -85,6 +87,38 @@ test('ignora las acciones locales', () => {
 
 test('ignora un uses: dentro de un comentario', () => {
   assert.deepEqual(findUnpinnedActions('      # uses: actions/checkout@v7', 'x.yml'), []);
+});
+
+test('admite el valor entre comillas, fijado o local', () => {
+  assert.deepEqual(
+    findUnpinnedActions(`        uses: "actions/checkout@${SHA}" # v7.0.1`, 'x.yml'),
+    [],
+  );
+  assert.deepEqual(findUnpinnedActions("        uses: './.github/actions/mia'", 'x.yml'), []);
+});
+
+test('rechaza un tag móvil entre comillas', () => {
+  assert.equal(findUnpinnedActions('        uses: "actions/checkout@v7"', 'x.yml').length, 1);
+});
+
+test('funciona con saltos de línea CRLF', () => {
+  const text = `steps:
+  - uses: actions/checkout@${SHA} # v7
+  - uses: actions/setup-node@v7
+`;
+  const problems = findUnpinnedActions(text, 'x.yml');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x.yml:3/);
+});
+
+test('workflow reutilizable: acepta SHA con comentario y rechaza tag', () => {
+  const path = 'o/r/.github/workflows/x.yml';
+  assert.deepEqual(findUnpinnedActions(`    uses: ${path}@${SHA} # v1`, 'x.yml'), []);
+  assert.equal(findUnpinnedActions(`    uses: ${path}@v1`, 'x.yml').length, 1);
+});
+
+test('rechaza docker:// (deliberado: hoy no se usa; fijar por digest exigiría ampliar la regla)', () => {
+  assert.equal(findUnpinnedActions('    uses: docker://alpine:3.20', 'x.yml').length, 1);
 });
 
 test('todas las Actions de .github/workflows van fijadas por SHA', () => {
