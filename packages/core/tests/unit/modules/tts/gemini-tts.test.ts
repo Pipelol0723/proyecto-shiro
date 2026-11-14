@@ -13,6 +13,7 @@ import {
   GeminiTTSConfigSchema,
   GeminiTTSError,
 } from '../../../../src/modules/tts/gemini-tts.js';
+import type { Emotion } from '../../../../src/types/emotions.js';
 
 const API_KEY = 'test-key-no-real-0000';
 const VOICE = 'voice_test000000';
@@ -581,6 +582,61 @@ describe('GeminiTTS', () => {
       expect(GeminiTTSConfigSchema.parse({ voice_id: VOICE }).monthly_warn_seconds).toBe(6000);
       expect(GeminiTTSConfigSchema.safeParse({ monthly_warn_seconds: 0 }).success).toBe(false);
       expect(GeminiTTSConfigSchema.safeParse({ monthly_warn_seconds: 1.5 }).success).toBe(false);
+    });
+  });
+
+  describe('estilo por emoción (ADR 0034 §2)', () => {
+    const EMOTIONS_MAP = {
+      neutral: { tts_style: 'calm, quiet and matter-of-fact' },
+      molesta: { tts_style: 'mildly annoyed but contained, flat and curt' },
+      pensativa: { tts_stability: 0.8 },
+    };
+
+    function makeStyled(): GeminiTTS {
+      return new GeminiTTS({ voice_id: VOICE }, makeDeps(), {
+        apiKey: API_KEY,
+        emotions: EMOTIONS_MAP,
+      });
+    }
+
+    async function sentTextItem(
+      tts: GeminiTTS,
+      emotion?: Emotion,
+    ): Promise<Record<string, unknown>> {
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(1))));
+      await tts.synthesize(emotion === undefined ? { text: SPOKEN } : { text: SPOKEN, emotion });
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(init.body as string) as {
+        input: { content: Record<string, unknown>[] }[];
+      };
+      return body.input[0]!.content[0]!;
+    }
+
+    it('envía speech_metadata.style de la emoción', async () => {
+      const item = await sentTextItem(makeStyled(), 'neutral');
+      expect(item).toEqual({
+        type: 'text',
+        text: SPOKEN,
+        annotations: [{ type: 'speech_metadata', style: 'calm, quiet and matter-of-fact' }],
+      });
+    });
+
+    it('no envía annotations si la emoción no tiene tts_style', async () => {
+      const item = await sentTextItem(makeStyled(), 'pensativa');
+      expect(item).toEqual({ type: 'text', text: SPOKEN });
+      expect('annotations' in item).toBe(false);
+    });
+
+    it('no envía annotations si no se pasa emoción', async () => {
+      const item = await sentTextItem(makeStyled());
+      expect('annotations' in item).toBe(false);
+    });
+
+    it('usa el estilo de la emoción pedida y no el de otra', async () => {
+      const item = await sentTextItem(makeStyled(), 'molesta');
+      expect(item.annotations).toEqual([
+        { type: 'speech_metadata', style: 'mildly annoyed but contained, flat and curt' },
+      ]);
     });
   });
 });

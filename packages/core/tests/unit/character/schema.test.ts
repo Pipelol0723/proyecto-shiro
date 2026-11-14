@@ -1,5 +1,15 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CharacterLoader } from '../../../src/character/character-loader.js';
 import { CharacterSchema } from '../../../src/character/schema.js';
+import { Logger } from '../../../src/core/logger.js';
+import { EMOTIONS } from '../../../src/types/emotions.js';
+
+const DEFAULT_CHARACTER_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../src/character/characters/default.yaml',
+);
 
 const MINIMAL_CHARACTER = {
   version: 1,
@@ -74,6 +84,44 @@ describe('CharacterSchema', () => {
       emotions: { neutral: { tts_stability: 1.5 } },
     });
     expect(result.success).toBe(false);
+  });
+
+  // `safeParse` descarta en silencio los campos desconocidos y devuelve success,
+  // así que estos tests aseveran sobre el dato parseado, no sobre `success`.
+  it('conserva tts_style en result.data.emotions.<emoción>.tts_style', () => {
+    const result = CharacterSchema.safeParse({
+      ...MINIMAL_CHARACTER,
+      emotions: { neutral: { tts_style: 'calm and quiet' } },
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.emotions?.neutral?.tts_style).toBe('calm and quiet');
+  });
+
+  it('rechaza tts_style vacío', () => {
+    const result = CharacterSchema.safeParse({
+      ...MINIMAL_CHARACTER,
+      emotions: { neutral: { tts_style: '' } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rechaza tts_style que no sea string', () => {
+    const result = CharacterSchema.safeParse({
+      ...MINIMAL_CHARACTER,
+      emotions: { neutral: { tts_style: 42 } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('default.yaml: las cinco emociones tienen tts_style', () => {
+    const loader = new CharacterLoader({ logger: new Logger('error') });
+    const character = loader.loadFromFile(DEFAULT_CHARACTER_PATH);
+    expect(EMOTIONS).toHaveLength(5);
+    for (const emotion of EMOTIONS) {
+      const style = character.emotions?.[emotion]?.tts_style;
+      expect(typeof style, `falta tts_style en ${emotion}`).toBe('string');
+      expect(style?.length).toBeGreaterThan(0);
+    }
   });
 
   it('acepta interaction_rules como array de strings', () => {
