@@ -7,8 +7,10 @@
  * con `parseWav` y devuelve siempre `audio/wav` con su duración en ms.
  *
  * Parte b-2: tiempo máximo de la petición, guardas de clave, voz y texto, y
- * aviso de privacidad. No incluye estilo (`annotations`) ni contador de cuota:
- * llegan en partes posteriores del ADR. Un fallo de configuración no detiene
+ * aviso de privacidad. Parte c: contador mensual de segundos sintetizados, vía
+ * un `TtsUsageSink` inyectado (la persistencia vive en el `core-host`; aquí no
+ * hay `node:fs`) y aviso al cruzar `monthly_warn_seconds`. No incluye estilo
+ * (`annotations`): llega en una parte posterior del ADR. Un fallo de configuración no detiene
  * el arranque (el constructor solo avisa); `synthesize` falla rápido.
  * Los errores no reintentan nada (un 429 debe saltar a la cadena de respaldo).
  *
@@ -35,6 +37,8 @@ export const GeminiTTSConfigSchema = z.object({
     .default('https://generativelanguage.googleapis.com/v1beta'),
   /** Tiempo máximo de la petición HTTP, en ms. */
   timeout_ms: z.number().int().positive().default(30_000),
+  /** Segundos sintetizados al mes a partir de los cuales se avisa en el log (defecto: 100 min). */
+  monthly_warn_seconds: z.number().int().positive().default(6000),
 });
 
 export type GeminiTTSConfig = z.infer<typeof GeminiTTSConfigSchema>;
@@ -48,9 +52,21 @@ export class GeminiTTSError extends Error {
   }
 }
 
+/**
+ * Destino del contador mensual de segundos sintetizados. Lo implementa el
+ * `core-host` (persistencia en disco); `core` solo conoce esta interfaz.
+ * `record` devuelve el total del mes tras sumar y no debe lanzar (si lanza,
+ * GeminiTTS lo captura y avisa una sola vez).
+ */
+export interface TtsUsageSink {
+  record(seconds: number): number;
+}
+
 export interface GeminiTTSOptions {
   /** Override de la clave. Por defecto `process.env.GEMINI_API_KEY`. */
   apiKey?: string;
+  /** Contador mensual de segundos. Sin él no se cuenta nada. */
+  usage?: TtsUsageSink;
 }
 
 const ERROR_BODY_MAX = 200;
@@ -94,6 +110,8 @@ export class GeminiTTS implements ITTSModule {
   private readonly config: GeminiTTSConfig;
   private readonly logger: Logger;
   private readonly apiKey: string | undefined;
+  private readonly usage: TtsUsageSink | undefined;
+  private usageFailureWarned = false;
 
   constructor(rawConfig: unknown, deps: ModuleDeps, options: GeminiTTSOptions = {}) {
     const parsed = GeminiTTSConfigSchema.safeParse(rawConfig);
@@ -107,6 +125,7 @@ export class GeminiTTS implements ITTSModule {
     this.config = parsed.data;
     this.logger = deps.logger.child({ module: 'GeminiTTS' });
     this.apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
+    this.usage = options.usage;
     this.id = `tts:gemini:${this.config.voice_id || '<sin-voice-id>'}`;
     if (this.apiKey === undefined || this.apiKey === '') {
       this.logger.warn(
@@ -193,6 +212,7 @@ export class GeminiTTS implements ITTSModule {
     const audio = Buffer.from(base64, 'base64');
     try {
       const info = parseWav(audio);
+      this.recordUsage(info.durationMs / 1000);
       return { audio, mimeType: 'audio/wav', duration: info.durationMs };
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'motivo desconocido';
@@ -201,6 +221,30 @@ export class GeminiTTS implements ITTSModule {
         undefined,
         err,
       );
+    }
+  }
+
+  /**
+   * Suma los segundos al contador mensual. Nunca propaga: un contador roto no
+   * debe mudar a Shiro. Avisa al cruzar el umbral y, una sola vez, si el sink falla.
+   */
+  private recordUsage(seconds: number): void {
+    if (this.usage === undefined) return;
+    try {
+      const total = this.usage.record(seconds);
+      const threshold = this.config.monthly_warn_seconds;
+      if (total >= threshold && total - seconds < threshold) {
+        this.logger.warn(
+          `GeminiTTS: se cruzó el umbral mensual de ${String(threshold)} s sintetizados (van ${String(Math.round(total))} s este mes). Revisa el uso en Google.`,
+        );
+      }
+    } catch {
+      if (!this.usageFailureWarned) {
+        this.usageFailureWarned = true;
+        this.logger.warn(
+          'GeminiTTS: el contador de segundos falló; se sigue sintetizando sin contar.',
+        );
+      }
     }
   }
 
