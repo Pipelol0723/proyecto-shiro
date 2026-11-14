@@ -210,7 +210,9 @@ describe('GeminiTTS', () => {
   });
 
   it('rechaza una config inválida con el campo en el mensaje', () => {
-    expect(() => new GeminiTTS({}, makeDeps(), { apiKey: API_KEY })).toThrow(/voice_id/);
+    expect(() => new GeminiTTS({ voice_id: 7 }, makeDeps(), { apiKey: API_KEY })).toThrow(
+      /voice_id/,
+    );
     expect(
       () => new GeminiTTS({ voice_id: VOICE, timeout_ms: -1 }, makeDeps(), { apiKey: API_KEY }),
     ).toThrow(/timeout_ms/);
@@ -272,7 +274,7 @@ describe('GeminiTTS', () => {
   it('JSON ilegible: "no es JSON" con status 200', async () => {
     fetchMock.mockResolvedValueOnce({
       ...jsonResponse({}),
-      json: () => Promise.reject(new SyntaxError('x')),
+      text: () => Promise.resolve('no es json {'),
     });
     const err = (await makeTts()
       .synthesize({ text: SPOKEN })
@@ -323,5 +325,176 @@ describe('GeminiTTS', () => {
       .catch((e: unknown) => e)) as GeminiTTSError;
     expect(err.message).not.toContain(API_KEY);
     expect(err.message).not.toContain(SPOKEN);
+  });
+
+  describe('tiempo máximo, guardas y avisos (b-2)', () => {
+    /** Registra todo lo que el módulo escriba en el logger. */
+    function spyLogs(): string[] {
+      const lines: string[] = [];
+      for (const level of ['info', 'warn', 'error', 'debug'] as const) {
+        vi.spyOn(Logger.prototype, level).mockImplementation((msg: string, payload?: object) => {
+          lines.push(msg + (payload === undefined ? '' : JSON.stringify(payload)));
+        });
+      }
+      return lines;
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it('lanza por tiempo agotado cuando el fetch no responde', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => {
+              reject(new DOMException('aborted', 'AbortError'));
+            });
+          }),
+      );
+      const tts = new GeminiTTS({ voice_id: VOICE, timeout_ms: 1000 }, makeDeps(), {
+        apiKey: API_KEY,
+      });
+      const pending = tts.synthesize({ text: SPOKEN }).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(1001);
+      const err = (await pending) as GeminiTTSError;
+      expect(err).toBeInstanceOf(GeminiTTSError);
+      expect(err.message).toMatch(/tiempo|agotó/i);
+      expect(err.message).toContain('1000');
+      expect(err.message).not.toContain(API_KEY);
+      expect(err.message).not.toContain(SPOKEN);
+    });
+
+    /** Respuesta con cabeceras ya recibidas y un cuerpo que no llega hasta que se aborta. */
+    function hungBodyResponse(status: number, signal: AbortSignal | null | undefined): Response {
+      const hang = (): Promise<never> =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        });
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers: { get: () => 'application/json' } as unknown as Headers,
+        json: hang,
+        text: hang,
+      } as unknown as Response;
+    }
+
+    it.each([200, 500])(
+      'el tiempo máximo también cubre el cuerpo colgado (status %i)',
+      async (status) => {
+        vi.useFakeTimers();
+        fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+          Promise.resolve(hungBodyResponse(status, init.signal)),
+        );
+        const tts = new GeminiTTS({ voice_id: VOICE, timeout_ms: 1000 }, makeDeps(), {
+          apiKey: API_KEY,
+        });
+        const pending = tts.synthesize({ text: SPOKEN }).catch((e: unknown) => e);
+        await vi.advanceTimersByTimeAsync(1001);
+        const err = (await pending) as GeminiTTSError;
+        expect(err).toBeInstanceOf(GeminiTTSError);
+        expect(err.message).toMatch(/tiempo agotado/i);
+      },
+    );
+
+    it('un AbortError que no es DOMException también se informa como tiempo agotado', async () => {
+      const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+      fetchMock.mockRejectedValueOnce(abort);
+      const err = (await makeTts()
+        .synthesize({ text: SPOKEN })
+        .catch((e: unknown) => e)) as GeminiTTSError;
+      expect(err.message).toMatch(/tiempo agotado/i);
+    });
+
+    it('no deja temporizadores vivos tras un éxito ni tras un fallo', async () => {
+      vi.useFakeTimers();
+      const tts = makeTts();
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(1))));
+      await tts.synthesize({ text: SPOKEN });
+      expect(vi.getTimerCount()).toBe(0);
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await tts.synthesize({ text: SPOKEN }).catch(() => undefined);
+      expect(vi.getTimerCount()).toBe(0);
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'x' }, 500));
+      await tts.synthesize({ text: SPOKEN }).catch(() => undefined);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('un voice_id solo de espacios cuenta como vacío', async () => {
+      const logs = spyLogs();
+      const tts = new GeminiTTS({ voice_id: '   ' }, makeDeps(), { apiKey: API_KEY });
+      expect(logs.some((l) => l.includes('voice_id'))).toBe(true);
+      await expect(tts.synthesize({ text: SPOKEN })).rejects.toThrow(/voice_id/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('lanza por fallo de red con mensaje legible', async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+      const err = (await makeTts()
+        .synthesize({ text: SPOKEN })
+        .catch((e: unknown) => e)) as GeminiTTSError;
+      expect(err).toBeInstanceOf(GeminiTTSError);
+      expect(err.message).toMatch(/red|conexi/i);
+      expect(err.message).toContain('https://generativelanguage.googleapis.com');
+    });
+
+    it('el constructor no lanza sin clave y avisa; synthesize lanza', async () => {
+      const logs = spyLogs();
+      const tts = new GeminiTTS({ voice_id: VOICE }, makeDeps());
+      expect(logs.some((l) => l.includes('GEMINI_API_KEY'))).toBe(true);
+      await expect(tts.synthesize({ text: SPOKEN })).rejects.toThrow(/GEMINI_API_KEY/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('el constructor no lanza sin voice_id y avisa; synthesize lanza', async () => {
+      const logs = spyLogs();
+      const tts = new GeminiTTS({}, makeDeps(), { apiKey: API_KEY });
+      expect(logs.some((l) => l.includes('voice_id'))).toBe(true);
+      await expect(tts.synthesize({ text: SPOKEN })).rejects.toThrow(/voice_id/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['', '   \n\t'])('lanza con texto vacío (%j) sin llamar a la API', async (text) => {
+      await expect(makeTts().synthesize({ text })).rejects.toThrow(/vacío/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('registra el aviso de privacidad una sola vez al construirse con clave', async () => {
+      const logs = spyLogs();
+      const tts = makeTts();
+      fetchMock.mockResolvedValue(jsonResponse(audioBody(makeWav(1))));
+      await tts.synthesize({ text: SPOKEN });
+      await tts.synthesize({ text: SPOKEN });
+      const privacy = logs.filter((l) => l.includes('se envía a Google'));
+      expect(privacy).toHaveLength(1);
+      expect(privacy[0]).toContain('nivel gratuito');
+    });
+
+    it('no registra el aviso de privacidad sin clave', () => {
+      const logs = spyLogs();
+      new GeminiTTS({ voice_id: VOICE }, makeDeps());
+      expect(logs.some((l) => l.includes('se envía a Google'))).toBe(false);
+    });
+
+    it('la clave no aparece en ningún mensaje de log ni de error', async () => {
+      const logs = spyLogs();
+      const errors: string[] = [];
+      const tts = makeTts();
+      fetchMock.mockRejectedValueOnce(new Error(`red caída ${API_KEY}`));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: API_KEY } }, 500));
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: API_KEY } }, 401));
+      for (let i = 0; i < 3; i++) {
+        const err = (await tts.synthesize({ text: SPOKEN }).catch((e: unknown) => e)) as Error;
+        errors.push(err.message);
+      }
+      await tts.synthesize({ text: '' }).catch((e: unknown) => errors.push((e as Error).message));
+      expect(logs.length).toBeGreaterThan(0);
+      for (const line of [...logs, ...errors]) expect(line).not.toContain(API_KEY);
+    });
   });
 });
