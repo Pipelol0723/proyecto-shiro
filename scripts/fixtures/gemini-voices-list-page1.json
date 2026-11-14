@@ -1,0 +1,21 @@
+{
+  "voices": [
+    {
+      "id": "voice_test00000001",
+      "type": "prompted",
+      "expire_time": "2027-11-13T06:31:43.942416695Z",
+      "display_name": "voz-de-prueba",
+      "prompted": { "input": "Descripción inventada." },
+      "language_code": "es-MX",
+      "gender": "female"
+    },
+    {
+      "id": "ar-eg-assistant-5",
+      "type": "prebuilt",
+      "display_name": "Catalogo uno",
+      "language_code": "ar-EG",
+      "gender": "female"
+    }
+  ],
+  "next_page_token": "token-pagina-2"
+}

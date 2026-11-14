@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 400,
+    "message": "Language code not supported for this voice.",
+    "status": "INVALID_ARGUMENT"
+  }
+}

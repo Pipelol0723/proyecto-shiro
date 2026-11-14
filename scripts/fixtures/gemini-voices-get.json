@@ -1,0 +1,11 @@
+{
+  "id": "voice_test00000001",
+  "model": "models/gemini-3.8-flash-tts",
+  "type": "prompted",
+  "expire_time": "2027-11-13T06:31:43.942416695Z",
+  "display_name": "voz-de-prueba",
+  "prompted": { "input": "Descripción inventada para la prueba." },
+  "language_code": "es-MX",
+  "gender": "female",
+  "sample_audio": { "mime_type": "audio/wav", "data": "QUJDREVGR0hJSktMTU5PUA==" }
+}
