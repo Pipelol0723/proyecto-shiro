@@ -22,6 +22,7 @@
  * Ver ADR 0012 (split cliente/server) y ADR 0001 (modular event-driven).
  */
 
+import path from 'node:path';
 import {
   AnthropicLLM,
   buildSystemPrompt,
@@ -58,6 +59,7 @@ import type { SelfDevOutcome } from './selfdev/selfdev-session.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
 import { buildTtsChain } from './tts/build-tts-chain.js';
+import { FileTtsUsageCounter } from './tts/tts-usage-counter.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
 import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
 
@@ -137,8 +139,18 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     'ElevenLabsTTS',
     (cfg, deps) => new ElevenLabsTTS(cfg, deps, { emotions: options.character.emotions }),
   );
-  // GeminiTTS (ADR 0034): solo registrado; `options` queda listo para 2c y voz-3.
-  loader.register('GeminiTTS', (cfg, deps) => new GeminiTTS(cfg, deps, {}));
+  // GeminiTTS (ADR 0034 §4): el contador mensual de segundos se guarda en
+  // `data/tts-usage.json` (cwd del proceso, ya ignorado por git).
+  loader.register(
+    'GeminiTTS',
+    (cfg, deps) =>
+      new GeminiTTS(cfg, deps, {
+        usage: new FileTtsUsageCounter({
+          dir: path.resolve(process.cwd(), 'data'),
+          logger: deps.logger,
+        }),
+      }),
+  );
   // SystemTTS lo instancia `buildTtsChain` al final de la cadena, con
   // `tts.providers.SystemTTS` o `{}` si no hay entrada. Ver ADR 0020 y 0034.
   loader.register('SystemTTS', (cfg, deps) => new SystemTTS(cfg, deps));
