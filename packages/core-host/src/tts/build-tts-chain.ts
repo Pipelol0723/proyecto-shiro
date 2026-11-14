@@ -58,7 +58,15 @@ export function buildTtsChain(options: BuildTtsChainOptions): TtsWithFallback {
           `puede quedar como eslabón muerto.`,
       );
     }
-    return loader.load<ITTSModule>(name, providers[name] ?? {}, deps);
+    try {
+      return loader.load<ITTSModule>(name, providers[name] ?? {}, deps);
+    } catch (error) {
+      // Una config inválida de un respaldo detiene el arranque, diciendo de dónde viene.
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`tts.fallback_chain: no se pudo instanciar '${name}': ${detail}`, {
+        cause: error,
+      });
+    }
   });
 
   const inChain = new Set([slot.active, ...names]);

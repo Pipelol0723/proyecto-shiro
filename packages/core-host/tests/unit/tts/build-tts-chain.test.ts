@@ -110,4 +110,33 @@ describe('buildTtsChain', () => {
     const chain = build(h, slot({ fallback_chain: ['GeminiTTS'], providers: { GeminiTTS: {} } }));
     expect(chain.id).toBe('tts:chain:tts:primary→tts:GeminiTTS→tts:system');
   });
+
+  it('si la factory de un respaldo lanza, el error nombra tts.fallback_chain y el respaldo', () => {
+    const h = makeHarness(names);
+    h.loader.register('GeminiTTS', () => {
+      throw new Error('config inválida');
+    });
+    expect(() => build(h, slot({ fallback_chain: ['GeminiTTS'] }))).toThrow(
+      /tts\.fallback_chain.*GeminiTTS.*config inválida/s,
+    );
+  });
+
+  it('sin fallback_chain (ausente o vacía) el único respaldo es SystemTTS', () => {
+    const h = makeHarness(names);
+    expect(build(h, slot({})).id).toBe('tts:chain:tts:primary→tts:SystemTTS');
+    expect(build(h, slot({ fallback_chain: [] })).id).toBe('tts:chain:tts:primary→tts:SystemTTS');
+  });
+
+  it('los nombres distinguyen mayúsculas (systemtts no está registrado)', () => {
+    const h = makeHarness(names);
+    expect(() => build(h, slot({ fallback_chain: ['systemtts'] }))).toThrow(/systemtts/);
+  });
+
+  it('instancia SystemTTS una sola vez aunque esté en la cadena', () => {
+    const h = makeHarness(names);
+    const factory = vi.fn(() => makeTts('tts:SystemTTS'));
+    h.loader.register('SystemTTS', factory);
+    build(h, slot({ fallback_chain: ['SystemTTS'] }));
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
 });

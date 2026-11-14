@@ -136,9 +136,8 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     'ElevenLabsTTS',
     (cfg, deps) => new ElevenLabsTTS(cfg, deps, { emotions: options.character.emotions }),
   );
-  // SystemTTS no recibe config del YAML (el slot `tts` solo describe el
-  // primary). Lo registramos vacío y el bootstrap lo instanciará después
-  // para envolverlo en `TtsWithFallback`. Ver ADR 0020.
+  // SystemTTS lo instancia `buildTtsChain` al final de la cadena, con
+  // `tts.providers.SystemTTS` o `{}` si no hay entrada. Ver ADR 0020 y 0034.
   loader.register('SystemTTS', (cfg, deps) => new SystemTTS(cfg, deps));
   loader.register('MemoryManager', (cfg, deps) => new MemoryManager(cfg, deps));
   // Live2DAvatar es lógico server-side (no carga PIXI). Recibe las
