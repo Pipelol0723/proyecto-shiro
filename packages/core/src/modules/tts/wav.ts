@@ -62,6 +62,9 @@ export function parseWav(audio: Uint8Array): WavInfo {
       if (tag !== WAVE_FORMAT_PCM && tag !== WAVE_FORMAT_EXTENSIBLE) {
         throw new WavError(`Formato de audio no soportado (${tag}): solo PCM`);
       }
+      // No se valida el SubFormat de WAVE_FORMAT_EXTENSIBLE: un subformato no
+      // entero (p. ej. float) pasaría como PCM. Si se reproduce o reempaqueta
+      // el audio (2b/2c), habrá que comprobarlo. Gemini entrega PCM de 16 bits.
       format = {
         channels: view.getUint16(body + 2, true),
         sampleRate: view.getUint32(body + 4, true),
@@ -73,6 +76,8 @@ export function parseWav(audio: Uint8Array): WavInfo {
       if (dataBytes <= 0) throw new WavError('El bloque data está vacío');
       const bytesPerSecond = format.sampleRate * format.channels * (format.bitsPerSample / 8);
       if (!(bytesPerSecond > 0)) throw new WavError('Formato WAV con tasa de bytes inválida');
+      // Si `data` está truncado a media muestra, la duración es aproximada
+      // (error de décimas de microsegundo, irrelevante para sincronizar la boca).
       return { ...format, dataBytes, durationMs: (dataBytes / bytesPerSecond) * 1000 };
     }
     // Los bloques se rellenan a longitud par.

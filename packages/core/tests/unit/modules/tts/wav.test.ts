@@ -140,13 +140,16 @@ describe('parseWav', () => {
   });
 
   it('lanza si falta data o está vacío', () => {
-    const sinData = riff([chunk({ id: 'fmt ', body: fmtBody({}) })]);
+    const sinData = riff([
+      chunk({ id: 'fmt ', body: fmtBody({}) }),
+      chunk({ id: 'LIST', body: silence(10) }),
+    ]);
     const vacio = riff([
       chunk({ id: 'fmt ', body: fmtBody({}) }),
       chunk({ id: 'data', body: silence(0) }),
     ]);
-    expect(() => parseWav(sinData)).toThrow(WavError);
-    expect(() => parseWav(vacio)).toThrow(WavError);
+    expect(() => parseWav(sinData)).toThrow(/Falta el bloque data/);
+    expect(() => parseWav(vacio)).toThrow(/data está vacío/);
   });
 
   it('lanza con un buffer menor de 44 bytes (JSON de error o MP3)', () => {
@@ -161,6 +164,49 @@ describe('parseWav', () => {
       chunk({ id: 'data', body: silence(4800) }, 1_000_000),
     ]);
     const info = parseWav(wav);
+    expect(info.dataBytes).toBe(4800);
+    expect(info.durationMs).toBeCloseTo(100, 6);
+  });
+
+  it('acepta un fmt extensible de 40 bytes', () => {
+    const fmt = Uint8Array.from([
+      ...fmtBody({ format: 0xfffe }),
+      ...u16(22),
+      ...new Uint8Array(22),
+    ]);
+    const wav = riff([
+      chunk({ id: 'fmt ', body: fmt }),
+      chunk({ id: 'data', body: silence(48000) }),
+    ]);
+    expect(fmt.length).toBe(40);
+    expect(parseWav(wav).durationMs).toBeCloseTo(1000, 6);
+  });
+
+  it('lanza si data aparece antes que fmt', () => {
+    const wav = riff([
+      chunk({ id: 'data', body: silence(100) }),
+      chunk({ id: 'fmt ', body: fmtBody({}) }),
+    ]);
+    expect(() => parseWav(wav)).toThrow(/antes que fmt/);
+  });
+
+  it('lanza con tasa de bytes inválida (frecuencia o bits a 0)', () => {
+    for (const opts of [{ sampleRate: 0 }, { bits: 0 }]) {
+      const wav = riff([
+        chunk({ id: 'fmt ', body: fmtBody(opts) }),
+        chunk({ id: 'data', body: silence(100) }),
+      ]);
+      expect(() => parseWav(wav)).toThrow(/tasa de bytes/);
+    }
+  });
+
+  it('lee un subarray con byteOffset distinto de 0', () => {
+    const wav = riff([
+      chunk({ id: 'fmt ', body: fmtBody({}) }),
+      chunk({ id: 'data', body: silence(4800) }),
+    ]);
+    const padded = Uint8Array.from([9, 9, 9, ...wav]);
+    const info = parseWav(padded.subarray(3));
     expect(info.dataBytes).toBe(4800);
     expect(info.durationMs).toBeCloseTo(100, 6);
   });
