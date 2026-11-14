@@ -56,7 +56,7 @@ import { buildSelfDevAnnounceTurn, buildSelfDevToolTurn } from './selfdev/selfde
 import type { SelfDevOutcome } from './selfdev/selfdev-session.js';
 import { AudioCache } from './audio/audio-cache.js';
 import { createAudioRouteHandler } from './audio/audio-route.js';
-import { TtsWithFallback } from './tts/tts-with-fallback.js';
+import { buildTtsChain } from './tts/build-tts-chain.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
 import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
 
@@ -276,17 +276,18 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     })();
   });
 
-  // 5. TTS con cadena de fallback (ADR 0020). El YAML define el primary
-  //    (ElevenLabsTTS) en `tts.active`; aquí instanciamos SystemTTS
-  //    aparte y los envolvemos en un wrapper que el pipeline ve como un
-  //    solo `ITTSModule`. Si la API key de ElevenLabs no está o falla,
-  //    SystemTTS toma el turno.
+  // 5. TTS con cadena de fallback (ADR 0020, ADR 0034 §3). El primario
+  //    (`tts.active`) ya lo cargó el orquestador en `orchestrator.init`
+  //    (core/orchestrator.ts); aquí se construyen los respaldos desde
+  //    `tts.fallback_chain` y `tts.providers`, con SystemTTS siempre al
+  //    final. Un nombre inválido lanza aquí, tras `init`.
   const modules = orchestrator.getModules();
   const primaryTts = modules.tts;
-  const systemTts = new SystemTTS({}, { logger, bus });
-  const ttsChain: ITTSModule = new TtsWithFallback({
+  const ttsChain: ITTSModule = buildTtsChain({
     primary: primaryTts,
-    fallbacks: [systemTts],
+    slot: options.config.modules.tts,
+    loader,
+    deps: { logger, bus },
     logger,
   });
   child.info(`TTS cadena: ${ttsChain.id}`);

@@ -28,7 +28,7 @@ describe('ModulesConfigSchema · slot tts', () => {
     );
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data.modules.tts.providers?.['ElevenLabsTTS']).toEqual({ voice_id: 'abc' });
+    expect(result.data.modules.tts.providers?.ElevenLabsTTS).toEqual({ voice_id: 'abc' });
   });
 
   it('acepta un slot sin providers', () => {

@@ -24,7 +24,7 @@ interface Harness {
 function makeHarness(names: readonly string[]): Harness {
   const logger = makeLogger();
   const warn = vi.fn();
-  logger.warn = warn as unknown as Logger['warn'];
+  logger.warn = warn;
   const loader = new ModuleLoader({ logger });
   const configs = new Map<string, unknown>();
   for (const name of names) {
