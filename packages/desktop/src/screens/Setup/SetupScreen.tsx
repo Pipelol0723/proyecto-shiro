@@ -102,7 +102,7 @@ const SECRETS: readonly SecretRow[] = [
     purpose: 'Es mi voz principal.',
     degraded: 'Sin esta clave hablo con ElevenLabs y, si tampoco está, con la voz del sistema.',
     notice:
-      'Lo que digo en voz alta se envía a Google. Con una clave del nivel gratuito, Google lo usa para mejorar sus productos; con el de pago, no.',
+      'Lo que digo en voz alta se envía a Google. Con una clave del nivel gratuito, Google lo usa para mejorar sus productos; con el de pago, no. No sé de qué nivel es tu clave. Si no quieres eso, usa una del de pago.',
   },
 ] as const;
 
@@ -225,7 +225,7 @@ export function SetupScreen(): JSX.Element {
                 </div>
                 <p className={styles.cardPurpose}>{sec.purpose}</p>
                 {!ok && report !== null && <p className={styles.degraded}>{sec.degraded}</p>}
-                {sec.notice !== undefined && <p className={styles.degraded}>{sec.notice}</p>}
+                {sec.notice !== undefined && <p className={styles.notice}>{sec.notice}</p>}
                 <div className={styles.secretRow}>
                   <input
                     type="password"
@@ -267,9 +267,8 @@ export function SetupScreen(): JSX.Element {
         )}
         <p className={styles.secretHint}>
           Guardo las claves en este equipo y no las cifro yo: dependen del cifrado del disco de tu
-          sistema. Solo se usan para hablar con su servicio, pero lo que digo en voz alta sí se
-          envía a Google o a ElevenLabs. En desarrollo, el <code>.env</code> de la raíz tiene
-          prioridad.
+          sistema. Lo que digo en voz alta sí se envía a Google o a ElevenLabs. En desarrollo, el{' '}
+          <code>.env</code> de la raíz tiene prioridad.
         </p>
       </div>
 

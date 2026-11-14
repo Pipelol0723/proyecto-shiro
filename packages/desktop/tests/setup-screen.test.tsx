@@ -3,10 +3,11 @@
  * textos degradados coherentes con la cadena Gemini → ElevenLabs → sistema.
  */
 
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { SystemHealthReport } from '@proyecto-shiro/core';
 
+const saveMock = vi.fn();
 const state: { report: SystemHealthReport | null } = { report: null };
 
 vi.mock('../src/use-bus', () => ({ useBus: () => ({}) }));
@@ -22,7 +23,7 @@ vi.mock('../src/health/useSystemHealth', () => ({
 }));
 vi.mock('../src/health/useSecretsSave', () => ({
   useSecretsSave: () => ({
-    save: () => undefined,
+    save: saveMock,
     status: 'idle',
     restartRequired: false,
     error: undefined,
@@ -70,6 +71,7 @@ describe('SetupScreen', () => {
     render(<SetupScreen />);
     const text = within(cardOf('ElevenLabs')).getByText(/Sin esta clave/).textContent ?? '';
     expect(text).toMatch(/Gemini/);
+    expect(text).not.toMatch(/key/);
   });
 
   it('la nota fija avisa de que lo hablado sale a un tercero', () => {
@@ -77,5 +79,16 @@ describe('SetupScreen', () => {
     render(<SetupScreen />);
     expect(screen.getByText(/lo que digo en voz alta sí se envía/i)).toBeDefined();
     expect(screen.queryByText(/nunca salen de tu máquina/)).toBeNull();
+  });
+
+  it('guardar la clave de Gemini manda gemini por secrets:save', () => {
+    state.report = makeReport({ anthropic: true, elevenlabs: true, gemini: false });
+    render(<SetupScreen />);
+    const card = cardOf('Google Gemini');
+    fireEvent.change(within(card).getByPlaceholderText(/GEMINI_API_KEY/), {
+      target: { value: 'clave-de-prueba' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: 'Guardar' }));
+    expect(saveMock).toHaveBeenCalledWith({ gemini: 'clave-de-prueba' });
   });
 });
