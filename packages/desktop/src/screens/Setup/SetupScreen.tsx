@@ -23,9 +23,13 @@ import { useSecretsSave } from '../../health/useSecretsSave';
 import styles from './SetupScreen.module.css';
 
 /** Campos del payload `secrets:save`. Mapea cada secret a su campo. */
-const SECRET_FIELD: Record<keyof SystemHealthReport['secrets'], 'anthropic' | 'elevenlabs'> = {
+const SECRET_FIELD: Record<
+  keyof SystemHealthReport['secrets'],
+  'anthropic' | 'elevenlabs' | 'gemini'
+> = {
   anthropic: 'anthropic',
   elevenlabs: 'elevenlabs',
+  gemini: 'gemini',
 };
 
 interface ServiceRow {
@@ -89,6 +93,13 @@ const SECRETS: readonly SecretRow[] = [
     purpose: 'Voz neuronal del TTS',
     degraded: 'Sin esta key Shiro habla con la voz del sistema operativo (SystemTTS).',
   },
+  {
+    key: 'gemini',
+    name: 'Gemini',
+    envVar: 'GEMINI_API_KEY',
+    purpose: 'Voz diseñada de Shiro (TTS primario)',
+    degraded: 'Sin esta key Shiro usa ElevenLabs o, en su defecto, la voz del sistema.',
+  },
 ] as const;
 
 function StatusBadge({
@@ -126,7 +137,7 @@ export function SetupScreen(): JSX.Element {
 
   const serviceStatus = (s: ServiceStatus | undefined): boolean => s === 'ok';
 
-  const saveSecret = (field: 'anthropic' | 'elevenlabs'): void => {
+  const saveSecret = (field: 'anthropic' | 'elevenlabs' | 'gemini'): void => {
     const value = drafts[field] ?? '';
     secrets.save({ [field]: value });
     setDrafts((d) => ({ ...d, [field]: '' }));

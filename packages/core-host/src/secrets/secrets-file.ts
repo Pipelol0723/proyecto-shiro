@@ -22,13 +22,14 @@ import { dirname, join } from 'node:path';
 export const SECRETS_FILENAME = 'secrets.env';
 
 /** Las únicas keys que este módulo lee y escribe. */
-export const MANAGED_KEYS = ['ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY'] as const;
+export const MANAGED_KEYS = ['ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY', 'GEMINI_API_KEY'] as const;
 export type ManagedKey = (typeof MANAGED_KEYS)[number];
 
 /** Mapea el nombre corto del payload del bus a la env var real. */
 export const SECRET_FIELD_TO_ENV: Record<string, ManagedKey> = {
   anthropic: 'ANTHROPIC_API_KEY',
   elevenlabs: 'ELEVENLABS_API_KEY',
+  gemini: 'GEMINI_API_KEY',
 };
 
 /** Parsea un contenido `KEY=VALUE` a un mapa (ignora líneas vacías/`#`). */
