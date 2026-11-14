@@ -233,3 +233,7 @@ Sustituir el bloque actual del slot `tts` por la versión post-decisión (quitar
 - §7: el diferido de multi-device lo resuelve [ADR 0026 §6](0026-estacion-holografica-pepper-ghost-cliente-ligero.md) (`OutputRouter`, destino = cliente de origen), sin implementar. Hoy todos los clientes reproducen `tts:audio` salvo los que tengan el mute; no existe la lógica de «primer cliente con audio».
 - La RTX 5080 que el ADR esperaba no existe: «post-5080» significa «cuando haya una GPU con más VRAM».
 - Enmienda planificada, sin implementar: URL de audio relativa al origen del cliente y CORS acotado (P-14 del plan de mejora).
+
+## Nota 2026-11-14
+
+- [ADR 0034](0034-tts-gemini-voz-disenada.md) sustituirá el §1 (primaria y cadena de dos) y el §6 (voz) y amplía el §5 con `tts_style` cuando se active `GeminiTTS` (pendiente del nivel de pago; hoy sigue activa `ElevenLabsTTS`); sigue vigente en topología, transporte y cancelación.

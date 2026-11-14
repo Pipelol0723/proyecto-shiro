@@ -1,10 +1,10 @@
 # ADR 0034: TTS — voz diseñada de Gemini como primaria, ElevenLabs y SystemTTS de respaldo
 
-- **Status**: Accepted (sin implementar)
+- **Status**: Accepted (implementado; sin activar)
 - **Fecha**: 2026-11-13
 - **Decidido por**: Pipelol0723
 
-> **Estado de implementación (2026-11-13):** el dueño aceptó la decisión el mismo día. **Sin implementar todavía**: hasta que entre el código, Shiro sigue hablando con ElevenLabs y SystemTTS (ADR 0020). El módulo no sirve para uso diario hasta que el dueño active el nivel de pago (ver «Qué tiene que hacer el dueño»).
+> **Estado de implementación (2026-11-14):** el dueño aceptó la decisión el 2026-11-13 y el código está implementado y probado con la API real (módulo `GeminiTTS`, cadena desde la configuración, estilo por emoción, aviso de caducidad, clave gestionada y script de voces). **Sin activar**: `tts.active` sigue en `ElevenLabsTTS` mientras el dueño use el nivel gratuito de Gemini, solo para desarrollar y probar; se activa con el nivel de pago (ver «Qué tiene que hacer el dueño» y la nota fechada del final).
 
 ## Contexto
 
@@ -178,3 +178,12 @@ Sin implementar. Si el dueño lo acepta, en PRs pequeños y en este orden:
 - [`voz.md`](../plan-implementacion-2026-11/voz.md) §5.0 — decisiones del dueño del 2026-11-13 — y [`voz-alternativas.md`](../plan-implementacion-2026-11/voz-alternativas.md) — comparativa de opciones con sus fuentes.
 - [Biblia del personaje](../design/shiro-character-bible.md) — tono de Shiro.
 - Documentación de Google consultada el 2026-11-13: [diseño de voces](https://ai.google.dev/gemini-api/docs/voice-design), [API de voces](https://ai.google.dev/api/voices), [generación de voz](https://ai.google.dev/gemini-api/docs/speech-generation), [precios](https://ai.google.dev/gemini-api/docs/pricing).
+
+## Nota 2026-11-14
+
+- **Implementado**: el módulo `GeminiTTS` (petición, tiempo máximo, cabecera RIFF, duración y contador de segundos), la cadena de respaldo construida desde la configuración (`providers`), `tts_style` por emoción en el personaje, el script de voces (`npm run voices`), el aviso de caducidad al arrancar, la clave `GEMINI_API_KEY` gestionada desde Setup y su fila en la tabla SEC-xx. El ejemplo de la cadena de tres está comentado en `config/modules.config.yaml`, con un test que comprueba que, descomentado, lo acepta el cargador de configuración.
+- **Pendiente de activar**: cambiar `tts.active` a `GeminiTTS` espera al nivel de pago; el dueño sigue en el gratuito por decisión propia. Pendiente también del ADR 0030, que debe listar a Google junto a ElevenLabs como destino del texto hablado.
+- **No hecho**: la línea de caducidad de la voz en la interfaz. La llevará el rediseño de la interfaz ([propuesta](../design/propuesta-rediseno-escritorio.md)).
+- **Medido en pruebas reales**: una frase corta tarda entre 3,5 y 4,2 s. Con la cadena real, sin clave de Gemini habla ElevenLabs y sin red habla la voz del sistema.
+- **Hallazgo: usar la voz renueva su caducidad.** La voz se creó el 2026-11-13 con `expire_time` 2027-11-13; tras una síntesis el 2026-11-14 pasó a 2027-11-14, un año después de ese uso. Los usos de las primeras 23 horas no la cambiaron. Google no lo documenta y puede cambiarlo. Rebaja el riesgo principal del §5 mientras Shiro hable de vez en cuando, pero no sustituye al aviso ni a la receta.
+- PRs: (los completa el coordinador)
