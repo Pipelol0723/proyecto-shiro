@@ -108,7 +108,7 @@ graph LR
 
         subgraph "modules/ (✅ implementados / ⏸️ pendientes)"
             STT["stt/<br>WhisperSTT ✅<br>(cliente HTTP del micro)"]
-            TTS["tts/<br>ElevenLabs (primary) ✅<br>SystemTTS (fallback) ✅"]
+            TTS["tts/<br>GeminiTTS (opcional) ✅<br>ElevenLabs (primary hoy) ✅<br>SystemTTS (fallback) ✅"]
             LLM[llm/<br>Ollama / Anthropic ✅]
             Mem[memory/<br>MemoryManager → Letta SDK + LocalMemory WAL ✅]
             Av["avatar/<br>Live2DAvatar ✅ (server)<br>render + lip-sync en cliente ✅<br>VRM ⏸️"]
@@ -280,7 +280,7 @@ sequenceDiagram
 
     LLM->>TTS: tts.synthesize(text, emotion)
     TTS-->>LLM: { audio: Buffer, mimeType }
-    Note over TTS: TtsWithFallback intenta ElevenLabs<br/>y cae a SystemTTS si falla
+    Note over TTS: TtsWithFallback recorre la cadena configurada<br/>(por defecto ElevenLabs y SystemTTS; con Gemini activada, Gemini primero)
     LLM->>Bus: emit("tts:audio", { url, audioId, mimeType })
     Bus->>Client: deliver
     Client->>TTS: GET /audio/&lt;id&gt;.&lt;ext&gt;
@@ -304,16 +304,17 @@ sequenceDiagram
 - La memoria se inserta en dos puntos: lee contexto para el LLM, escribe
   cada turno de la conversación.
 
-## TTS: ElevenLabs + SystemTTS, audio HTTP efímero
+## TTS: cadena configurable (Gemini, ElevenLabs, SystemTTS), audio HTTP efímero
 
-La salida de voz (ver [ADR 0020](adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)) se reparte así:
+La salida de voz (ver [ADR 0020](adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) y [ADR 0034](adr/0034-tts-gemini-voz-disenada.md)) se reparte así. El diagrama muestra la cadena de tres que se obtiene al activar Gemini; por defecto `tts.active` es `ElevenLabsTTS` y la cadena es ElevenLabs → SystemTTS:
 
 ```mermaid
 graph LR
     subgraph "core-host (Node)"
         Pipe[conversation-flow]
         Chain[TtsWithFallback]
-        EL[ElevenLabsTTS<br/>primary]
+        Gem[GeminiTTS<br/>opcional, primero]
+        EL[ElevenLabsTTS<br/>primary hoy]
         Sys[SystemTTS<br/>fallback]
         Cache[(AudioCache<br/>TTL 60s)]
         Route[GET /audio/&lt;id&gt;.&lt;ext&gt;<br/>HTTP route]
@@ -325,8 +326,10 @@ graph LR
     end
 
     Pipe -->|llm:responded → tts.synthesize| Chain
-    Chain -->|primero| EL
+    Chain -->|primero, si está activa| Gem
+    Chain -->|si falla| EL
     Chain -->|si falla| Sys
+    Gem -.HTTPS.-> Goog[(Gemini API)]
     EL -.HTTPS.-> EL11[(ElevenLabs API)]
     Sys -.child_process.-> SO[say.js → SAPI / NSSpeech / festival]
     Chain -->|Buffer + mimeType| Cache
@@ -342,21 +345,27 @@ graph LR
     style Hook fill:#4a9eff,stroke:#333,color:#fff
 ```
 
-- **Cadena `TtsWithFallback`**: el pipeline ve un solo `ITTSModule`. Por dentro, intenta `ElevenLabsTTS` (primary); si lanza (sin internet, cuota, 401, 5xx), prueba `SystemTTS` (voz del SO). Solo cuando los dos fallan, el server emite `tts:audio-ended` directo para desbloquear al cliente.
+- **Cadena `TtsWithFallback`**: el pipeline ve un solo `ITTSModule`. Por dentro recorre, en orden, los eslabones de la configuración. Por defecto son `ElevenLabsTTS` (primary) y `SystemTTS` (voz del SO); con Gemini activada, `GeminiTTS` → `ElevenLabsTTS` → `SystemTTS`. Si un eslabón lanza (sin clave, sin internet, cuota, 401, 5xx, tiempo agotado), prueba el siguiente, con un aviso en el log por turno. `SystemTTS` va siempre al final. Solo cuando todos fallan, el server emite `tts:audio-ended` directo para desbloquear al cliente.
+- **Cadena desde la configuración** (ADR 0034 §3): en `modules.config.yaml`, `tts.active` es el primer eslabón y usa `tts.config`; `tts.fallback_chain` lista los respaldos y cada uno toma su configuración de `tts.providers[<nombre>]` (o sus valores por defecto). Un nombre no registrado o repetido detiene el arranque con un mensaje legible. La cadena de tres está como ejemplo comentado en el propio YAML.
 - **In-process en core-host**, no microservicio aparte. ElevenLabs es API REST trivial — encapsularlo en Docker es overkill. La asimetría con Whisper (que sí es microservicio) refleja la realidad: **cloud APIs in-process, motores locales pesados en microservicio**. Si llega una voz sintética local (UTAU), cuando haya una GPU con más VRAM, esa sí será microservicio.
 - **Audio HTTP efímero**: el server cachea el buffer con un `audioId` único (TTL 60s) y expone `GET /audio/<audioId>.<ext>`. El bus solo lleva la URL (`tts:audio { url, audioId, mimeType }`) — bytes binarios no caben naturalmente en el wire-schema JSON, y servir por HTTP permite que solo los clientes que reproducen hagan el fetch.
 - **Reproducción en el cliente**: `useTtsPlayback(bus)` crea un `HTMLAudioElement`, hace `fetch(url)`, reproduce, y emite `tts:audio-ended` al `ended` (o al `error`). El **`speaking: true`** del reducer se mantiene hasta entonces.
 - **Cancelable mid-speech**: el cliente emite `tts:cancel { audioId }` cuando el usuario interrumpe (PTT o tipeo durante speaking). El server invalida el `audioId` en el cache (cualquier fetch posterior recibe 410). El cliente que estaba reproduciendo hace `audio.pause(); audio.src = ''`.
 - **Mute por cliente**: `useTtsPlayback` persiste la preferencia en `localStorage` (`shiro:tts:muted`). Cuando `muted=true`, el cliente sigue emitiendo `tts:audio-ended` (para desbloquear el reducer) pero no reproduce. Hoy todos los clientes conectados reproducen `tts:audio` salvo los que tengan el mute; el enrutado al cliente de origen lo decide el `OutputRouter` de ADR 0026 §6, sin implementar.
 
-### Mapeo emoción → `stability`
+### Mapeo emoción → `stability` / `style`
 
 `ElevenLabsTTS` lee `character.emotions[emotion].tts_stability` del YAML del personaje y lo usa como `voice_settings.stability` por turno. El resto de `voice_settings` (`similarity_boost`, `style`, `use_speaker_boost`) son constantes desde `config/modules.config.yaml`. Si la emoción no está mapeada o no hay character, cae a `default_stability` (0.75).
+
+`GeminiTTS` lee `character.emotions[emotion].tts_style`, una frase de estilo en inglés, y la envía como `speech_metadata.style`; si falta, no envía estilo. Cada emoción lleva así un parámetro por proveedor (`tts_stability` para ElevenLabs, `tts_style` para Gemini).
 
 `SystemTTS` **ignora** la emoción con un debug log — `say.js` no expone parámetros emocionales y forzarlos vía pitch manual no compensa la complejidad.
 
 ### Quirks importantes
 
+- **`GEMINI_API_KEY` server-side**: como la de ElevenLabs, vive solo en `process.env` del `core-host` (en el modo empaquetado se guarda desde Setup en `secrets.env`). Sin ella, `GeminiTTS` falla en cada turno y la cadena sigue con el siguiente eslabón. El informe de salud lleva solo su presencia.
+- **Contador mensual de `GeminiTTS`**: suma los segundos sintetizados, guarda el total del mes (hora local) en `data/tts-usage.json`, dentro del directorio de trabajo del `core-host`, y avisa en el log al pasar `monthly_warn_seconds` (por defecto 6000). Solo ve el uso de este proceso: la alerta de presupuesto de Google es la que manda.
+- **Aviso de caducidad de la voz de Gemini** (ADR 0034 §5): si `GeminiTTS` está en la cadena, el arranque consulta una vez, en segundo plano, la voz configurada y avisa en el log si caduca en menos de 30 días, ya caducó o no existe. El resultado viaja en el campo `geminiVoice` del informe `system:health`. La voz caduca al año; según lo observado, usarla renueva la fecha, pero Google no lo documenta. La receta y el script para recrearla (`npm run voices`) están en el repo.
 - **`ELEVENLABS_API_KEY` server-side**: vive solo en `process.env` del `core-host`. Sin ella, ElevenLabsTTS arranca con un `WARN` (no aborta) y todos los turnos caen al fallback.
 - **El bootstrap solo crea el AudioCache si `simulationSpeed !== 0`** — `simulationSpeed === 0` es la señal de "modo test" y mantiene el simulador legacy de `tts:audio-ended` para tests que no levantan red real.
 - **Sin auth en `GET /audio/`**: V1 local-only. CORS acotado: `403` a un `Origin` ajeno y eco exacto del permitido (ADR 0027, 2a); nunca `*`. Cuando llegue multi-device público, habrá que firmar/limitar las URLs.
@@ -779,7 +788,7 @@ El "carácter" del companion (Shiro) vive en
 El `CharacterLoader` carga este YAML al arrancar el `core-host` y
 `buildSystemPrompt` lo convierte en el system prompt que se inyecta en cada
 conversación; los parámetros emocionales se propagan al TTS
-(`emotion → stability`) y al Orbe/Avatar (`emotion → expresión`) en cada
+(`emotion → stability` en ElevenLabs, `emotion → style` en Gemini) y al Orbe/Avatar (`emotion → expresión`) en cada
 respuesta.
 
 El **orbe placeholder** consume el campo `emotion` del payload de
