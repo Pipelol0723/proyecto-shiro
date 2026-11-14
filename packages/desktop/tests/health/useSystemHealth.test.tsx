@@ -48,7 +48,7 @@ function makeFakeBus(): FakeBus {
 
 const REPORT: SystemHealthReport = {
   services: { ollama: 'ok', letta: 'down', whisper: 'ok' },
-  secrets: { anthropic: false, elevenlabs: true },
+  secrets: { anthropic: false, elevenlabs: true, gemini: false },
   checkedAt: '2026-06-10T00:00:00.000Z',
 };
 

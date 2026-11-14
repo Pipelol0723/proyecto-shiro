@@ -12,6 +12,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   loadSecretsEnv,
+  MANAGED_KEYS,
+  SECRET_FIELD_TO_ENV,
   saveSecretsEnv,
   SECRETS_FILENAME,
 } from '../../../src/secrets/secrets-file.js';
@@ -22,12 +24,28 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'shiro-secrets-'));
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.ELEVENLABS_API_KEY;
+  delete process.env.GEMINI_API_KEY;
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.ELEVENLABS_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+});
+
+describe('claves gestionadas', () => {
+  it('MANAGED_KEYS incluye GEMINI_API_KEY y toda clave de MANAGED_KEYS tiene campo en SECRET_FIELD_TO_ENV', () => {
+    expect(MANAGED_KEYS).toContain('GEMINI_API_KEY');
+    expect(SECRET_FIELD_TO_ENV.gemini).toBe('GEMINI_API_KEY');
+    const mapped = new Set<string>(Object.values(SECRET_FIELD_TO_ENV));
+    for (const key of MANAGED_KEYS) expect(mapped.has(key)).toBe(true);
+  });
+
+  it('todo valor de SECRET_FIELD_TO_ENV está en MANAGED_KEYS (si no, saveSecretsEnv lo descartaría)', () => {
+    const managed = new Set<string>(MANAGED_KEYS);
+    for (const envKey of Object.values(SECRET_FIELD_TO_ENV)) expect(managed.has(envKey)).toBe(true);
+  });
 });
 
 describe('saveSecretsEnv', () => {
@@ -67,6 +85,49 @@ describe('saveSecretsEnv', () => {
     const changed = saveSecretsEnv(dir, { ELEVENLABS_API_KEY: undefined });
     expect(changed).toBe(false);
     expect(readFileSync(join(dir, SECRETS_FILENAME), 'utf8')).toContain('ANTHROPIC_API_KEY=a1');
+  });
+
+  it('rechaza un valor con un salto de línea dentro y no escribe nada', () => {
+    // Sin esto, el valor se serializa en dos líneas y la segunda se lee
+    // después como otra clave gestionada (inyección por `secrets:save`).
+    saveSecretsEnv(dir, { ANTHROPIC_API_KEY: 'a1' });
+    const injected = 'g1\nANTHROPIC_API_KEY=inyectada';
+    let message = '';
+    try {
+      saveSecretsEnv(dir, { GEMINI_API_KEY: injected });
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toMatch(/salto de línea/);
+    expect(message).not.toContain('inyectada');
+    expect(readFileSync(join(dir, SECRETS_FILENAME), 'utf8')).toBe('ANTHROPIC_API_KEY=a1\n');
+  });
+
+  it('acepta un valor pegado con un salto de línea al final', () => {
+    saveSecretsEnv(dir, { GEMINI_API_KEY: 'g1\r\n' });
+    expect(readFileSync(join(dir, SECRETS_FILENAME), 'utf8')).toBe('GEMINI_API_KEY=g1\n');
+  });
+});
+
+describe('GEMINI_API_KEY', () => {
+  it('guarda y borra GEMINI_API_KEY en secrets.env sin tocar las otras claves', () => {
+    saveSecretsEnv(dir, { ANTHROPIC_API_KEY: 'a1', GEMINI_API_KEY: 'g1' });
+    const path = join(dir, SECRETS_FILENAME);
+    expect(readFileSync(path, 'utf8')).toContain('GEMINI_API_KEY=g1');
+    const changed = saveSecretsEnv(dir, { GEMINI_API_KEY: '' });
+    expect(changed).toBe(true);
+    const content = readFileSync(path, 'utf8');
+    expect(content).not.toContain('GEMINI_API_KEY');
+    expect(content).toContain('ANTHROPIC_API_KEY=a1');
+  });
+
+  it('carga GEMINI_API_KEY de secrets.env sin pisar una variable ya definida', () => {
+    saveSecretsEnv(dir, { GEMINI_API_KEY: 'g-file' });
+    expect(loadSecretsEnv(dir)).toEqual(['GEMINI_API_KEY']);
+    expect(process.env.GEMINI_API_KEY).toBe('g-file');
+    process.env.GEMINI_API_KEY = 'g-real';
+    expect(loadSecretsEnv(dir)).toEqual([]);
+    expect(process.env.GEMINI_API_KEY).toBe('g-real');
   });
 });
 

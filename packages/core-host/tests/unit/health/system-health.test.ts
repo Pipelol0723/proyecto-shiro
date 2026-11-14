@@ -13,6 +13,7 @@ import {
   readSecretPresence,
   resolveHealthTargets,
 } from '../../../src/health/system-health.js';
+import { MANAGED_KEYS, SECRET_FIELD_TO_ENV } from '../../../src/secrets/secrets-file.js';
 
 function makeConfig(overrides?: {
   ollamaHost?: string;
@@ -62,6 +63,7 @@ function makeFetch(byUrl: (url: string) => number | 'reject'): typeof fetch {
 afterEach(() => {
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.ELEVENLABS_API_KEY;
+  delete process.env.GEMINI_API_KEY;
 });
 
 describe('resolveHealthTargets', () => {
@@ -90,19 +92,42 @@ describe('resolveHealthTargets', () => {
 
 describe('readSecretPresence', () => {
   it('reporta false cuando las keys no están', () => {
-    expect(readSecretPresence()).toEqual({ anthropic: false, elevenlabs: false });
+    expect(readSecretPresence()).toEqual({ anthropic: false, elevenlabs: false, gemini: false });
   });
 
   it('reporta true cuando las keys están (no expone el valor)', () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-xxx';
     process.env.ELEVENLABS_API_KEY = 'el-xxx';
-    expect(readSecretPresence()).toEqual({ anthropic: true, elevenlabs: true });
+    process.env.GEMINI_API_KEY = 'gm-xxx';
+    expect(readSecretPresence()).toEqual({ anthropic: true, elevenlabs: true, gemini: true });
   });
 
   it('trata una key vacía / solo espacios como ausente', () => {
     process.env.ANTHROPIC_API_KEY = '   ';
     process.env.ELEVENLABS_API_KEY = '';
-    expect(readSecretPresence()).toEqual({ anthropic: false, elevenlabs: false });
+    expect(readSecretPresence()).toEqual({ anthropic: false, elevenlabs: false, gemini: false });
+  });
+});
+
+describe('readSecretPresence y claves gestionadas', () => {
+  it('informa true para cada campo de SECRET_FIELD_TO_ENV cuando su clave está definida', () => {
+    for (const key of MANAGED_KEYS) process.env[key] = 'x';
+    try {
+      const presence = readSecretPresence() as Record<string, boolean>;
+      for (const field of Object.keys(SECRET_FIELD_TO_ENV)) expect(presence[field]).toBe(true);
+    } finally {
+      for (const key of MANAGED_KEYS) delete process.env[key];
+    }
+  });
+});
+
+describe('readSecretPresence con Gemini', () => {
+  it('readSecretPresence informa gemini (true/false)', () => {
+    expect(readSecretPresence().gemini).toBe(false);
+    process.env.GEMINI_API_KEY = 'gm-xxx';
+    expect(readSecretPresence().gemini).toBe(true);
+    process.env.GEMINI_API_KEY = '  ';
+    expect(readSecretPresence().gemini).toBe(false);
   });
 });
 
@@ -148,7 +173,7 @@ describe('checkSystemHealth', () => {
   it('incluye la presencia de keys en el reporte', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant';
     const report = await checkSystemHealth({ ...targets, fetchImpl: makeFetch(() => 200) });
-    expect(report.secrets).toEqual({ anthropic: true, elevenlabs: false });
+    expect(report.secrets).toEqual({ anthropic: true, elevenlabs: false, gemini: false });
   });
 
   it('un servicio caído no tumba a los otros (Promise.all resiliente)', async () => {

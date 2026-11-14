@@ -50,8 +50,10 @@ export interface SystemHealthReport {
   secrets: {
     /** `ANTHROPIC_API_KEY` presente (LLM cloud / Claude). */
     anthropic: boolean;
-    /** `ELEVENLABS_API_KEY` presente (TTS primary). */
+    /** `ELEVENLABS_API_KEY` presente (TTS de respaldo de Gemini). */
     elevenlabs: boolean;
+    /** `GEMINI_API_KEY` presente (TTS primary, voz diseñada; ADR 0034). */
+    gemini: boolean;
   };
   /**
    * Caducidad de la voz diseñada de Gemini (ADR 0034 §5). Solo existe si
@@ -109,7 +111,7 @@ export interface EventMap {
    * vacío **borra** esa key. El valor viaja por el WS local (mismo origen
    * que el resto del bus) y nunca se loguea.
    */
-  'secrets:save': { anthropic?: string; elevenlabs?: string };
+  'secrets:save': { anthropic?: string; elevenlabs?: string; gemini?: string };
 
   /**
    * Ack del `core-host` tras intentar persistir las keys. `restartRequired`

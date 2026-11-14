@@ -22,13 +22,14 @@ import { dirname, join } from 'node:path';
 export const SECRETS_FILENAME = 'secrets.env';
 
 /** Las únicas keys que este módulo lee y escribe. */
-export const MANAGED_KEYS = ['ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY'] as const;
+export const MANAGED_KEYS = ['ANTHROPIC_API_KEY', 'ELEVENLABS_API_KEY', 'GEMINI_API_KEY'] as const;
 export type ManagedKey = (typeof MANAGED_KEYS)[number];
 
 /** Mapea el nombre corto del payload del bus a la env var real. */
 export const SECRET_FIELD_TO_ENV: Record<string, ManagedKey> = {
   anthropic: 'ANTHROPIC_API_KEY',
   elevenlabs: 'ELEVENLABS_API_KEY',
+  gemini: 'GEMINI_API_KEY',
 };
 
 /** Parsea un contenido `KEY=VALUE` a un mapa (ignora líneas vacías/`#`). */
@@ -91,10 +92,17 @@ export function saveSecretsEnv(dir: string, updates: Partial<Record<ManagedKey, 
   for (const key of MANAGED_KEYS) {
     const next = updates[key];
     if (next === undefined) continue; // no se tocó
-    if (next.trim() === '') {
+    const value = next.trim();
+    // Un salto de línea DENTRO del valor se serializaría en dos líneas y la
+    // segunda se leería después como otra clave. Se rechaza sin escribir
+    // nada; el mensaje no lleva el valor.
+    if (/[\r\n]/.test(value)) {
+      throw new Error(`${key}: la clave no puede contener un salto de línea`);
+    }
+    if (value === '') {
       current.delete(key); // vaciar = borrar
     } else {
-      current.set(key, next.trim());
+      current.set(key, value);
     }
   }
 

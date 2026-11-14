@@ -63,6 +63,7 @@ export function readSecretPresence(): SystemHealthReport['secrets'] {
   return {
     anthropic: hasEnv('ANTHROPIC_API_KEY'),
     elevenlabs: hasEnv('ELEVENLABS_API_KEY'),
+    gemini: hasEnv('GEMINI_API_KEY'),
   };
 }
 
