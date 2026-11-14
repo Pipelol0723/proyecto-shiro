@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 404,
+    "message": "The voice was not found or the caller does not have permission to access it.",
+    "status": "NOT_FOUND"
+  }
+}

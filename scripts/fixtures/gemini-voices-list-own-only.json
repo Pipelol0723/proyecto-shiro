@@ -1,0 +1,20 @@
+{
+  "voices": [
+    {
+      "id": "voice_test00000001",
+      "type": "prompted",
+      "expire_time": "2027-11-13T06:31:43.942416695Z",
+      "display_name": "voz-de-prueba",
+      "language_code": "es-MX",
+      "gender": "female"
+    },
+    {
+      "id": "voice_test00000002",
+      "type": "prompted",
+      "expire_time": "2027-11-20T06:31:43.942416695Z",
+      "display_name": "otra-voz",
+      "language_code": "es-MX",
+      "gender": "female"
+    }
+  ]
+}
