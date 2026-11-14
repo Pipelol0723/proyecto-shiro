@@ -117,7 +117,7 @@ export class GeminiTTS implements ITTSModule {
         'GeminiTTS: el texto hablado se envía a Google; con clave del nivel gratuito Google lo usa para mejorar sus productos.',
       );
     }
-    if (this.config.voice_id === '') {
+    if (this.config.voice_id.trim() === '') {
       this.logger.warn(
         'GeminiTTS: `voice_id` vacío en la config. Define el de la voz diseñada o sintetizar fallará.',
       );
@@ -128,7 +128,7 @@ export class GeminiTTS implements ITTSModule {
     if (this.apiKey === undefined || this.apiKey === '') {
       throw new GeminiTTSError('GeminiTTS: GEMINI_API_KEY no está definida.');
     }
-    if (this.config.voice_id === '') {
+    if (this.config.voice_id.trim() === '') {
       throw new GeminiTTSError('GeminiTTS: voice_id vacío. Configura el de la voz diseñada.');
     }
     if (request.text.trim().length === 0) {
@@ -142,16 +142,16 @@ export class GeminiTTS implements ITTSModule {
       generation_config: { speech_config: [{ voice: this.config.voice_id }] },
     };
 
-    let response: Response;
+    let response: HttpResult;
     try {
-      response = await this.fetchWithTimeout(url, {
+      response = await this.postWithTimeout(url, {
         method: 'POST',
         headers: { 'x-goog-api-key': this.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
     } catch (err) {
       const origin = new URL(url).origin;
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (isAbortError(err)) {
         throw new GeminiTTSError(
           `GeminiTTS: tiempo agotado (${String(this.config.timeout_ms)} ms) esperando a ${origin}`,
           undefined,
@@ -162,7 +162,7 @@ export class GeminiTTS implements ITTSModule {
     }
 
     if (!response.ok) {
-      const rawDetail = await response.text().catch(() => '<sin cuerpo>');
+      const rawDetail = response.text;
       // Se redacta antes de recortar para no dejar un trozo de la clave en el borde.
       const detail = redact(rawDetail, [this.apiKey, request.text]).slice(0, ERROR_BODY_MAX);
       if (response.status === 401) {
@@ -179,7 +179,7 @@ export class GeminiTTS implements ITTSModule {
 
     let json: InteractionResponse;
     try {
-      json = (await response.json()) as InteractionResponse;
+      json = JSON.parse(response.text) as InteractionResponse;
     } catch (err) {
       throw new GeminiTTSError('GeminiTTS: la respuesta no es JSON', response.status, err);
     }
@@ -204,17 +204,44 @@ export class GeminiTTS implements ITTSModule {
     }
   }
 
-  private async fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  /**
+   * POST con tiempo máximo que cubre también la lectura del cuerpo: el
+   * temporizador sigue vivo hasta tener el texto completo.
+   */
+  private async postWithTimeout(url: string, init: RequestInit): Promise<HttpResult> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
     }, this.config.timeout_ms);
     try {
-      return await fetch(url, { ...init, signal: controller.signal });
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      let text: string;
+      try {
+        text = await response.text();
+      } catch (err) {
+        // Un cuerpo ilegible en un error HTTP no oculta el código; en un 200 sí es fallo.
+        if (response.ok || controller.signal.aborted) throw err;
+        text = '<sin cuerpo>';
+      }
+      return { ok: response.ok, status: response.status, text };
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+/** Resultado de la petición con el cuerpo ya leído. */
+interface HttpResult {
+  ok: boolean;
+  status: number;
+  text: string;
+}
+
+/** AbortError venga de un DOMException, de un polyfill o de un fetch inyectado. */
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError'
+  );
 }
 
 /** Primer contenido `audio` con `data` dentro de `steps[].content[]`. */

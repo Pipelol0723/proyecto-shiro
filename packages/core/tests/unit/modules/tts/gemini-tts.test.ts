@@ -274,7 +274,7 @@ describe('GeminiTTS', () => {
   it('JSON ilegible: "no es JSON" con status 200', async () => {
     fetchMock.mockResolvedValueOnce({
       ...jsonResponse({}),
-      json: () => Promise.reject(new SyntaxError('x')),
+      text: () => Promise.resolve('no es json {'),
     });
     const err = (await makeTts()
       .synthesize({ text: SPOKEN })
