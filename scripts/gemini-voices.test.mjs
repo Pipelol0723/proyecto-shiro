@@ -127,6 +127,71 @@ test('create reintenta con el siguiente idioma solo ante 400', async () => {
   assert.equal(other.calls.length, 1, 'un 429 no reintenta con otro idioma');
 });
 
+test('create no reintenta idiomas ante un 400 que no habla del idioma', async () => {
+  const badKey = { error: { message: 'API key not valid.', status: 'INVALID_ARGUMENT' } };
+  const r = await run(['create', '--yes'], () => reply(badKey, 400));
+  assert.equal(r.code, 2);
+  assert.equal(r.calls.length, 1);
+  assert.match(r.err, /comprueba con `list`/);
+});
+
+test('create sale con 2 si la respuesta no trae id', async () => {
+  const r = await run(['create', '--yes'], [reply({})]);
+  assert.equal(r.code, 2);
+});
+
+test('las peticiones llevan un tope de tiempo', async () => {
+  const r = await run(['get', 'voice_test00000001'], [reply(voiceIn(40))]);
+  assert.ok(r.calls[0].init.signal instanceof AbortSignal);
+});
+
+test('la clave se recorta antes de usarla', async () => {
+  const r = await run(['get', 'voice_test00000001'], [reply(voiceIn(40))], {
+    GEMINI_API_KEY: `${KEY}\n`,
+  });
+  assert.equal(r.calls[0].init.headers['x-goog-api-key'], KEY);
+});
+
+test('las opciones y palabras que no corresponden al subcomando salen con 2', async () => {
+  for (const argv of [
+    ['list', '--dry-run'],
+    ['get', 'voice_test00000001', '--dry-run'],
+    ['get', 'voice_test00000001', '--yes'],
+    ['get', 'voice_test00000001', '--all'],
+    ['create', '--all'],
+    ['list', '--name', 'x'],
+    ['create', 'foo', '--yes'],
+    ['list', 'x'],
+  ]) {
+    const r = await run(argv);
+    assert.equal(r.code, 2, argv.join(' '));
+    assert.equal(r.calls.length, 0, argv.join(' '));
+  }
+});
+
+test('get de una voz de catálogo sin expire_time sale con 0', async () => {
+  const prebuilt = { ...voiceIn(40), type: 'prebuilt', expire_time: undefined };
+  const r = await run(['get', 'voice_test00000001'], [reply(prebuilt)]);
+  assert.equal(r.code, 0);
+  assert.match(r.out, /sin caducidad/);
+});
+
+test('list avisa si no hay voces propias, si el token se repite y si llega al tope', async () => {
+  const none = await run(['list'], [reply({ voices: [] })]);
+  assert.equal(none.code, 0);
+  assert.match(none.err, /sin voces propias/);
+
+  const same = { voices: [], next_page_token: 'igual' };
+  const repeated = await run(['list', '--all'], () => reply(same));
+  assert.equal(repeated.calls.length, 2, 'corta si el token no cambia');
+
+  let n = 0;
+  const capped = await run(['list', '--all'], () =>
+    reply({ voices: [], next_page_token: `t${n++}` }),
+  );
+  assert.match(capped.err, /tope/);
+});
+
 test('get devuelve 0 con 31 días o más', async () => {
   const r = await run(['get', 'voice_test00000001'], [reply(voiceIn(31))]);
   assert.equal(r.code, 0);

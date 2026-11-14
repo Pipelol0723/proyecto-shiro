@@ -16,6 +16,8 @@
  * de 30 días (solo en `get`) · 2 error de uso, clave, red o API.
  *
  * La clave se lee solo de GEMINI_API_KEY (nunca de un .env) y nunca se imprime.
+ * Supuestos observados, no documentados: la API lista primero las voces propias
+ * y la paginación usa el parámetro `pageToken` (confirmar con `list --all`).
  */
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +37,13 @@ export const RECIPE = Object.freeze({
 export const LANGUAGE_FALLBACKS = ['es-MX', 'es-US', 'es-419', 'es'];
 export const WARN_DAYS = 30;
 const MAX_PAGES = 20;
+const TIMEOUT_MS = 60_000;
+/** Opciones válidas por subcomando. */
+const ALLOWED_OPTIONS = {
+  create: new Set(['--yes', '--dry-run', '--name']),
+  list: new Set(['--all']),
+  get: new Set(),
+};
 const DAY_MS = 86_400_000;
 const BOOLEAN_OPTIONS = new Set(['--yes', '--dry-run', '--all']);
 const VALUE_OPTIONS = new Set(['--name']);
@@ -111,8 +120,11 @@ export function daysLeft(expireTime, now) {
  */
 async function api(io, key, method, path, body) {
   const headers = { 'x-goog-api-key': key, 'Content-Type': 'application/json' };
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
   const init =
-    body === undefined ? { method, headers } : { method, headers, body: JSON.stringify(body) };
+    body === undefined
+      ? { method, headers, signal }
+      : { method, headers, signal, body: JSON.stringify(body) };
   const res = await io.fetch(`${API_BASE}${path}`, init);
   /** @type {any} */
   let data = null;
@@ -129,7 +141,7 @@ async function api(io, key, method, path, body) {
   return data;
 }
 
-/** @param {Io} io @param {string} key @param {string[]} words @param {Set<string>} flags @param {Map<string, string>} values */
+/** @param {Io} io @param {string} key @param {Set<string>} flags @param {Map<string, string>} values */
 async function create(io, key, flags, values) {
   const displayName = values.get('--name') ?? RECIPE.displayName;
   if (flags.has('--dry-run')) {
@@ -148,14 +160,23 @@ async function create(io, key, flags, values) {
       const voice = parseVoice(
         await api(io, key, 'POST', '/voices', buildCreateBody({ displayName, language })),
       );
+      if (!voice.id) throw new VoicesError('la respuesta no trae el id de la voz');
       io.stdout(
         `creada ${voice.id} (${voice.displayName}, ${voice.language}) caduca ${voice.expireTime ?? '?'}`,
       );
       io.stdout('Escúchala y cambia el voice_id a mano: la receta no garantiza el mismo timbre.');
       return 0;
     } catch (err) {
-      if (!(err instanceof VoicesError) || err.status !== 400) throw err;
-      last = err;
+      const status = err instanceof VoicesError ? err.status : undefined;
+      const message = err instanceof Error ? err.message : String(err);
+      // Solo un 400 que habla del idioma justifica probar con otro.
+      if (status !== 400 || !/language|locale/i.test(message)) {
+        throw new VoicesError(
+          `${message} (create no es idempotente: comprueba con \`list\` antes de reintentar)`,
+          status,
+        );
+      }
+      last = /** @type {VoicesError} */ (err);
     }
   }
   throw last ?? new VoicesError('no se pudo crear la voz');
@@ -166,23 +187,33 @@ async function list(io, key, flags) {
   const all = flags.has('--all');
   /** @type {string | undefined} */
   let token;
+  let shown = 0;
   for (let page = 0; page < MAX_PAGES; page++) {
     const query = token ? `?pageToken=${encodeURIComponent(token)}` : '';
     const data = await api(io, key, 'GET', `/voices${query}`);
     const voices = Array.isArray(data.voices) ? data.voices.map(parseVoice) : [];
     for (const v of voices) {
-      if (v.type === 'prebuilt' && !all) return 0; // las propias van primero
+      if (v.type === 'prebuilt' && !all) return finishList(io, shown); // las propias van primero
       const days = daysLeft(v.expireTime, io.now());
       io.stdout(
         `${v.id}\t${v.type}\t${v.language}\t${days === null ? '-' : `${days} días`}\t${v.displayName}`,
       );
+      shown++;
     }
-    token =
+    const next =
       typeof data.next_page_token === 'string' && data.next_page_token
         ? data.next_page_token
         : undefined;
-    if (!token) return 0;
+    if (!next || next === token) return finishList(io, shown); // sin más páginas o token repetido
+    token = next;
   }
+  io.stderr(`gemini-voices: se alcanzó el tope de ${MAX_PAGES} páginas; puede haber más voces`);
+  return finishList(io, shown);
+}
+
+/** @param {Io} io @param {number} shown */
+function finishList(io, shown) {
+  if (shown === 0) io.stderr('gemini-voices: sin voces propias');
   return 0;
 }
 
@@ -198,6 +229,11 @@ async function get(io, key, id) {
       return 1;
     }
     throw err;
+  }
+  if (voice.expireTime === undefined && voice.type === 'prebuilt') {
+    io.stdout(`${voice.id} ${voice.displayName} ${voice.language} ${voice.gender}`);
+    io.stdout('voz de catálogo: sin caducidad');
+    return 0;
   }
   const days = daysLeft(voice.expireTime, io.now());
   if (days === null)
@@ -225,7 +261,7 @@ export async function main(argv, overrides = {}) {
     stderr: (s) => console.error(s),
     ...overrides,
   };
-  const key = io.env.GEMINI_API_KEY ?? '';
+  const key = (io.env.GEMINI_API_KEY ?? '').trim();
   // Última red de seguridad: ningún mensaje sale con la clave dentro.
   const scrub = (/** @type {string} */ s) => (key ? s.split(key).join('[clave]') : s);
   const safe = {
@@ -255,6 +291,12 @@ export async function main(argv, overrides = {}) {
         'uso: gemini-voices.mjs create|list|get <id> [--yes] [--dry-run] [--all] [--name <n>]',
       );
     }
+    for (const opt of [...flags, ...values.keys()]) {
+      if (!ALLOWED_OPTIONS[/** @type {'create' | 'list' | 'get'} */ (command)].has(opt))
+        throw new VoicesError(`${opt} no corresponde a ${command}`);
+    }
+    if (command !== 'get' && id !== undefined)
+      throw new VoicesError(`${command} no admite argumentos sueltos: ${id}`);
     if (command === 'create' && flags.has('--dry-run'))
       return await create(safe, key, flags, values);
     if (!key) throw new VoicesError('falta la variable de entorno GEMINI_API_KEY');
