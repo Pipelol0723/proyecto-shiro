@@ -794,7 +794,7 @@ Para no pisar al grupo que sincroniza la documentación con el ADR 0029, estas l
 | 5. Conexión visible y voz que no se corta                                                                    | Pruebas manuales de P-07a (parar y arrancar el core-host) y de P-07b (cambiar de pantalla con la voz sonando)                                                                                                       | P-07a, P-07b       |
 | 6. AGENTS.md generado desde CLAUDE.md (si entra en F1, §2.2 #14)                                             | `npm run agents:check` sale con 0                                                                                                                                                                                   | P-03               |
 
-**Estado (2026-11-13).** Los seis puntos se cumplen: el 6, con el PR #137. P-03b quedó hecho ese mismo día (PRs #138 y #139). De la Fase 1 queda solo P-09, que espera a que haya una versión que publicar.
+**Estado (2026-11-13).** Los seis puntos se cumplen: el 6, con el PR #137. P-03b quedó hecho ese mismo día (PRs #138 y #139). De la Fase 1 queda solo P-09: sus Actions ya van fijadas por SHA (PR #140); la clave nueva con passphrase, el Environment `release` y la custodia esperan a que haya una versión que publicar (el dueño decidió el 2026-11-13 no publicar todavía).
 
 ### 3.16 Cifras de la Fase 1
 
