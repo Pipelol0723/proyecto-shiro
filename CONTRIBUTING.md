@@ -12,8 +12,6 @@ del README.
   base `develop`; la rama se borra al fusionar.
 - Las versiones son tags `vX.Y.Z` sobre `develop`. `main` no es una rama
   "estable": solo avanza al publicar un tag, por fast-forward hasta ese tag.
-  Hoy va unos 260 commits por detrás porque aún no se ha publicado ninguna
-  versión.
 - Sin issue tracker: el seguimiento son las casillas del
   [plan de mejora](docs/plan-mejora-2026-11.md), la tabla
   [Roadmap](README.md#roadmap) y la tabla SEC-xx de
@@ -24,6 +22,69 @@ del README.
 - Un ADR nuevo va en un PR `docs:` propio, fusionado antes que su código; la
   enmienda de un ADR existente viaja con el código. Detalle en
   [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md).
+
+## Encargar trabajo a un agente
+
+Cada encargo a un agente de IA, y cada propuesta de self-dev, se escribe con
+esta misma plantilla para que tenga siempre la misma forma y el dueño pueda
+revisarlo por su intención. Las reglas de los PRs de agente no se repiten
+aquí: están en «PRs de agentes y de self-dev» de [`CLAUDE.md`](CLAUDE.md) y en
+el [ADR 0029](docs/adr/0029-proceso-de-mantenimiento-de-una-persona.md).
+
+```markdown
+## Encargo «<P-xx, si lo hay>»: <título corto>
+
+**Qué cierra**: ítem del plan P-xx, lote L-xxx, hallazgos R-xxx. Si es una
+propuesta de self-dev que no cierra nada del plan: la intención en una frase.
+
+**Rama y PR**: `claude/<tarea>`, `feat/<nombre>/<tarea>` o `shiro/<tema>`
+(la que indique el encargo), creada desde `origin/develop`. Título del PR: `<prefijo>: <asunto>`.
+
+**Qué leer antes**: sección del plan, ADR y archivos que dan el contexto.
+Requisitos previos: qué debe estar ya en `develop`.
+
+**Archivos a tocar** (`archivo:línea`):
+
+- ...
+
+Documentación que NO se toca porque la lleva quien coordina: ...
+
+**Test rojo**: archivo, nombres de los tests y por qué fallan hoy. Va en un
+commit propio, antes del arreglo. Si no cabe un test, la verificación manual
+paso a paso.
+
+**Pasos**:
+
+1. ...
+
+**Criterio de hecho**: comandos y resultado esperado. `npm run verify` con
+código 0, más los propios del encargo.
+
+**Tamaño**: 300 líneas de diff como máximo; si se pasa, se justifica en el PR.
+
+**Prohibiciones fijas**:
+
+- En propuestas de self-dev (`shiro/<tema>`): no tocar los archivos
+  inmutables (lista en
+  `packages/core/src/modules/tools/selfdev/immutable-paths.ts`, ADR 0023 §3)
+  y mantenerse en el alcance del ADR 0023 §4. En encargos de `claude/*` o
+  `feat/*`, esos archivos solo se tocan si «Archivos a tocar» los nombra.
+- No pushear a `develop` ni a `main`; todo entra por PR.
+- No usar `--no-verify`.
+- No subir versiones mayores de dependencias fuera de su lote.
+- No tocar `.env*` ni `config/` salvo que el encargo lo diga.
+- No commitear lo de «Lo que NO se commitea» de [`CLAUDE.md`](CLAUDE.md).
+
+**Qué devuelve el agente**: commits, evidencia del test en rojo, resultado de
+`npm run verify`, desviaciones respecto al encargo y dudas.
+
+**Qué revisa el dueño**: la intención, en una o dos frases que digan qué tiene
+que ser verdad después del cambio.
+```
+
+Quien coordina hace revisar el resultado por un segundo agente antes de
+fusionar (ADR 0029) y lleva la documentación viva: el plan, la tabla Roadmap y
+la tabla SEC-xx.
 
 ## Firma del auto-updater (Tauri)
 

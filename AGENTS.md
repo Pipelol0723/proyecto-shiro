@@ -64,6 +64,7 @@ Antes de implementar algo que cumpla **AL MENOS UNA** de estas condiciones,
 - Checks en verde (ver «Antes de pushear»).
 - Como mucho 2 PRs de agente abiertos a la vez.
 - Un PR que toque una frontera de confianza actualiza su fila en la tabla SEC-xx.
+- El encargo se escribe con la [plantilla de CONTRIBUTING](CONTRIBUTING.md#encargar-trabajo-a-un-agente).
 
 ### Prefijos de commit (siempre minúscula + `:`)
 
