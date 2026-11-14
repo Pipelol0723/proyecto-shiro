@@ -367,6 +367,72 @@ describe('GeminiTTS', () => {
       expect(err.message).not.toContain(SPOKEN);
     });
 
+    /** Respuesta con cabeceras ya recibidas y un cuerpo que no llega hasta que se aborta. */
+    function hungBodyResponse(status: number, signal: AbortSignal | null | undefined): Response {
+      const hang = (): Promise<never> =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        });
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers: { get: () => 'application/json' } as unknown as Headers,
+        json: hang,
+        text: hang,
+      } as unknown as Response;
+    }
+
+    it.each([200, 500])(
+      'el tiempo máximo también cubre el cuerpo colgado (status %i)',
+      async (status) => {
+        vi.useFakeTimers();
+        fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+          Promise.resolve(hungBodyResponse(status, init.signal)),
+        );
+        const tts = new GeminiTTS({ voice_id: VOICE, timeout_ms: 1000 }, makeDeps(), {
+          apiKey: API_KEY,
+        });
+        const pending = tts.synthesize({ text: SPOKEN }).catch((e: unknown) => e);
+        await vi.advanceTimersByTimeAsync(1001);
+        const err = (await pending) as GeminiTTSError;
+        expect(err).toBeInstanceOf(GeminiTTSError);
+        expect(err.message).toMatch(/tiempo agotado/i);
+      },
+    );
+
+    it('un AbortError que no es DOMException también se informa como tiempo agotado', async () => {
+      const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+      fetchMock.mockRejectedValueOnce(abort);
+      const err = (await makeTts()
+        .synthesize({ text: SPOKEN })
+        .catch((e: unknown) => e)) as GeminiTTSError;
+      expect(err.message).toMatch(/tiempo agotado/i);
+    });
+
+    it('no deja temporizadores vivos tras un éxito ni tras un fallo', async () => {
+      vi.useFakeTimers();
+      const tts = makeTts();
+      fetchMock.mockResolvedValueOnce(jsonResponse(audioBody(makeWav(1))));
+      await tts.synthesize({ text: SPOKEN });
+      expect(vi.getTimerCount()).toBe(0);
+      fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+      await tts.synthesize({ text: SPOKEN }).catch(() => undefined);
+      expect(vi.getTimerCount()).toBe(0);
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'x' }, 500));
+      await tts.synthesize({ text: SPOKEN }).catch(() => undefined);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('un voice_id solo de espacios cuenta como vacío', async () => {
+      const logs = spyLogs();
+      const tts = new GeminiTTS({ voice_id: '   ' }, makeDeps(), { apiKey: API_KEY });
+      expect(logs.some((l) => l.includes('voice_id'))).toBe(true);
+      await expect(tts.synthesize({ text: SPOKEN })).rejects.toThrow(/voice_id/);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it('lanza por fallo de red con mensaje legible', async () => {
       fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
       const err = (await makeTts()
