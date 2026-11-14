@@ -9,10 +9,12 @@
  * Parte b-2: tiempo máximo de la petición, guardas de clave, voz y texto, y
  * aviso de privacidad. Parte c: contador mensual de segundos sintetizados, vía
  * un `TtsUsageSink` inyectado (la persistencia vive en el `core-host`; aquí no
- * hay `node:fs`) y aviso al cruzar `monthly_warn_seconds`. No incluye estilo
- * (`annotations`): llega en una parte posterior del ADR. Un fallo de
- * configuración no detiene el arranque (el constructor solo avisa);
- * `synthesize` falla rápido. Los errores no reintentan nada (un 429 debe saltar a la cadena de respaldo).
+ * hay `node:fs`) y aviso al cruzar `monthly_warn_seconds`. Parte §2: si la
+ * emoción de la petición tiene `tts_style` en el personaje, el texto lleva
+ * `annotations: [{ type: 'speech_metadata', style }]`; sin estilo, la clave no
+ * se envía. Un fallo de configuración no detiene el arranque (el constructor
+ * solo avisa); `synthesize` falla rápido. Los errores no reintentan nada (un
+ * 429 debe saltar a la cadena de respaldo).
  *
  * Por contrato se instancia solo en el `core-host`: la clave vive en
  * `process.env.GEMINI_API_KEY` y no aparece en errores ni en logs.
@@ -21,7 +23,9 @@
 import { z } from 'zod';
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
+import type { Character } from '../../character/schema.js';
 import type { ITTSModule, TTSRequest, TTSResponse } from '../../interfaces/ITTSModule.js';
+import type { Emotion } from '../../types/emotions.js';
 import { parseWav } from './wav.js';
 
 export const GeminiTTSConfigSchema = z.object({
@@ -67,6 +71,8 @@ export interface GeminiTTSOptions {
   apiKey?: string;
   /** Contador mensual de segundos. Sin él no se cuenta nada. */
   usage?: TtsUsageSink;
+  /** Bloque `emotions:` del personaje, del que se lee `tts_style` por turno. */
+  emotions?: Character['emotions'];
 }
 
 const ERROR_BODY_MAX = 200;
@@ -111,6 +117,7 @@ export class GeminiTTS implements ITTSModule {
   private readonly logger: Logger;
   private readonly apiKey: string | undefined;
   private readonly usage: TtsUsageSink | undefined;
+  private readonly emotions: Character['emotions'] | undefined;
   private usageFailureWarned = false;
 
   constructor(rawConfig: unknown, deps: ModuleDeps, options: GeminiTTSOptions = {}) {
@@ -126,6 +133,7 @@ export class GeminiTTS implements ITTSModule {
     this.logger = deps.logger.child({ module: 'GeminiTTS' });
     this.apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
     this.usage = options.usage;
+    this.emotions = options.emotions;
     this.id = `tts:gemini:${this.config.voice_id || '<sin-voice-id>'}`;
     if (this.apiKey === undefined || this.apiKey === '') {
       this.logger.warn(
@@ -154,9 +162,18 @@ export class GeminiTTS implements ITTSModule {
       throw new GeminiTTSError('GeminiTTS: el texto a sintetizar está vacío.');
     }
     const url = `${this.config.base_url.replace(/\/$/, '')}/interactions`;
+    const style = this.resolveStyle(request.emotion);
+    const textItem =
+      style === undefined
+        ? { type: 'text', text: request.text }
+        : {
+            type: 'text',
+            text: request.text,
+            annotations: [{ type: 'speech_metadata', style }],
+          };
     const body = {
       model: this.config.model_id,
-      input: [{ type: 'user_input', content: [{ type: 'text', text: request.text }] }],
+      input: [{ type: 'user_input', content: [textItem] }],
       response_format: { type: 'audio' },
       generation_config: { speech_config: [{ voice: this.config.voice_id }] },
     };
@@ -223,6 +240,15 @@ export class GeminiTTS implements ITTSModule {
     }
     this.recordUsage(info.durationMs / 1000);
     return { audio, mimeType: 'audio/wav', duration: info.durationMs };
+  }
+
+  /**
+   * Estilo de la emoción según el personaje. A diferencia de `resolveStability`
+   * de ElevenLabs no hay valor por defecto: sin estilo no se envía nada.
+   */
+  private resolveStyle(emotion: Emotion | undefined): string | undefined {
+    if (emotion === undefined) return undefined;
+    return this.emotions?.[emotion]?.tts_style;
   }
 
   /**

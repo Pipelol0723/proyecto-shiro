@@ -145,6 +145,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     'GeminiTTS',
     (cfg, deps) =>
       new GeminiTTS(cfg, deps, {
+        emotions: options.character.emotions,
         usage: new FileTtsUsageCounter({
           dir: path.resolve(process.cwd(), 'data'),
           logger: deps.logger,
