@@ -210,7 +210,9 @@ describe('GeminiTTS', () => {
   });
 
   it('rechaza una config inválida con el campo en el mensaje', () => {
-    expect(() => new GeminiTTS({}, makeDeps(), { apiKey: API_KEY })).toThrow(/voice_id/);
+    expect(() => new GeminiTTS({ voice_id: 7 }, makeDeps(), { apiKey: API_KEY })).toThrow(
+      /voice_id/,
+    );
     expect(
       () => new GeminiTTS({ voice_id: VOICE, timeout_ms: -1 }, makeDeps(), { apiKey: API_KEY }),
     ).toThrow(/timeout_ms/);

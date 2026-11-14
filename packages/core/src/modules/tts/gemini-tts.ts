@@ -6,8 +6,10 @@
  * real (forma capturada con una llamada real el 2026-11-13). Valida el audio
  * con `parseWav` y devuelve siempre `audio/wav` con su duración en ms.
  *
- * Esta parte no incluye estilo (`annotations`), guardas de entrada, tiempo
- * máximo efectivo ni contador de cuota: llegan en partes posteriores del ADR.
+ * Parte b-2: tiempo máximo de la petición, guardas de clave, voz y texto, y
+ * aviso de privacidad. No incluye estilo (`annotations`) ni contador de cuota:
+ * llegan en partes posteriores del ADR. Un fallo de configuración no detiene
+ * el arranque (el constructor solo avisa); `synthesize` falla rápido.
  * Los errores no reintentan nada (un 429 debe saltar a la cadena de respaldo).
  *
  * Por contrato se instancia solo en el `core-host`: la clave vive en
@@ -22,7 +24,7 @@ import { parseWav } from './wav.js';
 
 export const GeminiTTSConfigSchema = z.object({
   /** Identificador de la voz diseñada (`voice_…`). */
-  voice_id: z.string().min(1),
+  voice_id: z.string().default(''),
   /** Modelo de síntesis. */
   model_id: z.string().min(1).default('gemini-3.8-flash-tts'),
   /** URL base del API. Existe solo para inyectar un servidor falso en tests. */
@@ -31,7 +33,7 @@ export const GeminiTTSConfigSchema = z.object({
     .url()
     .refine(isPlainHttpUrl, 'debe ser http(s) sin credenciales ni query')
     .default('https://generativelanguage.googleapis.com/v1beta'),
-  /** Timeout HTTP en ms. Su uso real llega en 2b-2. */
+  /** Tiempo máximo de la petición HTTP, en ms. */
   timeout_ms: z.number().int().positive().default(30_000),
 });
 
@@ -105,10 +107,19 @@ export class GeminiTTS implements ITTSModule {
     this.config = parsed.data;
     this.logger = deps.logger.child({ module: 'GeminiTTS' });
     this.apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
-    this.id = `tts:gemini:${this.config.voice_id}`;
+    this.id = `tts:gemini:${this.config.voice_id || '<sin-voice-id>'}`;
     if (this.apiKey === undefined || this.apiKey === '') {
       this.logger.warn(
         'GEMINI_API_KEY no está definida. GeminiTTS no podrá sintetizar hasta configurarla.',
+      );
+    } else {
+      this.logger.info(
+        'GeminiTTS: el texto hablado se envía a Google; con clave del nivel gratuito Google lo usa para mejorar sus productos.',
+      );
+    }
+    if (this.config.voice_id === '') {
+      this.logger.warn(
+        'GeminiTTS: `voice_id` vacío en la config. Define el de la voz diseñada o sintetizar fallará.',
       );
     }
   }
@@ -116,6 +127,12 @@ export class GeminiTTS implements ITTSModule {
   async synthesize(request: TTSRequest): Promise<TTSResponse> {
     if (this.apiKey === undefined || this.apiKey === '') {
       throw new GeminiTTSError('GeminiTTS: GEMINI_API_KEY no está definida.');
+    }
+    if (this.config.voice_id === '') {
+      throw new GeminiTTSError('GeminiTTS: voice_id vacío. Configura el de la voz diseñada.');
+    }
+    if (request.text.trim().length === 0) {
+      throw new GeminiTTSError('GeminiTTS: el texto a sintetizar está vacío.');
     }
     const url = `${this.config.base_url.replace(/\/$/, '')}/interactions`;
     const body = {
@@ -133,11 +150,15 @@ export class GeminiTTS implements ITTSModule {
         body: JSON.stringify(body),
       });
     } catch (err) {
-      throw new GeminiTTSError(
-        `GeminiTTS: fallo al llamar a ${new URL(url).origin}`,
-        undefined,
-        err,
-      );
+      const origin = new URL(url).origin;
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new GeminiTTSError(
+          `GeminiTTS: tiempo agotado (${String(this.config.timeout_ms)} ms) esperando a ${origin}`,
+          undefined,
+          err,
+        );
+      }
+      throw new GeminiTTSError(`GeminiTTS: fallo de red al llamar a ${origin}`, undefined, err);
     }
 
     if (!response.ok) {
