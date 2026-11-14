@@ -632,6 +632,20 @@ describe('GeminiTTS', () => {
       expect('annotations' in item).toBe(false);
     });
 
+    it('no envía annotations con una emoción desconocida en ejecución', async () => {
+      for (const unknown of ['inexistente', 'constructor']) {
+        fetchMock.mockClear();
+        const item = await sentTextItem(makeStyled(), unknown as Emotion);
+        expect('annotations' in item).toBe(false);
+      }
+    });
+
+    it('no envía annotations si no se pasa la opción emotions', async () => {
+      const tts = new GeminiTTS({ voice_id: VOICE }, makeDeps(), { apiKey: API_KEY });
+      const item = await sentTextItem(tts, 'neutral');
+      expect('annotations' in item).toBe(false);
+    });
+
     it('usa el estilo de la emoción pedida y no el de otra', async () => {
       const item = await sentTextItem(makeStyled(), 'molesta');
       expect(item.annotations).toEqual([

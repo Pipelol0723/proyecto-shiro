@@ -46,7 +46,7 @@ const EmotionMappingSchema = z.record(
   z.object({
     tts_stability: z.number().min(0).max(1).optional(),
     /** Frase de estilo (en inglés) que GeminiTTS envía como `speech_metadata.style`. */
-    tts_style: z.string().min(1).optional(),
+    tts_style: z.string().trim().min(1).optional(),
     avatar_expression: z.string().optional(),
   }),
 );

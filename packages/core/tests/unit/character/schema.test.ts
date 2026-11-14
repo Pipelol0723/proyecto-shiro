@@ -105,6 +105,14 @@ describe('CharacterSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rechaza tts_style de solo espacios', () => {
+    const result = CharacterSchema.safeParse({
+      ...MINIMAL_CHARACTER,
+      emotions: { neutral: { tts_style: '   ' } },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rechaza tts_style que no sea string', () => {
     const result = CharacterSchema.safeParse({
       ...MINIMAL_CHARACTER,
