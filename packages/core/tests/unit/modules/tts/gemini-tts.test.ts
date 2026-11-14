@@ -292,6 +292,21 @@ describe('GeminiTTS', () => {
     expect(err.message).toMatch(/base64/);
   });
 
+  it('rechaza base64 con caracteres sobrantes tras el relleno', async () => {
+    // Un WAV válido en base64 seguido de una letra suelta no es base64 válido.
+    const wav = makeWav(1).toString('base64');
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        steps: [{ content: [{ type: 'audio', data: `${wav.replace(/=+$/, '')}==s` }] }],
+      }),
+    );
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err).toBeInstanceOf(GeminiTTSError);
+    expect(err.message).toMatch(/base64/);
+  });
+
   it('respuesta sin audio: mensaje y status 200', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ steps: [] }));
     const err = (await makeTts()
