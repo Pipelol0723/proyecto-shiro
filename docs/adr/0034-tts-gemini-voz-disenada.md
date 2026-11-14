@@ -186,4 +186,4 @@ Sin implementar. Si el dueño lo acepta, en PRs pequeños y en este orden:
 - **No hecho**: la línea de caducidad de la voz en la interfaz. La llevará el rediseño de la interfaz ([propuesta](../design/propuesta-rediseno-escritorio.md)).
 - **Medido en pruebas reales**: una frase corta tarda entre 3,5 y 4,2 s. Con la cadena real, sin clave de Gemini habla ElevenLabs y sin red habla la voz del sistema.
 - **Hallazgo: usar la voz renueva su caducidad.** La voz se creó el 2026-11-13 con `expire_time` 2027-11-13; tras una síntesis el 2026-11-14 pasó a 2027-11-14, un año después de ese uso. Los usos de las primeras 23 horas no la cambiaron. Google no lo documenta y puede cambiarlo. Rebaja el riesgo principal del §5 mientras Shiro hable de vez en cuando, pero no sustituye al aviso ni a la receta.
-- **PRs**: #141, #142, #144, #145, #146, #147 y #148, y los que cierran la serie: el aviso de caducidad, la clave gestionada por la app, la fila de Setup y esta documentación.
+- **PRs**: #141, #142, del #144 al #151 y #153, más el de la guía del README, que cierra la serie.
