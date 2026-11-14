@@ -50,8 +50,12 @@ modules:
 
   # ─────────────────────────────────────────────────────────────
   # TTS — texto → voz (con cadena de fallbacks)
-  # Si el primero falla, el siguiente se activa. Ver ADR 0020:
-  # Kokoro descartado; voz sintética/UTAU diferida a hito post-5080.
+  # Si el primero falla, el siguiente se activa. Ver ADR 0020 (topología,
+  # transporte y cancelación) y ADR 0034 (voz de Gemini y cadena desde la
+  # configuración). Hoy sigue activa ElevenLabsTTS: la cadena de tres, con
+  # Gemini primero, está como ejemplo comentado debajo y se activa con el
+  # nivel de pago de Gemini. Kokoro descartado; voz sintética/UTAU diferida
+  # a hito post-5080.
   # ─────────────────────────────────────────────────────────────
   tts:
     active: ElevenLabsTTS
@@ -69,6 +73,29 @@ modules:
       similarity_boost: 0.78
       style: 0.15
       use_speaker_boost: true
+  # Cadena de tres (ADR 0034 §3): GeminiTTS → ElevenLabsTTS → SystemTTS.
+  # Para activarla (con el nivel de pago de Gemini; guía del README pendiente):
+  # sustituye el bloque `tts:` de arriba por este, con tus voice_id, y
+  # define GEMINI_API_KEY en .env. `config` es la del módulo activo;
+  # `providers`, la de cada respaldo (la actual de ElevenLabs se mueve ahí:
+  # sin su voice_id ese eslabón quedaría mudo).
+  # EJEMPLO-GEMINI-INICIO
+  # tts:
+  #   active: GeminiTTS
+  #   fallback_chain:
+  #     - ElevenLabsTTS
+  #     - SystemTTS
+  #   config:
+  #     voice_id: 'voice_REEMPLAZAR' # lo da `npm run voices -- create`
+  #     model_id: 'gemini-3.8-flash-tts'
+  #   providers:
+  #     ElevenLabsTTS:
+  #       voice_id: 'REEMPLAZAR_VOICE_ID_DE_ELEVENLABS'
+  #       model_id: 'eleven_multilingual_v2'
+  #       similarity_boost: 0.78
+  #       style: 0.15
+  #       use_speaker_boost: true
+  # EJEMPLO-GEMINI-FIN
 
   # ─────────────────────────────────────────────────────────────
   # Memory — memoria persistente

@@ -4,8 +4,9 @@ export interface TTSRequest {
   text: string;
   /**
    * Emoción a expresar en la síntesis. Cada impl mapea la emoción a sus
-   * parámetros propios (estabilidad, similarity, pitch, etc.) usando el
-   * archivo del personaje activo.
+   * parámetros propios usando el archivo del personaje activo:
+   * ElevenLabsTTS la traduce a `tts_stability`, GeminiTTS a una frase de
+   * estilo (`tts_style`, ADR 0034 §2) y SystemTTS la ignora.
    */
   emotion?: Emotion;
   /**
@@ -27,13 +28,17 @@ export interface TTSResponse {
 /**
  * Contrato de un módulo TTS (síntesis de voz).
  *
- * Implementaciones previstas (ver [ADR 0020](../../docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)):
- * - `ElevenLabsTTS` (cloud, alta calidad — primary)
- * - `SystemTTS` (voz del SO, fallback offline)
+ * Implementaciones (ver [ADR 0020](../../docs/adr/0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)
+ * y [ADR 0034](../../docs/adr/0034-tts-gemini-voz-disenada.md)):
+ * - `GeminiTTS` (cloud, voz diseñada; primaria cuando se active el nivel de pago)
+ * - `ElevenLabsTTS` (cloud, alta calidad; primaria hoy y primer respaldo después)
+ * - `SystemTTS` (voz del SO, último respaldo offline)
  *
- * El TTS forma parte de una **cadena de fallbacks** definida en
- * `modules.config.yaml`: si ElevenLabsTTS lanza error, el orchestrator
- * intenta con SystemTTS. Kokoro fue descartado por ADR 0020; la voz
+ * El TTS forma parte de una **cadena de fallbacks** que se construye desde
+ * `modules.config.yaml` (`active`, `fallback_chain` y la config de cada
+ * respaldo en `providers`): si un eslabón lanza error, se prueba el
+ * siguiente, y SystemTTS va siempre al final. Kokoro fue descartado por
+ * ADR 0020; la voz
  * sintética estilo UTAU queda diferida a un hito futuro post-5080
  * (será otro microservicio aparte, mismo patrón que Whisper).
  */
