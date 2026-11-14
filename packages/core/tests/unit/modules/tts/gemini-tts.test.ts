@@ -198,7 +198,7 @@ describe('GeminiTTS', () => {
         steps: [{ type: 'model_output', content: [{ type: 'text', text: 'hola' }] }],
       }),
     );
-    await expect(makeTts().synthesize({ text: SPOKEN })).rejects.toThrow(/audio/i);
+    await expect(makeTts().synthesize({ text: SPOKEN })).rejects.toThrow(/no trae audio/);
   });
 
   it('lanza si el audio no es un WAV', async () => {
@@ -206,10 +206,102 @@ describe('GeminiTTS', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ steps: [{ content: [{ type: 'audio', data: fake }] }] }),
     );
-    await expect(makeTts().synthesize({ text: SPOKEN })).rejects.toThrow(GeminiTTSError);
+    await expect(makeTts().synthesize({ text: SPOKEN })).rejects.toThrow(/WAV válido/);
   });
 
-  it('el error no contiene la clave ni el texto hablado', async () => {
+  it('rechaza una config inválida con el campo en el mensaje', () => {
+    expect(() => new GeminiTTS({}, makeDeps(), { apiKey: API_KEY })).toThrow(/voice_id/);
+    expect(
+      () => new GeminiTTS({ voice_id: VOICE, timeout_ms: -1 }, makeDeps(), { apiKey: API_KEY }),
+    ).toThrow(/timeout_ms/);
+    for (const base_url of ['ftp://x.test', 'https://u:p@x.test', 'https://x.test/v1?key=abc']) {
+      expect(() => new GeminiTTS({ voice_id: VOICE, base_url }, makeDeps())).toThrow(/base_url/);
+    }
+  });
+
+  it('el 401 no incluye la clave ni el texto', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: API_KEY + SPOKEN } }, 401));
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err.message).not.toContain(API_KEY);
+    expect(err.message).not.toContain(SPOKEN);
+  });
+
+  it.each([400, 429, 500])('un %i con clave y texto en el cuerpo sale redactado', async (code) => {
+    const text = 'dime "algo"\ncon salto';
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: { message: `campo ${text} clave ${API_KEY}` } }, code),
+    );
+    const err = (await makeTts()
+      .synthesize({ text })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err.status).toBe(code);
+    expect(err.message).not.toContain(API_KEY);
+    expect(err.message).not.toContain('algo');
+    expect(err.message).toContain('[redactado]');
+  });
+
+  it('no deja un trozo de la clave en el borde del recorte', async () => {
+    const body = 'a'.repeat(190) + API_KEY;
+    fetchMock.mockResolvedValueOnce({
+      ...jsonResponse({}, 500),
+      text: () => Promise.resolve(body),
+    });
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err.message).not.toContain(API_KEY.slice(0, 5));
+  });
+
+  it('fetch rechazado: sin status, causa conservada y solo el origen en el mensaje', async () => {
+    const cause = new Error('socket roto');
+    fetchMock.mockRejectedValueOnce(cause);
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err).toBeInstanceOf(GeminiTTSError);
+    expect(err.status).toBeUndefined();
+    expect(err.cause).toBe(cause);
+    expect(err.message).toContain('https://generativelanguage.googleapis.com');
+    expect(err.message).not.toContain('/v1beta');
+    expect(err.message).not.toContain(API_KEY);
+    expect(err.message).not.toContain(SPOKEN);
+  });
+
+  it('JSON ilegible: "no es JSON" con status 200', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ...jsonResponse({}),
+      json: () => Promise.reject(new SyntaxError('x')),
+    });
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err.message).toMatch(/no es JSON/);
+    expect(err.status).toBe(200);
+  });
+
+  it('data que no es base64 da un GeminiTTSError propio', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ steps: [{ content: [{ type: 'audio', data: '!!!no-base64!!!' }] }] }),
+    );
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err).toBeInstanceOf(GeminiTTSError);
+    expect(err.message).toMatch(/base64/);
+  });
+
+  it('respuesta sin audio: mensaje y status 200', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ steps: [] }));
+    const err = (await makeTts()
+      .synthesize({ text: SPOKEN })
+      .catch((e: unknown) => e)) as GeminiTTSError;
+    expect(err.message).toMatch(/no trae audio/);
+    expect(err.status).toBe(200);
+  });
+
+  it('el error de 500 no contiene la clave ni el texto hablado', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: { message: 'boom' } }, 500));
     const err = (await makeTts()
       .synthesize({ text: SPOKEN })

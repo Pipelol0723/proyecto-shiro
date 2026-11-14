@@ -26,7 +26,11 @@ export const GeminiTTSConfigSchema = z.object({
   /** Modelo de síntesis. */
   model_id: z.string().min(1).default('gemini-3.8-flash-tts'),
   /** URL base del API. Existe solo para inyectar un servidor falso en tests. */
-  base_url: z.string().url().default('https://generativelanguage.googleapis.com/v1beta'),
+  base_url: z
+    .string()
+    .url()
+    .refine(isPlainHttpUrl, 'debe ser http(s) sin credenciales ni query')
+    .default('https://generativelanguage.googleapis.com/v1beta'),
   /** Timeout HTTP en ms. Su uso real llega en 2b-2. */
   timeout_ms: z.number().int().positive().default(30_000),
 });
@@ -48,6 +52,35 @@ export interface GeminiTTSOptions {
 }
 
 const ERROR_BODY_MAX = 200;
+const BASE64_RE = /^[A-Za-z0-9+/s]*={0,2}s*$/;
+
+/** http(s) sin usuario, contraseña ni query: así la URL nunca porta secretos. */
+function isPlainHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return (
+      (u.protocol === 'http:' || u.protocol === 'https:') &&
+      u.username === '' &&
+      u.password === '' &&
+      u.search === ''
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Sustituye cada aparición de los secretos (en crudo y escapados como JSON). */
+function redact(input: string, secrets: string[]): string {
+  let out = input;
+  for (const secret of secrets) {
+    if (secret === '') continue;
+    const escaped = JSON.stringify(secret).slice(1, -1);
+    for (const variant of new Set([secret, escaped])) {
+      out = out.split(variant).join('[redactado]');
+    }
+  }
+  return out;
+}
 
 /** Forma mínima de la respuesta: solo lo que se lee. */
 interface InteractionResponse {
@@ -100,11 +133,17 @@ export class GeminiTTS implements ITTSModule {
         body: JSON.stringify(body),
       });
     } catch (err) {
-      throw new GeminiTTSError(`GeminiTTS: fallo al llamar a ${url}`, undefined, err);
+      throw new GeminiTTSError(
+        `GeminiTTS: fallo al llamar a ${new URL(url).origin}`,
+        undefined,
+        err,
+      );
     }
 
     if (!response.ok) {
-      const detail = (await response.text().catch(() => '<sin cuerpo>')).slice(0, ERROR_BODY_MAX);
+      const rawDetail = await response.text().catch(() => '<sin cuerpo>');
+      // Se redacta antes de recortar para no dejar un trozo de la clave en el borde.
+      const detail = redact(rawDetail, [this.apiKey, request.text]).slice(0, ERROR_BODY_MAX);
       if (response.status === 401) {
         throw new GeminiTTSError('GeminiTTS: 401 — GEMINI_API_KEY rechazada.', 401);
       }
@@ -126,6 +165,9 @@ export class GeminiTTS implements ITTSModule {
     const base64 = extractAudioBase64(json);
     if (base64 === undefined) {
       throw new GeminiTTSError('GeminiTTS: la respuesta no trae audio', response.status);
+    }
+    if (!BASE64_RE.test(base64)) {
+      throw new GeminiTTSError('GeminiTTS: el audio no es base64 válido', response.status);
     }
     const audio = Buffer.from(base64, 'base64');
     try {
