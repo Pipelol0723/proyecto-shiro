@@ -52,7 +52,7 @@ export interface GeminiTTSOptions {
 }
 
 const ERROR_BODY_MAX = 200;
-const BASE64_RE = /^[A-Za-z0-9+/s]*={0,2}s*$/;
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
 
 /** http(s) sin usuario, contraseña ni query: así la URL nunca porta secretos. */
 function isPlainHttpUrl(value: string): boolean {
