@@ -27,7 +27,7 @@
 - **F1 (contención y red cerrada).** Self-dev apagado, suite verde, red en loopback, CI con audit y check obligatorio, docs que dicen la verdad, y conexión visible y audio que no se corta.
 - **F2 (datos a salvo y diagnóstico).** Backup al homelab con restauración ensayada, health «listo», PTT fiable, latencia medida, CI en Windows y arranque del diario de uso.
 - **F3 (fronteras de agentes).** Suite «contrato de seguridad», self-dev con push tras la aprobación y eval aislado, y modal que muestra lo que se aprueba. Self-dev se reactiva.
-- **F4 (turno correcto y topología saliente).** Tool-loop honesto, SDK de Anthropic al día, datos separados de instrucciones y **URLs salientes** (Ollama, Letta, Whisper) por entorno. Cualquier bind distinto de loopback sigue bloqueado hasta que exista el token (F5).
+- **F4 (turno correcto y topología saliente).** Tool-loop honesto, SDK de Anthropic al día, datos separados de instrucciones y **URLs salientes** (Ollama, Letta, Whisper) por entorno. Cualquier bind distinto de loopback sigue bloqueado hasta que exista el token (F5). **Recortada el 2026-11-14**: las URLs salientes por entorno (P-34 y P-35) esperan con el resto de la F5 (ver la fase).
 - **F5 (puerta de la estación).** Protocolo multicliente, validación de eventos entrantes, `clientId`, token (ADR 0027) y unicast. Al cerrarla, la estación holográfica o mover un servicio fuera del portátil solo exige variables y token, sin reescribir contratos. **Reducida el 2026-11-14** a validar lo que entra por el bus y cuidar los secretos: el protocolo multicliente y el token esperan a que se planee un segundo cliente (ver la fase).
 
 ## 2. Decisiones de contexto que fija este plan
@@ -262,7 +262,7 @@ _(La condición «`release.yml` con Actions por SHA y clave nueva» ya no está 
 - **P-30 antes de P-31a.** El SDK es el módulo más caro de romper (tool-use y self-dev): sin tests de la rama real, una subida mayor es a ciegas.
 - **P-31c después de P-32.** Orden de los PRs que tocan `anthropic-llm.ts`: P-30 → P-31a → P-32 → P-31c, para que cada uno toque el loop una vez y con el anterior ya fusionado.
 - **P-35 antes del protocolo.** La URL se publica ya por el canal que existe (`system:health`), y P-41b solo la mueve al `hello`. No se inventa un canal provisional.
-- **Por qué el bind remoto no se abre en F4.** Abrir un puerto a la LAN sin token repetiría R-002/R-005. P-34 deja la puerta escrita y cerrada con llave; la llave es P-40.
+- **Por qué el bind remoto no se abre en F4.** Abrir un puerto a la LAN sin token repetiría R-002/R-005. P-34 deja la puerta escrita y cerrada con llave; la llave es P-40. Vale para cuando se retome P-34 (en espera desde el 2026-11-14).
 
 ### Fase 5 — Puerta de la estación: protocolo multicliente y token (semanas 25-30)
 
@@ -478,7 +478,7 @@ flowchart LR
 
 ### 8.3 Seams baratos que sí se hacen ya
 
-- `SHIRO_BIND_HOST` con default 127.0.0.1 en el bus y `/audio` (P-05). Un bind distinto de loopback sin token impide arrancar (P-34).
+- `SHIRO_BIND_HOST` con default 127.0.0.1 en el bus y `/audio` (P-05). Hoy un bind distinto de loopback solo avisa en el log; que impida arrancar sin token es de P-34, en espera (ver la nota de la Fase 4).
 - Binds de compose parametrizados (`${LETTA_BIND:-127.0.0.1}`, `${WHISPER_BIND:-127.0.0.1}`), con profiles, y Letta fijada por digest (P-06a); la base CUDA de Whisper, por digest en P-06b.
 - `WHISPER_HOST` respetado por el CMD del Dockerfile (P-06b) y defaults de `config.py` iguales a compose, int8 incluido (P-19).
 - URL de audio relativa al origen del cliente (P-14): quita el único high que bloquea cualquier cliente remoto.
