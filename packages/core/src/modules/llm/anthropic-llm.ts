@@ -37,6 +37,7 @@ import type {
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
 import { type Emotion, EMOTIONS, isEmotion } from '../../types/emotions.js';
+import { MISSING_API_KEY_CODE } from '../../types/turn-failure.js';
 
 // ─── Schema de config ─────────────────────────────────────────────────
 
@@ -62,9 +63,13 @@ export type AnthropicLLMConfig = z.infer<typeof AnthropicLLMConfigSchema>;
 // ─── Errores ──────────────────────────────────────────────────────────
 
 export class AnthropicLLMError extends Error {
-  constructor(message: string, cause?: unknown) {
+  /** Marca los fallos que no vienen de la API (hoy, solo la falta de clave). */
+  readonly code?: string;
+
+  constructor(message: string, cause?: unknown, code?: string) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'AnthropicLLMError';
+    if (code !== undefined) this.code = code;
   }
 }
 
@@ -158,6 +163,8 @@ export class AnthropicLLM implements ILLMModule {
     if (this.client === null) {
       throw new AnthropicLLMError(
         'AnthropicLLM: ANTHROPIC_API_KEY no está configurada — no se puede invocar generate.',
+        undefined,
+        MISSING_API_KEY_CODE,
       );
     }
 
@@ -202,6 +209,8 @@ export class AnthropicLLM implements ILLMModule {
     if (this.client === null) {
       throw new AnthropicLLMError(
         'AnthropicLLM: ANTHROPIC_API_KEY no está configurada — no se puede invocar generateWithTools.',
+        undefined,
+        MISSING_API_KEY_CODE,
       );
     }
     const client = this.client;

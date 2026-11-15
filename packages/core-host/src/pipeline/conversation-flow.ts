@@ -31,6 +31,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { classifyTurnFailure } from '@proyecto-shiro/core';
 import type {
   EventMap,
   IEventBus,
@@ -230,6 +231,11 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       } catch (err) {
         if (tier !== 'cloud') throw err;
         child.warn('LLM cloud falló — reintentando con local', { err });
+        await bus.emit('llm:failed', {
+          reason: classifyTurnFailure(err),
+          tier: 'cloud',
+          userId: payload.userId,
+        });
         effectiveTier = 'local';
         response = await modules.llmLocal.generate(llmRequest);
       }
@@ -273,6 +279,13 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       );
     } catch (err) {
       child.error('error procesando turno, emitiendo fallback', { err });
+      // Un fallo de la nube ya se anunció arriba y el turno siguió en local:
+      // lo que llega aquí es del modelo local o de un paso anterior a él.
+      await bus.emit('llm:failed', {
+        reason: classifyTurnFailure(err),
+        tier: 'local',
+        userId: payload.userId,
+      });
       const latencyMs = Date.now() - startTime;
       await bus.emit('llm:responded', {
         text: FALLBACK_RESPONSE,

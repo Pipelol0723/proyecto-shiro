@@ -169,3 +169,19 @@ El error específico (timeout de Ollama, 401 de Anthropic, etc.) va al log. El u
 - [ADR 0014](0014-llm-structured-output-text-emotion.md) — formato del `llm:responded`.
 - [ADR 0015](0015-hybrid-router-classifier-llm-based.md) — el router que invoca este pipeline.
 - Mock que reemplaza: `wireMockConversationFlow` (PR 3, ahora eliminado).
+
+## Nota 2026-11-14 — canal de error del turno
+
+- El pipeline emite un evento nuevo, **`llm:failed`**, cuando un LLM no puede
+  responder: `{ reason, tier, userId }`. `reason` es una lista cerrada
+  (`missing-key`, `auth`, `quota`, `unavailable`, `model-missing`, `unknown`)
+  que sale de recorrer la cadena `cause` del error. El texto del error no
+  viaja: se queda en el log.
+- Si falla la nube, se emite `llm:failed` con `tier: 'cloud'` y el turno sigue
+  en local, como antes. Si falla también el local (o un paso anterior), se
+  emite otro con `tier: 'local'` y después la respuesta de error de siempre
+  por `llm:responded`, que no cambia.
+- Motivo: los fallos del turno no tenían canal de error y el cliente no podía
+  distinguir una respuesta de un error ni decir qué arreglar (R-281). Es la
+  primera parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md); el
+  aviso en el chat llega con el cliente.
