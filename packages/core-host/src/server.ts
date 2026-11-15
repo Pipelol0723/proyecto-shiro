@@ -16,6 +16,7 @@
 import { Logger } from '@proyecto-shiro/core';
 import { CharacterLoader, ConfigLoader } from '@proyecto-shiro/core/node';
 import { bootstrap } from './bootstrap.js';
+import { installProcessSafetyNet } from './process-safety-net.js';
 import { loadSecretsEnv } from './secrets/secrets-file.js';
 import { resolveBindHost } from './transports/bind-host.js';
 
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
 
   const port = parsePort(process.env.SHIRO_HOST_PORT);
   const logger = new Logger();
+  installProcessSafetyNet(logger);
   if (loadedSecrets.length > 0) {
     logger
       .child({ module: 'secrets' })
