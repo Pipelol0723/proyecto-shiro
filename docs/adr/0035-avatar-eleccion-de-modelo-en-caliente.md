@@ -28,8 +28,8 @@ Fuerzas en juego:
 
 - **Quién manda.** El dueño no quiere un selector en el que él ordena y Shiro
   obedece: lo que él diga es una sugerencia, que **influye en la decisión de
-  Shiro pero no la cambia**. A la vez necesita poder asegurar un modelo (un
-  directo no puede cambiar de cara a mitad): eso es **fijar**.
+  Shiro pero no la cambia**. A la vez aceptó que exista un **fijar**, para
+  asegurar un modelo cuando haga falta (por ejemplo, en un directo).
 - **Recursos.** El LLM local, Whisper y el avatar comparten una GPU de 4 GB.
   La chibi no usa GPU, pero cargada ocupa unos 49 MB; el 3D no está medido.
 - **Dos niveles de LLM.** Responde el modelo local o el de la nube
@@ -74,18 +74,45 @@ mide el cliente en marcha manda sobre el manifiesto.
 
 ### 2. Quién decide: la escalera
 
-| Peldaño                | Qué es                                                                                 | Efecto                                                                                                               |
-| ---------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1. Límites del cliente | Lo que este cliente puede dibujar: modelos instalados que pasan la comprobación, WebGL | Descartan modelos. Nadie los salta                                                                                   |
-| 2. Fijado              | El usuario fija una forma en este cliente                                              | Mientras dure no hay cambios automáticos ni de Shiro. Si el modelo fijado falla, se baja al siguiente y sigue fijado |
-| 3. Estado y contexto   | Shiro dormida, modo de actividad del usuario, pocos recursos                           | Acotan entre qué formas se elige                                                                                     |
-| 4. Shiro               | Su preferencia                                                                         | Elige dentro de lo que queda                                                                                         |
-| 5. Orden por defecto   | El del ADR 0028 (3D → 2D → capas)                                                      | Cuando Shiro no ha dicho nada                                                                                        |
+| Peldaño                | Qué es                                                                                 | Efecto                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1. Límites del cliente | Lo que este cliente puede dibujar: modelos instalados que pasan la comprobación, WebGL | Descartan modelos. Nadie los salta                                          |
+| 2. Fijado              | El usuario fija una forma en este cliente                                              | Se muestra esa forma. Los peldaños 3 a 5 no cambian el modelo               |
+| 3. Estado y contexto   | Shiro dormida, modo de actividad del usuario, pocos recursos                           | Acotan entre qué formas se elige                                            |
+| 4. Shiro               | Su preferencia                                                                         | Elige dentro de lo que queda                                                |
+| 5. Orden por defecto   | El del ADR 0028 (3D → 2D → capas)                                                      | Vale cuando Shiro no ha dicho nada o cuando lo que prefiere está descartado |
 
-El orbe sigue siendo el último recurso y nunca falla. La sugerencia del
-usuario no es un peldaño: es algo que le llega a Shiro (§4).
+Dicho como una función sin efectos: de las formas que el cliente puede
+dibujar, la fijada; si no hay fijado, se quitan las que descarta el peldaño 3
+y, de las que quedan, la que prefiere Shiro; si no prefiere ninguna de esas,
+la primera del orden por defecto.
+
+Reglas que cierran los casos límite:
+
+- **El orbe no es una forma.** Es la red de seguridad del ADR 0028: sale
+  cuando ningún modelo puede dibujarse, y ni Shiro ni el usuario lo eligen.
+- **La sugerencia del usuario no es un peldaño**: es algo que le llega a Shiro
+  (§4).
+- **Si el modelo fijado deja de poder dibujarse**, se muestra el primero del
+  orden por defecto que sí pueda, con un aviso visible. El fijado se conserva
+  y vuelve a aplicarse en cuanto ese modelo esté disponible.
+- **La preferencia de Shiro no se pierde** cuando el peldaño 3 la descarta:
+  queda guardada y vuelve a valer cuando el estado o el modo terminan.
+
+| Caso                                                          | Resultado                                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------ |
+| Shiro prefiere el 3D y el usuario activa el modo de actividad | 2D, o chibi si no hay 2D. Al quitar el modo, vuelve el 3D    |
+| 3D fijado y modo de actividad activo                          | 3D: el fijado gana                                           |
+| 2D fijado y Shiro se duerme                                   | 2D con cara de dormida                                       |
+| Sin fijado y Shiro se duerme                                  | Chibi con cara de dormida; al despertar, lo que tocaba antes |
+| 3D fijado y el 3D deja de cargar                              | 2D con un aviso; el 3D sigue fijado y vuelve cuando cargue   |
+| Solo está instalada la chibi                                  | Chibi siempre; a Shiro no se le ofrece elegir                |
 
 ### 3. Estado y contexto
+
+Los tres factores de este apartado solo mueven el modelo cuando no hay fijado.
+Con fijado, dormirse solo cambia la cara, el modo de actividad no cambia nada
+y «pocos recursos» solo avisa.
 
 **Dormida.** Es un estado de Shiro, no de una ventana: lo lleva un módulo del
 core y lo anuncia por el bus. Se duerme por tres vías:
@@ -97,9 +124,9 @@ core y lo anuncia por el bus. Se duerme por tres vías:
 Despierta con cualquier interacción: un mensaje, pulsar para hablar, un clic
 sobre ella o el mismo control. El horario solo duerme; nunca despierta.
 
-Dormida, el avatar baja a la forma más ligera disponible y pone cara de
-dormida (ojos cerrados, brillo bajo, menos cuadros por segundo) hasta que
-exista una pose. Con un modelo fijado no cambia de modelo: solo de cara.
+Dormida queda una sola forma, la más ligera disponible, y Shiro no elige
+mientras duerme. El avatar pone cara de dormida (ojos cerrados, brillo bajo,
+menos cuadros por segundo) hasta que exista una pose.
 
 **Modo de actividad.** Lo que está haciendo el usuario: nada especial, jugando
 o en directo. Lo pone él, con un atajo global o desde el menú; la detección
@@ -111,25 +138,34 @@ porque Shiro lo sabe.
 **Pocos recursos.** El cliente mide los cuadros por segundo del avatar y el
 core la latencia del turno (P-16). Si se mantienen fuera del umbral, se baja
 un escalón de coste y no se vuelve a subir sola hasta pasado un tiempo. Los
-umbrales van en la configuración y se fijan con medidas, no a ojo.
+umbrales van en la configuración y se fijan con medidas, no a ojo. Esta regla
+manda sobre la preferencia de Shiro.
 
 ### 4. Cómo decide Shiro
 
-- En cada turno el core le da, como datos: las formas disponibles, la que
-  lleva, si está fijada, el modo de actividad y si hay una sugerencia
-  pendiente.
-- La respuesta estructurada gana dos campos **opcionales**: la forma que
-  quiere y si se duerme. Sin campo no cambia nada.
-- Con una sola forma disponible el campo no se ofrece: no cuesta nada hasta
-  que haya dos modelos.
-- **Sugerencia del usuario.** Dicha en la conversación o con el control de la
-  app (que la envía como un turno), hace el campo obligatorio en ese turno:
-  Shiro contesta y elige. Si elige otra forma, vale la suya.
-- Si no hay quien conteste, o mientras Shiro no sepa decidir (antes de AV-5),
-  la sugerencia se aplica tal cual: no hay decisión suya que cambiar.
+- En cada turno el core le da, como datos: las formas entre las que puede
+  elegir, la que lleva, si está fijada, el modo de actividad y, si la hay, la
+  sugerencia pendiente.
+- La respuesta estructurada
+  ([ADR 0014](0014-llm-structured-output-text-emotion.md)) gana dos campos
+  **opcionales**: la forma que quiere y si se duerme. Un campo ausente, o con
+  un valor que no está entre los ofrecidos, no cambia nada: la misma
+  degradación que ya tiene la emoción.
+- El campo de la forma solo se ofrece si hay al menos dos formas entre las que
+  elegir. Con una sola, o con el modelo fijado, no se ofrece: no cuesta nada
+  hasta que haya dos modelos.
+- Los dos campos viajan en `llm:responded`. El módulo de presencia lo escucha
+  y es quien anuncia la preferencia y el sueño por el bus (§7).
+- **Sugerencia desde la app.** El control la envía y el core abre un turno con
+  ella. En ese turno el campo de la forma es obligatorio: Shiro contesta y
+  elige. Si elige otra forma, vale la suya.
+- **Sugerencia dicha en la conversación.** Es un turno normal: Shiro la lee y
+  usa el campo si quiere.
+- **Mientras Shiro no sepa decidir** (antes de AV-5), o si no hay LLM que
+  conteste, la sugerencia ocupa el sitio de su preferencia en el peldaño 4, y
+  pasa igualmente por los peldaños 1 a 3. Es un comportamiento de transición.
 - Su preferencia dura hasta que exprese otra o se reinicie el servidor.
-- La emoción, la latencia y las ganas no tienen reglas propias: son cosas que
-  ella sopesa.
+- La emoción y las ganas no tienen reglas propias: son cosas que ella sopesa.
 
 Lo que declara un cliente (formas, sugerencia) se valida contra listas
 cerradas antes de entrar en el contexto del LLM: nunca texto libre.
@@ -148,10 +184,11 @@ cerradas antes de entrar en el contexto del LLM: nunca texto libre.
    `prefers-reduced-motion`, corte.
 5. Al terminar, el motor viejo se suelta: solo hay dos modelos en memoria
    mientras dura el fundido.
-6. Shiro no cambia de cuerpo a mitad de frase: un cambio suyo o automático
-   espera a que termine el audio. Fijar y soltar son inmediatos.
-7. Entre dos cambios automáticos pasa un tiempo mínimo, para que no haya
-   vaivén.
+6. Shiro no cambia de cuerpo a mitad de frase: un cambio suyo o de las reglas
+   espera a que termine el audio que esté sonando, y si llegan varios solo
+   cuenta el último. Fijar y soltar son inmediatos.
+7. Entre dos cambios de Shiro o de «pocos recursos» pasa un tiempo mínimo,
+   para que no haya vaivén. No se aplica a fijar, dormirse ni despertar.
 
 Esto amplía el contrato del ADR 0028 con dos piezas de ciclo de vida, que no
 son verbos: **`dispose()`** y **carga cancelable**.
@@ -162,20 +199,26 @@ son verbos: **`dispose()`** y **carga cancelable**.
   actividad, preferencia de Shiro) llegan por el bus y cada cliente las aplica
   a sus candidatos y a sus límites: uno que solo tenga la chibi se queda en la
   chibi aunque Shiro prefiera el 3D.
-- El fijado es de cada cliente y se guarda como el silencio de la voz
+- El fijado es de cada cliente y se guarda en su `localStorage`, como el
+  silencio de la voz
   ([ADR 0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md)).
 - El modo normal y el overlay usan el mismo selector, y el modo de ventana no
   descarta ningún modelo.
 
 ### 7. Eventos nuevos en el bus
 
-| Evento             | Sentido         | Para qué                                                            |
-| ------------------ | --------------- | ------------------------------------------------------------------- |
-| `avatar:state`     | cliente → core  | Qué forma lleva, cuáles tiene disponibles y si está fijada          |
-| `avatar:suggest`   | cliente → core  | Sugerencia hecha desde la app; el core la convierte en un turno     |
-| `avatar:preferred` | core → clientes | La forma que Shiro quiere                                           |
-| `presence:set`     | cliente → core  | Dormir o despertar a Shiro; poner o quitar el modo de actividad     |
-| `presence:changed` | core → clientes | El estado nuevo (despierta o dormida, modo de actividad) y su causa |
+| Evento             | Sentido         | Contenido                                                                                                   | Cuándo                                     |
+| ------------------ | --------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `avatar:state`     | cliente → core  | `current` (forma u `orb`), `available` (formas), `pinned` (forma o `null`)                                  | Al conectar y cuando cambia algo de eso    |
+| `avatar:suggest`   | cliente → core  | `form`                                                                                                      | Al sugerir desde la app                    |
+| `avatar:preferred` | core → clientes | `form` (o `null`)                                                                                           | Al cambiar, y cuando un cliente se anuncia |
+| `presence:set`     | cliente → core  | `action`: `sleep`, `wake` o `activity`; con `activity`, el modo (`none`, `gaming`, `streaming`)             | Desde los controles de la app              |
+| `presence:changed` | core → clientes | `state` (`awake`, `asleep`), `activity` y `reason` (`idle`, `asked`, `schedule`, `interaction`, `activity`) | Al cambiar, y cuando un cliente se anuncia |
+
+Todos llevan `userId`, como los demás. `presence:set` es solo de los
+clientes: cuando es Shiro quien se duerme, el módulo de presencia lo lee de
+`llm:responded`. Con un solo cliente, el core usa el último `avatar:state`
+recibido; distinguir clientes llega con el protocolo multicliente.
 
 ### 8. Qué queda fuera
 
@@ -188,18 +231,20 @@ son verbos: **`dispose()`** y **carga cancelable**.
 
 ### Qué viene del dueño y qué propone el agente
 
-| Punto                                                  | Del dueño                                                | Propuesta del agente                                           |
-| ------------------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------- |
-| Tres modelos, en caliente, en modo normal y en overlay | Sí                                                       | —                                                              |
-| Quién decide                                           | Shiro; lo que él diga influye pero no la cambia          | La sugerencia le llega como un turno y ella contesta           |
-| Fijar                                                  | Existe                                                   | Gana a todo salvo a los límites del cliente                    |
-| Dormirse                                               | Por inactividad configurable, al decírselo y por horario | El horario solo duerme; se despierta con cualquier interacción |
-| Juego o directo                                        | Lo dice él con un modo o un atajo; detectarlo, después   | Ese modo descarta la forma pesada                              |
-| Cómo se ve el cambio                                   | Fundido corto                                            | Unos 250 ms, a cargo del selector                              |
-| Dispositivos al final; overlay donde estaba            | Sí                                                       | —                                                              |
-| Orden de la escalera                                   | —                                                        | Límites → fijado → estado y contexto → Shiro → orden           |
-| Por dónde habla Shiro                                  | —                                                        | Campos opcionales de la respuesta estructurada                 |
-| `form`, `cost` y `capabilities`                        | —                                                        | Propuesta de la sesión de diseño del personaje                 |
+| Punto                                                  | Del dueño                                                                | Propuesta del agente                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Tres modelos, en caliente, en modo normal y en overlay | Sí                                                                       | —                                                                                       |
+| Sugerencia, no orden                                   | «Que mi decisión influya en Shiro pero no la cambie»                     | Lectura: Shiro puede elegir otra forma que la sugerida. **A confirmar**                 |
+| Cómo le llega la sugerencia                            | —                                                                        | Desde la app, un turno con respuesta obligada; hablada, un turno normal                 |
+| Que Shiro «quiera» verse de una forma                  | Sí (su ejemplo: verse en 3D)                                             | Una preferencia que dura hasta que exprese otra                                         |
+| Fijar                                                  | Existe                                                                   | Gana a todo salvo a los límites del cliente                                             |
+| Dormirse                                               | Por inactividad configurable, al decírselo y por horario; dormida, chibi | El horario solo duerme; despierta con cualquier interacción; fijada no cambia de modelo |
+| Juego o directo                                        | Lo dice él con un modo o un atajo; detectarlo, después. Ahí, chibi o 2D  | El modo descarta la forma pesada                                                        |
+| Cómo se ve el cambio                                   | Fundido corto                                                            | Unos 250 ms, a cargo del selector                                                       |
+| Dispositivos al final; overlay donde estaba            | Sí                                                                       | —                                                                                       |
+| Orden de la escalera                                   | —                                                                        | Límites → fijado → estado y contexto → Shiro → orden                                    |
+| Por dónde habla Shiro                                  | —                                                                        | Campos opcionales de la respuesta estructurada                                          |
+| `form`, `cost` y `capabilities`                        | —                                                                        | Propuesta de la sesión de diseño del personaje                                          |
 
 ## Alternativas consideradas
 
@@ -253,7 +298,16 @@ son verbos: **`dispose()`** y **carga cancelable**.
 - Durante el fundido hay dos modelos cargados. Si dos motores con WebGL no
   caben, ese cambio pasará por el orbe. Se mide al llegar el 3D.
 - Sugerir desde la app cuesta un turno entero (LLM y voz).
-- Shiro puede decir que no. Es lo pedido; la salida es fijar.
+- Shiro puede elegir otra cosa que lo sugerido. Es la lectura que hace este
+  ADR de «influye pero no la cambia», y el dueño debe confirmarla al aceptar;
+  la salida es fijar.
+- El modo de actividad y la forma que lleva el cliente entran en el contexto
+  del LLM, también el de la nube, solo como valores de listas cerradas.
+  Mientras el bus no tenga token
+  ([ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md)), cualquier
+  proceso local puede dormir a Shiro, cambiar el modo o declarar formas
+  falsas: el daño es de aspecto, no de datos. La tabla SEC-xx se actualiza con
+  AV-4 y AV-5.
 - Un módulo nuevo en el core y cinco eventos más que mantener y validar.
 
 ### Neutrales
@@ -278,8 +332,9 @@ son verbos: **`dispose()`** y **carga cancelable**.
   módulo; `presence:set` y `presence:changed` en `types/events.ts`; el bloque
   de configuración; la medida de cuadros por segundo en el cliente.
 - **AV-5, Shiro decide.** Los dos campos en la respuesta estructurada de
-  `AnthropicLLM` y `OllamaLLM`, el contexto del turno y `avatar:state`,
-  `avatar:suggest` y `avatar:preferred`.
+  `AnthropicLLM` y `OllamaLLM` y en `llm:responded`, el contexto del turno y
+  `avatar:state`, `avatar:suggest` y `avatar:preferred`. La enmienda de
+  ADR 0014 (nota fechada) va en ese mismo PR.
 - **AV-6, overlay.** El mismo selector, con la enmienda de ADR 0024 §3.
 - Tests: la escalera con tablas (cada peldaño gana al siguiente); el cambio
   con la carga fallando, tardando y cancelada; el traspaso de estado; que
