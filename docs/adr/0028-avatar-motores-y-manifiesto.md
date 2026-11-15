@@ -1,6 +1,6 @@
 # ADR 0028: Avatar — motores intercambiables, manifiesto por modelo y motor de capas
 
-- **Status**: Accepted (sin implementar; integración en el cliente aplazada por el dueño)
+- **Status**: Accepted (sin implementar; integración en el cliente aprobada el 2026-11-14)
 - **Fecha**: 2026-11-12
 - **Decidido por**: Pipelol
 
@@ -188,3 +188,12 @@ Las capas de la chibi salen del borrador original del personaje y van en
 - Accepted y **sin implementar**. Su integración en el cliente está aplazada
   por el dueño, sin fecha. Prototipo en
   [`docs/design/chibi-prototype/`](../design/chibi-prototype/README.md).
+
+## Nota 2026-11-14
+
+- El dueño **aprobó la integración** en el cliente: es el paso AV-2 de la
+  vía «avatar y modelos» del
+  [plan de mejora](../plan-mejora-2026-11.md#vía-paralela-avatar-y-modelos).
+  Sigue sin implementar.
+- El cambio de modelo con la app en marcha, que este ADR deja fuera, se
+  propone en el ADR 0035 (pendiente de aceptar).
