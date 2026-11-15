@@ -14,7 +14,7 @@ GTX 1650 de 4 GB, donde corre todo el stack.
 **Lectura obligatoria antes de tomar decisiones arquitectónicas:**
 
 - [`README.md` → Roadmap](README.md#roadmap) — **única fuente** del estado de los hitos y de la hoja de ruta (ADR 0029).
-- [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md) — lo que toca ahora (la Fase 1 está aprobada desde el 2026-11-13 y en ejecución; las demás fases, pendientes de aprobación), con la [revisión](docs/revision-estado-2026-11.md) y su [anexo](docs/revision-estado-2026-11-anexo.md). Ningún ítem P-xx se ejecuta sin que el dueño apruebe su fase.
+- [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md) — lo que toca ahora (Fase 1 hecha salvo el release; Fase 2 aprobada el 2026-11-14 y en ejecución, intercalada con la vía del avatar; Fases 3 y 4 pendientes de aprobación; Fase 5 reducida), con la [revisión](docs/revision-estado-2026-11.md) y su [anexo](docs/revision-estado-2026-11-anexo.md). Ningún ítem P-xx se ejecuta sin que el dueño apruebe su fase.
 - [`docs/architecture.md`](docs/architecture.md) — vista actual de la arquitectura, con diagramas mermaid.
 - [`docs/adr/`](docs/adr/) — historial de decisiones con su porqué. Léelo cuando algo te haga dudar de "por qué se hizo así".
 - [`docs/design/shiro-character-bible.md`](docs/design/shiro-character-bible.md) — biblia del personaje (v0.2): identidad visual aprobada, tono y sistema de expresiones. Léela antes de tocar el avatar o producir arte de Shiro. El formato del avatar está en [ADR 0028](docs/adr/0028-avatar-motores-y-manifiesto.md) (Accepted, sin implementar; integración aplazada).
