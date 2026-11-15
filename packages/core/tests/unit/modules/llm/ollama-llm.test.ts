@@ -222,6 +222,17 @@ describe('OllamaLLM', () => {
     await expect(llm.generate({ text: 'hola' })).rejects.toBeInstanceOf(OllamaLLMError);
   });
 
+  it('con una respuesta que no es 2xx, el error lleva el status', async () => {
+    fetchSpy.mockResolvedValue(
+      mockResponse(
+        { error: "model 'm' not found" },
+        { ok: false, status: 404, statusText: 'Not Found' },
+      ),
+    );
+    const llm = new OllamaLLM({ model: 'm' }, makeDeps());
+    await expect(llm.generate({ text: 'hola' })).rejects.toMatchObject({ status: 404 });
+  });
+
   it('generate lanza si la respuesta no tiene el shape esperado', async () => {
     fetchSpy.mockResolvedValue(mockResponse({ unexpected: 'shape' }));
     const llm = new OllamaLLM({ model: 'm' }, makeDeps());

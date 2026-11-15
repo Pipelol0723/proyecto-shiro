@@ -102,6 +102,16 @@ describe('AnthropicLLM', () => {
     await expect(llm.generate({ text: 'hola' })).rejects.toBeInstanceOf(AnthropicLLMError);
   });
 
+  it('sin API key, el error lleva el code que lo clasifica como falta de clave', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    const llm = new AnthropicLLM({}, makeDeps());
+    const options = { tools: [], executeTool: () => Promise.resolve('') };
+    await expect(llm.generate({ text: 'hola' })).rejects.toMatchObject({ code: 'MISSING_API_KEY' });
+    await expect(llm.generateWithTools({ text: 'hola' }, options)).rejects.toMatchObject({
+      code: 'MISSING_API_KEY',
+    });
+  });
+
   it('generate construye el request con tool_choice forzado', async () => {
     mockCreate.mockResolvedValue(
       makeMockMessage([
