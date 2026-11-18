@@ -53,7 +53,7 @@ describe('describeTurnFailure', () => {
     );
   });
 
-  it('un fallo de la nube dice que sigue con el modelo local', () => {
+  it('todo fallo de la nube nombra el modelo local', () => {
     for (const reason of TURN_FAILURE_REASONS) {
       expect(describeTurnFailure({ reason, tier: 'cloud' })).toMatch(/modelo local/);
     }

@@ -97,7 +97,7 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
     // El motivo viene del servidor; si no es de la lista cerrada (un servidor
     // más nuevo, o un frame raro), se muestra el aviso genérico.
     const reason = isTurnFailureReason(p.reason) ? p.reason : 'unknown';
-    dispatch({ type: 'TURN_FAILED', reason, tier: p.tier });
+    dispatch({ type: 'TURN_FAILED', reason, tier: p.tier === 'cloud' ? 'cloud' : 'local' });
   });
 
   useBusEvent('tts:audio-ended', () => {

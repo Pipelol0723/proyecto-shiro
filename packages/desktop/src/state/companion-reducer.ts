@@ -57,10 +57,17 @@ export interface CompanionState {
   voiceCutByConnection: boolean;
   /**
    * Fallos de LLM del turno en curso, para explicar qué pasó. Se borran al
-   * empezar el turno siguiente; la respuesta de Shiro no los borra, porque
-   * llega después del fallo.
+   * empezar el turno siguiente o al perder la conexión. La respuesta de Shiro
+   * de ese turno no los borra, porque llega después del fallo; la siguiente
+   * respuesta sí (ver `turnFailuresAnswered`).
    */
   turnFailures: TurnFailure[];
+  /**
+   * Ya llegó la respuesta del turno de esos fallos. Otra respuesta sin turno
+   * nuevo por medio (un reporte de self-dev, el turno de otro cliente) ya no
+   * habla de ellos, así que los borra.
+   */
+  turnFailuresAnswered: boolean;
   /** Historial completo de conversación. */
   history: CompanionMessage[];
 }
@@ -75,6 +82,7 @@ export const INITIAL_STATE: CompanionState = {
   subtitle: '',
   voiceCutByConnection: false,
   turnFailures: [],
+  turnFailuresAnswered: false,
   history: [],
 };
 
@@ -134,6 +142,7 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         subtitle: '',
         voiceCutByConnection: false,
         turnFailures: [],
+        turnFailuresAnswered: false,
       };
 
     case 'STT_PARTIAL':
@@ -152,6 +161,7 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         ...state,
         voiceCutByConnection: false,
         turnFailures: [],
+        turnFailuresAnswered: false,
         history: [
           ...state.history,
           { role: 'user', text: action.text, timestamp: new Date().toISOString() },
@@ -167,6 +177,10 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         thinking: false,
         speaking: true,
         voiceCutByConnection: false,
+        // La primera respuesta tras un fallo es la de ese turno: el aviso se
+        // queda. La siguiente ya es de otra cosa: se borra.
+        turnFailures: state.turnFailuresAnswered ? [] : state.turnFailures,
+        turnFailuresAnswered: !state.turnFailuresAnswered && state.turnFailures.length > 0,
         emotion: action.emotion,
         subtitle: action.text,
         history: [
@@ -183,14 +197,17 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
       };
 
     case 'TURN_FAILED': {
+      const failure: TurnFailure = { reason: action.reason, tier: action.tier };
+      // Un fallo tras la respuesta es de un turno nuevo que este cliente no
+      // vio empezar: la lista vuelve a empezar.
+      if (state.turnFailuresAnswered) {
+        return { ...state, turnFailures: [failure], turnFailuresAnswered: false };
+      }
       const repeated = state.turnFailures.some(
-        (f) => f.reason === action.reason && f.tier === action.tier,
+        (f) => f.reason === failure.reason && f.tier === failure.tier,
       );
       if (repeated) return state;
-      return {
-        ...state,
-        turnFailures: [...state.turnFailures, { reason: action.reason, tier: action.tier }],
-      };
+      return { ...state, turnFailures: [...state.turnFailures, failure] };
     }
 
     case 'SPEAK_END':
@@ -211,6 +228,9 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         speaking: false,
         sttLive: '',
         subtitle: '',
+        // Al volver, el aviso sería el de un turno que ya no existe.
+        turnFailures: [],
+        turnFailuresAnswered: false,
       };
 
     case 'VOICE_CUT':

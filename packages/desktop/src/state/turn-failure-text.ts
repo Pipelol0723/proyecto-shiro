@@ -9,8 +9,11 @@
 import type { TurnFailureReason } from '@proyecto-shiro/core';
 import type { TurnFailure } from './companion-reducer';
 
-/** Tras un fallo de la nube el turno sigue en local: se dice siempre. */
-const CLOUD_FALLBACK = 'Sigo con el modelo local.';
+/**
+ * Tras un fallo de la nube el turno sigue en local. Se dice que se prueba, no
+ * que responderá: el local también puede fallar, y entonces sale su aviso.
+ */
+const CLOUD_FALLBACK = 'Pruebo con el modelo local.';
 
 const CLOUD_TEXT: Record<TurnFailureReason, string> = {
   'missing-key': 'No tengo clave para el modelo de la nube. Puedes ponerla en Setup.',
@@ -21,7 +24,12 @@ const CLOUD_TEXT: Record<TurnFailureReason, string> = {
   unknown: 'El modelo de la nube falló.',
 };
 
-const LOCAL_FALLBACK = 'El modelo local falló y no pude responder.';
+/**
+ * El servidor anuncia con el nivel local todo lo que no es un fallo de la
+ * nube: el modelo local, pero también el router. Sin un motivo conocido no se
+ * culpa al modelo.
+ */
+const LOCAL_FALLBACK = 'Algo falló al preparar mi respuesta y no pude contestar.';
 
 const LOCAL_TEXT: Partial<Record<TurnFailureReason, string>> = {
   unavailable: 'No pude hablar con Ollama. Comprueba que está abierto.',
