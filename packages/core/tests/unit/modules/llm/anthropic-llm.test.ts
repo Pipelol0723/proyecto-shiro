@@ -1,4 +1,4 @@
-import type Anthropic from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventBus } from '../../../../src/core/event-bus.js';
 import { Logger } from '../../../../src/core/logger.js';
@@ -8,6 +8,7 @@ import {
   AnthropicLLMError,
 } from '../../../../src/modules/llm/anthropic-llm.js';
 import type { ModuleDeps } from '../../../../src/core/module-loader.js';
+import { classifyTurnFailure } from '../../../../src/types/turn-failure.js';
 
 function makeDeps(): ModuleDeps {
   const logger = new Logger('error', { module: 'test' });
@@ -102,13 +103,68 @@ describe('AnthropicLLM', () => {
     await expect(llm.generate({ text: 'hola' })).rejects.toBeInstanceOf(AnthropicLLMError);
   });
 
-  it('sin API key, el error lleva el code que lo clasifica como falta de clave', async () => {
+  it('sin API key, el error va etiquetado como falta de clave', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', '');
     const llm = new AnthropicLLM({}, makeDeps());
     const options = { tools: [], executeTool: () => Promise.resolve({ ok: true, output: '' }) };
-    await expect(llm.generate({ text: 'hola' })).rejects.toMatchObject({ code: 'MISSING_API_KEY' });
+    await expect(llm.generate({ text: 'hola' })).rejects.toMatchObject({
+      failureReason: 'missing-key',
+    });
     await expect(llm.generateWithTools({ text: 'hola' }, options)).rejects.toMatchObject({
-      code: 'MISSING_API_KEY',
+      failureReason: 'missing-key',
+    });
+  });
+
+  describe('motivo del fallo con los errores reales del SDK', () => {
+    /** Cuerpo de error como lo devuelve la API. */
+    function apiError(status: number, message: string): unknown {
+      const body = { type: 'error', error: { type: 'api_error', message } };
+      return Anthropic.APIError.generate(status, body, undefined, {});
+    }
+
+    async function reasonOf(sdkError: unknown): Promise<string> {
+      mockCreate.mockRejectedValue(sdkError);
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      const err: unknown = await llm.generate({ text: 'hola' }).catch((e: unknown) => e);
+      return classifyTurnFailure(err);
+    }
+
+    it('un tiempo límite del SDK es «unavailable»', async () => {
+      expect(await reasonOf(new Anthropic.APIConnectionTimeoutError())).toBe('unavailable');
+    });
+
+    it('un fallo de conexión del SDK es «unavailable»', async () => {
+      const err = new Anthropic.APIConnectionError({ message: 'Connection error.' });
+      expect(await reasonOf(err)).toBe('unavailable');
+    });
+
+    it('el saldo agotado (un 400) es «quota»', async () => {
+      const message = 'Your credit balance is too low to access the Anthropic API.';
+      expect(await reasonOf(apiError(400, message))).toBe('quota');
+    });
+
+    it('otro 400 sigue siendo «unknown»', async () => {
+      expect(await reasonOf(apiError(400, 'messages: field required'))).toBe('unknown');
+    });
+
+    it.each([
+      [401, 'auth'],
+      [403, 'auth'],
+      [404, 'model-missing'],
+      [429, 'quota'],
+      [529, 'unavailable'],
+    ] as const)('un %i de la API es «%s»', async (status, reason) => {
+      expect(await reasonOf(apiError(status, 'detalle'))).toBe(reason);
+    });
+
+    it('en el loop de herramientas, el tiempo límite también es «unavailable»', async () => {
+      mockCreate.mockRejectedValue(new Anthropic.APIConnectionTimeoutError());
+      const llm = new AnthropicLLM({}, makeDeps(), { client: mockClient });
+      const options = { tools: [], executeTool: () => Promise.resolve({ ok: true, output: '' }) };
+      const err: unknown = await llm
+        .generateWithTools({ text: 'hola' }, options)
+        .catch((e: unknown) => e);
+      expect(classifyTurnFailure(err)).toBe('unavailable');
     });
   });
 

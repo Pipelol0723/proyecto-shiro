@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MISSING_API_KEY_CODE, classifyTurnFailure } from '../../../src/types/turn-failure.js';
+import { classifyTurnFailure } from '../../../src/types/turn-failure.js';
 
 /** Error envuelto como hacen los módulos LLM: mensaje genérico y motivo en `cause`. */
 function wrap(cause: unknown): Error {
@@ -39,9 +39,31 @@ describe('classifyTurnFailure', () => {
     expect(classifyTurnFailure(wrap(aborted))).toBe('unavailable');
   });
 
-  it('el code de «falta la clave» es «missing-key»', () => {
-    const err = Object.assign(new Error('no hay clave'), { code: MISSING_API_KEY_CODE });
-    expect(classifyTurnFailure(err)).toBe('missing-key');
+  it('la etiqueta failureReason que pone el módulo manda sobre las demás pistas', () => {
+    const tagged = Object.assign(new Error('no hay clave'), { failureReason: 'missing-key' });
+    expect(classifyTurnFailure(tagged)).toBe('missing-key');
+
+    const rateLimited = Object.assign(new Error('demasiadas peticiones'), { status: 429 });
+    const wrapper = Object.assign(new Error('envoltorio', { cause: rateLimited }), {
+      failureReason: 'unavailable',
+    });
+    expect(classifyTurnFailure(wrapper)).toBe('unavailable');
+  });
+
+  it('una etiqueta que no está en la lista cerrada se ignora', () => {
+    const err = Object.assign(new Error('raro'), { failureReason: 'inventado', status: 401 });
+    expect(classifyTurnFailure(err)).toBe('auth');
+  });
+
+  it('el AggregateError de Node al no poder conectar es «unavailable»', () => {
+    const refused = new AggregateError(
+      [Object.assign(new Error('connect ECONNREFUSED ::1:11434'), { code: 'ECONNREFUSED' })],
+      '',
+    );
+    Object.assign(refused, { code: 'ECONNREFUSED' });
+    expect(classifyTurnFailure(wrap(new TypeError('fetch failed', { cause: refused })))).toBe(
+      'unavailable',
+    );
   });
 
   it('gana el primer motivo reconocible de la cadena', () => {

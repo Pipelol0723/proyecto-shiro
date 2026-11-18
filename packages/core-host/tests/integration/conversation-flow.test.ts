@@ -533,6 +533,19 @@ describe('wireConversationFlow', () => {
       dispose();
     });
 
+    it('si falla el router, avisa con el nivel local y motivo desconocido', async () => {
+      const { bus, failed, responded, dispose } = run(
+        makeModules({ router: makeRouter({ fail: true }) }),
+      );
+
+      await bus.emit('user:message', { text: 'hola', userId: 'u1' });
+      await flushPromises();
+
+      expect(failed).toEqual([{ reason: 'unknown', tier: 'local', userId: 'u1' }]);
+      expect(responded[0]?.text).toMatch(/algo sali/i);
+      dispose();
+    });
+
     it('un turno sin fallos no emite llm:failed', async () => {
       const { bus, failed, dispose } = run(makeModules());
 
