@@ -92,3 +92,59 @@ describe('SetupScreen', () => {
     expect(saveMock).toHaveBeenCalledWith({ gemini: 'clave-de-prueba' });
   });
 });
+
+describe('SetupScreen — vivo frente a listo', () => {
+  const secrets = { anthropic: true, elevenlabs: true, gemini: true };
+
+  it('si a Ollama le falta un modelo, dice cuál y cómo bajarlo', () => {
+    state.report = { ...makeReport(secrets), readiness: { ollamaMissingModels: ['qwen2.5:3b'] } };
+    render(<SetupScreen />);
+    const card = cardOf('Ollama');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText(/falta un modelo/)).toBeDefined();
+    expect(within(card).getByText('ollama pull qwen2.5:3b')).toBeDefined();
+  });
+
+  it('con varios modelos que faltan, da un comando por modelo', () => {
+    state.report = {
+      ...makeReport(secrets),
+      readiness: { ollamaMissingModels: ['qwen2.5:3b', 'mxbai-embed-large'] },
+    };
+    render(<SetupScreen />);
+    const card = cardOf('Ollama');
+    expect(within(card).getByText('ollama pull qwen2.5:3b')).toBeDefined();
+    expect(within(card).getByText('ollama pull mxbai-embed-large')).toBeDefined();
+  });
+
+  it('Whisper cargando el modelo no sale como activo', () => {
+    state.report = { ...makeReport(secrets), readiness: { whisper: 'loading' } };
+    render(<SetupScreen />);
+    const card = cardOf('Whisper (STT)');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText(/cargando/)).toBeDefined();
+  });
+
+  it('Whisper en CPU sale activo, con el aviso de que irá lento', () => {
+    state.report = { ...makeReport(secrets), readiness: { whisper: 'cpu' } };
+    render(<SetupScreen />);
+    const card = cardOf('Whisper (STT)');
+    expect(within(card).getByText(/✓ activo/)).toBeDefined();
+    expect(within(card).getByText(/CPU/)).toBeDefined();
+  });
+
+  it('con Ollama caído, el comando incluye también el modelo de embeddings', () => {
+    state.report = {
+      ...makeReport(secrets),
+      services: { ollama: 'down', letta: 'ok', whisper: 'ok' },
+    };
+    render(<SetupScreen />);
+    expect(within(cardOf('Ollama')).getByText(/mxbai-embed-large/)).toBeDefined();
+  });
+
+  it('sin readiness todo sigue como antes', () => {
+    state.report = makeReport(secrets);
+    render(<SetupScreen />);
+    expect(within(cardOf('Ollama')).getByText(/✓ activo/)).toBeDefined();
+    expect(within(cardOf('Whisper (STT)')).getByText(/✓ activo/)).toBeDefined();
+  });
+});
