@@ -68,6 +68,7 @@ Decisiones del dueño tomadas al cerrar la Fase 1. Mandan sobre lo que digan las
 - **Fase 5, reducida a su mínima expresión.** La estación, el móvil y los demás clientes no llegarán pronto. Se quedan P-17 y P-39; P-37, P-38, P-41a, P-40 y P-41b esperan a que se planee un segundo cliente. La «puerta de la estación» deja de tener fecha.
 - **Fase 4, recortada.** Esperan también los dos ítems que solo sirven para sacar servicios del portátil: P-34 (ADR 0032, topología por entorno) y P-35 (URL de STT publicada por el core-host). El resto de la fase no cambia y sigue pendiente de aprobación.
 - **Avatar.** Shiro tendrá tres modelos (chibi, 2D y 3D) que se cambian en caliente. Decide ella: lo que diga el dueño influye en su decisión pero no la cambia, y para asegurar un modelo existe «fijar». El orden de trabajo y lo ya decidido están en la vía paralela; el detalle, en el [ADR 0035](adr/0035-avatar-eleccion-de-modelo-en-caliente.md), que el dueño aceptó el 2026-11-18.
+- **Rediseño de la app (2026-11-18).** El diseño que el dueño aprobó el 2026-11-14 entra en el plan como vía paralela, detrás de AV-2 ([«Vía paralela: rediseño de la app»](#vía-paralela-rediseño-de-la-app)).
 - **Fusión.** El agente fusiona sus PRs y deja para el dueño los que sean un cambio grande o muy extenso (nota del 2026-11-14 en ADR 0029).
 - **Voz de Gemini.** Implementada y sin activar (ADR 0034): la voz por defecto sigue siendo ElevenLabs mientras la clave esté en el nivel gratuito.
 
@@ -345,6 +346,35 @@ Fuera de las fases. Decidida por el dueño el 2026-11-14; se intercala con la Fa
 | AV-8                  | Modelos 2D (Live2D, torso primero) y 3D (VRM, motor nuevo con su ADR)                                                                         | Que existan el arte y el modelo; medir el 3D en la GPU |
 
 AV-2 es el primer PR de código y lo revisa el dueño: cambia cómo la app elige y maneja el avatar. Las piezas, el prototipo y el modelo de prueba los prepara la sesión de diseño del personaje; el código de `packages/desktop` lo escribe una sola sesión.
+
+### Vía paralela: rediseño de la app
+
+Fuera de las fases. El dueño aprobó el diseño el 2026-11-14 y pidió añadirlo al plan el 2026-11-18. La propuesta completa, con sus decisiones, está en [`docs/design/propuesta-rediseno-escritorio.md`](design/propuesta-rediseno-escritorio.md); las maquetas viven fuera del repo.
+
+**La idea.** Un solo tema, «Shiro», con la paleta y el motivo de cuadrados del diseño maestro. Tres destinos (Conversación, Shiro y Sistema) en vez de cinco pantallas. Un chip de estado siempre visible, dos modos (limpio y dev) y todos los textos en voz de Shiro.
+
+**Cómo encaja.**
+
+- **Empieza después de AV-2.** Los dos tocan la pantalla de conversación y el orbe: van uno detrás del otro, no a la vez.
+- **Reparte, no adelanta.** Parte del rediseño es dar forma a ítems que ya existen: el chip es P-16b, el permiso es P-27 (Fase 3, sin aprobar) y la latencia del modo dev sale de P-16. Esos ítems se hacen una sola vez, ya con el diseño nuevo.
+- **Lo ya hecho se reubica.** El aviso del fallo del turno y el «vivo frente a listo» de Setup (P-12) pasan a la zona de avisos y a Sistema sin cambiar su lógica.
+- **Enmiendas.** Retirar los tres temas y cambiar la tipografía enmienda ADR 0008, en el mismo PR que lo hace (RD-1). Lo que pide un ADR nuevo queda fuera de la tabla, más abajo.
+
+| ID   | Paso                                                                                                                                                             | Depende de                          | Esfuerzo    |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------- |
+| RD-1 | Tema único «Shiro»: colores de `palette.json`, tipografía, radios, ribete y cuadrados de estado; se retiran Kawaii, Cyberpunk y Editorial (enmienda de ADR 0008) | AV-2                                | M-L (6 h)   |
+| RD-2 | Navegación de tres destinos y cabecera común; Setup y Módulos pasan a Sistema, Personaje y Avatar a Shiro                                                        | RD-1                                | M (4 h)     |
+| RD-3 | Conversación: escenario y hilo plegable, orbe con el canon (blanco; azul al hablar), borrador que no se pierde y scroll del hilo                                 | RD-2                                | M (5 h)     |
+| RD-4 | Zona única de avisos: conexión, fallo del turno, self-dev y actualización                                                                                        | RD-2                                | S (2 h)     |
+| RD-5 | Sistema con datos reales (estado, claves, módulos y ajustes); fuera las maquetas y los atajos que no existen                                                     | RD-2                                | M (4 h)     |
+| RD-6 | Chip de estado por capacidades: pensar, oír, hablar y recordar (es P-16b)                                                                                        | RD-5                                | S-M (2,5 h) |
+| RD-7 | Shiro: voz y oído, aspecto (aquí vive el cambio de modelo, AV-3) y lo que ya exista de memoria                                                                   | RD-2; AV-3 para el cambio de modelo | M (4 h)     |
+| RD-8 | Primer arranque guiado                                                                                                                                           | RD-5                                | S (2 h)     |
+| RD-9 | Modo dev: selector, panel del escenario, etiquetas por mensaje y registro de eventos; la latencia por etapa, con P-16                                            | RD-3; P-16                          | M (4 h)     |
+
+**Esfuerzo:** unas 33 h, estimación del agente. A 4-6 h por semana y compartiendo con la Fase 2 y el avatar, son varios meses. RD-1 es el primer PR visible y lo revisa el dueño: cambia el aspecto de toda la app.
+
+**Fuera de esta vía**, hasta que cada cosa tenga su decisión: el permiso con vista estructurada (P-27, Fase 3), el historial de acciones, ver y olvidar la memoria, manos libres, «detener» mientras piensa, el modo overlay, la palabra de activación y aprobar por voz. Cada una pide un ADR, una enmienda o una fase sin aprobar (§8 y §9 de la propuesta).
 
 ## 6. ADR propuestos
 
