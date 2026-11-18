@@ -23,7 +23,10 @@ export interface CloudKeyWatch {
  * Escucha los turnos y llama a `onChange` cada vez que cambia lo que se sabe.
  *
  * - Un fallo `auth` o `quota` del nivel nube lo anota.
- * - Una respuesta de la nube lo borra: la clave funciona.
+ * - Una respuesta de la nube lo borra: la clave funciona. Solo cuenta la de un
+ *   turno que el router mandó a la nube (`router:routed`) y que no falló por
+ *   el camino. El reporte hablado de self-dev también emite `llm:responded`
+ *   con el nivel nube, pero no llama a la nube: no prueba nada de la clave.
  * - Los demás fallos de la nube (red, modelo, desconocido) no dicen nada de la
  *   clave: ni anotan ni borran. Tampoco los del modelo local.
  */
@@ -39,17 +42,26 @@ export function watchCloudKey(
     onChange(issue);
   };
 
+  // Hay un turno en curso que el router mandó a la nube y aún no ha fallado.
+  let cloudTurnOpen = false;
+
+  const offRouted = bus.on('router:routed', (p) => {
+    cloudTurnOpen = p.tier === 'cloud';
+  });
   const offFailed = bus.on('llm:failed', (p) => {
     if (p.tier !== 'cloud') return;
+    cloudTurnOpen = false;
     if (p.reason === 'auth' || p.reason === 'quota') set(p.reason);
   });
   const offResponded = bus.on('llm:responded', (p) => {
-    if (p.tier === 'cloud') set(undefined);
+    if (p.tier === 'cloud' && cloudTurnOpen) set(undefined);
+    cloudTurnOpen = false;
   });
 
   return {
     current: () => issue,
     dispose: () => {
+      offRouted();
       offFailed();
       offResponded();
     },

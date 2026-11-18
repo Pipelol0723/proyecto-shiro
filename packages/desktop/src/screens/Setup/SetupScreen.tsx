@@ -290,14 +290,14 @@ export function SetupScreen(): JSX.Element {
                 {cloudIssue === 'auth' && (
                   <p className={styles.degraded}>
                     La nube rechazó esta clave la última vez que la usé: puede estar mal escrita o
-                    caducada. Pega una nueva y guárdala. Mientras tanto respondo con el modelo
-                    local.
+                    caducada. Pega una nueva y guárdala. Mientras tanto uso el modelo local, si está
+                    disponible.
                   </p>
                 )}
                 {cloudIssue === 'quota' && (
                   <p className={styles.degraded}>
                     La nube dice que esta clave llegó a su límite de uso o que la cuenta no tiene
-                    saldo. Mientras tanto respondo con el modelo local.
+                    saldo. Mientras tanto uso el modelo local, si está disponible.
                   </p>
                 )}
                 {sec.notice !== undefined && <p className={styles.notice}>{sec.notice}</p>}
