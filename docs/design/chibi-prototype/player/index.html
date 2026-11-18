@@ -138,6 +138,20 @@
       </fieldset>
 
       <fieldset>
+        <legend>Mirada</legend>
+        <label
+          >Horizontal <input id="look-x" type="range" min="-1" max="1" step="0.05" value="0"
+        /></label>
+        <label
+          >Vertical <input id="look-y" type="range" min="-1" max="1" step="0.05" value="0"
+        /></label>
+        <div class="row">
+          <button id="look-free" aria-pressed="true">La de la expresión</button>
+          <button id="look-mouse" aria-pressed="false">Seguir el cursor</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
         <legend>Vista</legend>
         <label><input id="outline" type="checkbox" /> Contorno de luz</label>
         <label
@@ -211,6 +225,38 @@
       }
       document.getElementById('size').onchange = (e) => resize(Number(e.target.value));
       resize(808);
+
+      // ---- mirada: la de la expresion, deslizadores o el cursor ----
+      const lookX = document.getElementById('look-x');
+      const lookY = document.getElementById('look-y');
+      const lookFree = document.getElementById('look-free');
+      const lookMouse = document.getElementById('look-mouse');
+      let followMouse = false;
+      function setLookMode(mode) {
+        followMouse = mode === 'mouse';
+        lookFree.setAttribute('aria-pressed', String(mode === 'free'));
+        lookMouse.setAttribute('aria-pressed', String(mode === 'mouse'));
+        if (mode === 'free') avatar.setLookAt(null);
+      }
+      const fromSliders = () => {
+        setLookMode('manual');
+        avatar.setLookAt(Number(lookX.value), Number(lookY.value));
+      };
+      lookX.oninput = fromSliders;
+      lookY.oninput = fromSliders;
+      lookFree.onclick = () => setLookMode('free');
+      lookMouse.onclick = () => setLookMode(followMouse ? 'free' : 'mouse');
+      window.addEventListener('mousemove', (ev) => {
+        if (!followMouse) return;
+        // Direccion desde la cara (tercio superior del lienzo) hasta el cursor.
+        const r = canvas.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height * 0.33;
+        avatar.setLookAt(
+          (ev.clientX - cx) / (r.width * 0.9),
+          -(ev.clientY - cy) / (r.height * 0.5),
+        );
+      });
 
       // ---- boca: deslizador, habla simulada o audio real ----
       let simulate = false;
