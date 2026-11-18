@@ -266,6 +266,14 @@ export function SetupScreen(): JSX.Element {
           {SECRETS.map((sec) => {
             const ok = report?.secrets[sec.key] ?? false;
             const field = SECRET_FIELD[sec.key];
+            // La clave está, pero la nube la rechazó o no queda cuota (R-296).
+            const cloudIssue = ok && sec.key === 'anthropic' ? report?.readiness?.cloud : undefined;
+            const keyProblem =
+              cloudIssue === 'auth'
+                ? 'clave rechazada'
+                : cloudIssue === 'quota'
+                  ? 'sin cuota o saldo'
+                  : undefined;
             return (
               <li key={sec.key} className={styles.card}>
                 <div className={styles.cardHead}>
@@ -274,10 +282,24 @@ export function SetupScreen(): JSX.Element {
                     ok={ok}
                     checking={report === null && checking}
                     unknown={unreachable}
+                    {...(keyProblem !== undefined && { problem: keyProblem })}
                   />
                 </div>
                 <p className={styles.cardPurpose}>{sec.purpose}</p>
                 {!ok && report !== null && <p className={styles.degraded}>{sec.degraded}</p>}
+                {cloudIssue === 'auth' && (
+                  <p className={styles.degraded}>
+                    La nube rechazó esta clave la última vez que la usé: puede estar mal escrita o
+                    caducada. Pega una nueva y guárdala. Mientras tanto respondo con el modelo
+                    local.
+                  </p>
+                )}
+                {cloudIssue === 'quota' && (
+                  <p className={styles.degraded}>
+                    La nube dice que esta clave llegó a su límite de uso o que la cuenta no tiene
+                    saldo. Mientras tanto respondo con el modelo local.
+                  </p>
+                )}
                 {sec.notice !== undefined && <p className={styles.notice}>{sec.notice}</p>}
                 <div className={styles.secretRow}>
                   <input
