@@ -197,3 +197,15 @@ describe('SetupScreen — clave de la nube', () => {
     expect(within(cardOf('ElevenLabs')).getByText(/✓ activo/)).toBeDefined();
   });
 });
+
+describe('SetupScreen — clave de la nube, texto', () => {
+  it('no promete el modelo local: solo lo ofrece si está disponible', () => {
+    state.report = {
+      ...makeReport({ anthropic: true, elevenlabs: true, gemini: true }),
+      readiness: { cloud: 'auth' },
+    };
+    render(<SetupScreen />);
+    const text = within(cardOf('Anthropic (Claude)')).getByText(/mal escrita o caducada/);
+    expect(text.textContent).toMatch(/si está disponible/);
+  });
+});

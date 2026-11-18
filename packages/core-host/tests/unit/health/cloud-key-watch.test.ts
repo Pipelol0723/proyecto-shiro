@@ -73,14 +73,36 @@ describe('watchCloudKey', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it('una respuesta de la nube borra el problema y avisa', async () => {
+  it('una respuesta de un turno enrutado a la nube borra el problema y avisa', async () => {
     const { bus, onChange, watch } = setup();
     await bus.emit('llm:failed', { reason: 'auth', tier: 'cloud', userId: 'me' });
 
+    await bus.emit('router:routed', { tier: 'cloud', userId: 'me' });
     await bus.emit('llm:responded', cloudReply);
 
     expect(watch.current()).toBeUndefined();
     expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('una respuesta «de la nube» sin turno no lo borra: el reporte de self-dev no llama a la nube', async () => {
+    const { bus, onChange, watch } = setup();
+    await bus.emit('llm:failed', { reason: 'auth', tier: 'cloud', userId: 'me' });
+
+    await bus.emit('llm:responded', { ...cloudReply, latencyMs: 0 });
+
+    expect(watch.current()).toBe('auth');
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('un turno de la nube que falla y sigue en local no cuenta como respuesta de la nube', async () => {
+    const { bus, watch } = setup();
+    await bus.emit('llm:failed', { reason: 'quota', tier: 'cloud', userId: 'me' });
+
+    await bus.emit('router:routed', { tier: 'cloud', userId: 'me' });
+    await bus.emit('llm:failed', { reason: 'unavailable', tier: 'cloud', userId: 'me' });
+    await bus.emit('llm:responded', cloudReply);
+
+    expect(watch.current()).toBe('quota');
   });
 
   it('una respuesta del modelo local no lo borra', async () => {
