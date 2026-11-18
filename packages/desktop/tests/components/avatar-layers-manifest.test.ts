@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseSpriteLayersManifest } from '../../src/components/Avatar/engines/layers/manifest';
+import { isSafeRelativePath } from '../../src/components/Avatar/engines/manifest-header';
 
 const TEST_MODEL = path.resolve(__dirname, '../../../../docs/design/chibi-prototype/test-model');
 
@@ -144,6 +145,8 @@ describe('parseSpriteLayersManifest — rutas que no pueden salir de la carpeta'
     ['un espacio delante', ' assets/base.png'],
     ['un espacio detrás', 'assets/base.png '],
     ['un espacio en medio', 'assets/base final.png'],
+    ['una letra de unidad escrita con barra vertical', 'C|/base.png'],
+    ['una barra vertical suelta', 'a|'],
     ['un punto solo', '.'],
     ['un segmento de un punto', 'assets/./base.png'],
     ['más larga de lo razonable', `assets/${'a'.repeat(300)}.png`],
@@ -155,6 +158,40 @@ describe('parseSpriteLayersManifest — rutas que no pueden salir de la carpeta'
     for (const route of ['assets/v1.2/base-final_2.png', 'assets/a:b.png', 'capas/cañón.png']) {
       expect(issuesOf(applyCase(full, { set: { 'layers.base': route } }))).toEqual([]);
     }
+  });
+});
+
+describe('isSafeRelativePath — con cualquier base, la ruta se queda en la carpeta', () => {
+  const BASES = [
+    'http://localhost:5173/avatar/models/chibi/avatar.manifest.json',
+    'tauri://localhost/avatar/models/chibi/avatar.manifest.json',
+    'https://tauri.localhost/avatar/models/chibi/avatar.manifest.json',
+    'file:///C:/app/avatar/models/chibi/avatar.manifest.json',
+  ];
+  // Caracteres con los que se puede intentar salir de una carpeta o cambiar de sitio.
+  const ALPHABET = ['.', '/', ':', '|', '@', ';', '~', '\\', '%', '\t', ' ', 'a', 'C', '1'];
+
+  it('ninguna combinación corta que pase el filtro sale de la carpeta', () => {
+    const candidates = new Set<string>();
+    for (const a of ALPHABET) {
+      candidates.add(a);
+      for (const b of ALPHABET) {
+        candidates.add(a + b);
+        for (const c of ALPHABET) {
+          candidates.add(a + b + c);
+          candidates.add(`${a}${b}${c}/x`);
+        }
+      }
+    }
+    const escaped: string[] = [];
+    for (const route of candidates) {
+      if (!isSafeRelativePath(route)) continue;
+      for (const base of BASES) {
+        const folder = new URL('.', base).href;
+        if (!new URL(route, base).href.startsWith(folder)) escaped.push(`${route} con ${base}`);
+      }
+    }
+    expect(escaped).toEqual([]);
   });
 });
 
