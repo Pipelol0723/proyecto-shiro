@@ -32,6 +32,7 @@ import { useCompanion } from '../../state/use-companion';
 import { useMicrophonePTT } from '../../audio/useMicrophonePTT';
 import { useAudio } from '../../audio/use-audio';
 import { ChatPanel } from './ChatPanel';
+import { TurnFailureNotices } from './TurnFailureNotices';
 import styles from './ConversationScreen.module.css';
 
 const LOCAL_USER_ID = 'me';
@@ -206,6 +207,8 @@ export function ConversationScreen(): JSX.Element {
             Hay un problema con la conexión: se cortó lo que Shiro estaba diciendo.
           </p>
         )}
+
+        <TurnFailureNotices failures={state.turnFailures} />
 
         {ptt.state === 'error' && ptt.error !== null && (
           <p className={styles.micError} role="alert">

@@ -348,3 +348,77 @@ describe('companionReducer — conexión (P-07a)', () => {
     expect(next.thinking).toBe(true);
   });
 });
+
+describe('companionReducer — fallos del turno (TURN_FAILED)', () => {
+  const cloudAuth = { reason: 'auth', tier: 'cloud' } as const;
+  const localDown = { reason: 'unavailable', tier: 'local' } as const;
+
+  it('empieza sin fallos', () => {
+    expect(INITIAL_STATE.turnFailures).toEqual([]);
+  });
+
+  it('anota cada fallo, en orden', () => {
+    const one = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    const two = companionReducer(one, { type: 'TURN_FAILED', ...localDown });
+    expect(two.turnFailures).toEqual([cloudAuth, localDown]);
+  });
+
+  it('no repite el mismo fallo del mismo modelo', () => {
+    const one = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    const two = companionReducer(one, { type: 'TURN_FAILED', ...cloudAuth });
+    expect(two.turnFailures).toEqual([cloudAuth]);
+  });
+
+  it('la respuesta de Shiro no borra el aviso: llega después del fallo, en el mismo turno', () => {
+    const failed = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    const replied = companionReducer(failed, {
+      type: 'SHIRO_REPLY',
+      text: 'respondo en local',
+      emotion: 'neutral',
+      tier: 'local',
+      latencyMs: 10,
+    });
+    expect(replied.turnFailures).toEqual([cloudAuth]);
+  });
+
+  it('el turno siguiente lo borra, se escriba o se hable', () => {
+    const failed = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    expect(
+      companionReducer(failed, { type: 'USER_SAID', text: 'otra', userId: 'me' }).turnFailures,
+    ).toEqual([]);
+    expect(companionReducer(failed, { type: 'LISTEN_START' }).turnFailures).toEqual([]);
+  });
+
+  it('perder la conexión lo borra: al volver sería el aviso de un turno muerto', () => {
+    const failed = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    expect(companionReducer(failed, { type: 'CONNECTION_LOST' }).turnFailures).toEqual([]);
+  });
+
+  const reply = {
+    type: 'SHIRO_REPLY',
+    text: 'respondo',
+    emotion: 'neutral',
+    tier: 'local',
+    latencyMs: 10,
+  } as const;
+
+  it('en el orden real del turno, el aviso sigue ahí tras la respuesta', () => {
+    const said = companionReducer(baseState, { type: 'USER_SAID', text: 'hola', userId: 'me' });
+    const failed = companionReducer(said, { type: 'TURN_FAILED', ...cloudAuth });
+    expect(companionReducer(failed, reply).turnFailures).toEqual([cloudAuth]);
+  });
+
+  it('una segunda respuesta sin turno nuevo lo borra: ya no habla de ese fallo', () => {
+    const failed = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    const answered = companionReducer(failed, reply);
+    expect(companionReducer(answered, reply).turnFailures).toEqual([]);
+  });
+
+  it('un fallo que llega tras la respuesta empieza una lista nueva', () => {
+    const failed = companionReducer(baseState, { type: 'TURN_FAILED', ...cloudAuth });
+    const answered = companionReducer(failed, reply);
+    const again = companionReducer(answered, { type: 'TURN_FAILED', ...localDown });
+    expect(again.turnFailures).toEqual([localDown]);
+    expect(companionReducer(again, reply).turnFailures).toEqual([localDown]);
+  });
+});
