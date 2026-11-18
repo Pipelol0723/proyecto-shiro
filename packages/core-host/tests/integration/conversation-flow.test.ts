@@ -59,7 +59,7 @@ interface LLMMockOptions {
   /** Si true, generate() rechaza. */
   fail?: boolean;
   /** Si se da, generate() rechaza con este error. */
-  error?: unknown;
+  error?: Error;
 }
 
 function makeLLM(id: string, opts: LLMMockOptions = {}): ILLMModule & { calls: number } {
