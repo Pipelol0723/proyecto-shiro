@@ -49,7 +49,9 @@ async function main(): Promise<void> {
 
   const port = parsePort(process.env.SHIRO_HOST_PORT);
   const logger = new Logger();
-  installProcessSafetyNet(logger);
+  // Hasta que el arranque termina, un rechazo sin manejar cierra el proceso.
+  let ready = false;
+  installProcessSafetyNet(logger, { isReady: () => ready });
   if (loadedSecrets.length > 0) {
     logger
       .child({ module: 'secrets' })
@@ -66,6 +68,7 @@ async function main(): Promise<void> {
     );
   }
   const result = await bootstrap({ port, host: bind.host, config, character, logger });
+  ready = true;
 
   const shutdown = (signal: string): void => {
     console.log(`\nrecibido ${signal}, apagando…`);
