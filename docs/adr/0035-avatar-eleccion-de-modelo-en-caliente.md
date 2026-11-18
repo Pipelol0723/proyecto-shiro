@@ -1,12 +1,14 @@
 # ADR 0035: Avatar — elección del modelo en caliente: Shiro decide, el usuario sugiere o fija
 
-- **Status**: Proposed
+- **Status**: Accepted (sin implementar)
 - **Fecha**: 2026-11-14
-- **Decidido por**: Pipelol0723 (pendiente de aceptar)
+- **Decidido por**: Pipelol0723
 
-> **Estado (2026-11-14):** propuesta escrita por un agente a partir de las
-> decisiones que el dueño tomó ese día. **Sin aceptar y sin implementar.** La
-> tabla «Qué viene del dueño y qué propone el agente» separa lo uno de lo otro.
+> **Estado (2026-11-18):** el dueño aceptó la decisión el 2026-11-18. **Sin
+> implementar**: la cumplen los pasos AV-3 a AV-6 del plan de mejora. La
+> propuesta la escribió un agente a partir de las decisiones del dueño del
+> 2026-11-14; la tabla «Qué viene del dueño y qué propone el agente» separa lo
+> uno de lo otro.
 
 ## Contexto
 
@@ -234,7 +236,7 @@ recibido; distinguir clientes llega con el protocolo multicliente.
 | Punto                                                  | Del dueño                                                                | Propuesta del agente                                                                    |
 | ------------------------------------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
 | Tres modelos, en caliente, en modo normal y en overlay | Sí                                                                       | —                                                                                       |
-| Sugerencia, no orden                                   | «Que mi decisión influya en Shiro pero no la cambie»                     | Lectura: Shiro puede elegir otra forma que la sugerida. **A confirmar**                 |
+| Sugerencia, no orden                                   | «Que mi decisión influya en Shiro pero no la cambie»                     | Lectura: Shiro puede elegir otra forma que la sugerida. Aceptada con el ADR             |
 | Cómo le llega la sugerencia                            | —                                                                        | Desde la app, un turno con respuesta obligada; hablada, un turno normal                 |
 | Que Shiro «quiera» verse de una forma                  | Sí (su ejemplo: verse en 3D)                                             | Una preferencia que dura hasta que exprese otra                                         |
 | Fijar                                                  | Existe                                                                   | Gana a todo salvo a los límites del cliente                                             |
@@ -299,8 +301,7 @@ recibido; distinguir clientes llega con el protocolo multicliente.
   caben, ese cambio pasará por el orbe. Se mide al llegar el 3D.
 - Sugerir desde la app cuesta un turno entero (LLM y voz).
 - Shiro puede elegir otra cosa que lo sugerido. Es la lectura que hace este
-  ADR de «influye pero no la cambia», y el dueño debe confirmarla al aceptar;
-  la salida es fijar.
+  ADR de «influye pero no la cambia», aceptada con él; la salida es fijar.
 - El modo de actividad y la forma que lleva el cliente entran en el contexto
   del LLM, también el de la nube, solo como valores de listas cerradas.
   Mientras el bus no tenga token

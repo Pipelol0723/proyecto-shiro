@@ -89,7 +89,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0028](0028-avatar-motores-y-manifiesto.md)                              | Avatar — motores intercambiables, manifiesto y motor de capas  | Accepted (sin implementar; integración aprobada) |
 | [0029](0029-proceso-de-mantenimiento-de-una-persona.md)                  | Proceso de mantenimiento de una persona                        | Accepted                                         |
 | [0034](0034-tts-gemini-voz-disenada.md)                                  | TTS — voz diseñada de Gemini; ElevenLabs y SystemTTS detrás    | Accepted (implementado; sin activar)             |
-| [0035](0035-avatar-eleccion-de-modelo-en-caliente.md)                    | Avatar — elección del modelo en caliente; Shiro decide         | Proposed                                         |
+| [0035](0035-avatar-eleccion-de-modelo-en-caliente.md)                    | Avatar — elección del modelo en caliente; Shiro decide         | Accepted (sin implementar)                       |
 
 «Sin implementar» = decisión vigente sin código todavía. El estado de los
 hitos vive en la tabla [Roadmap del README](../../README.md#roadmap).
