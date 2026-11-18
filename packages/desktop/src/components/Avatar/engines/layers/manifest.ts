@@ -13,6 +13,7 @@
 
 import { z } from 'zod';
 import {
+  MAX_NAME_LENGTH,
   assetPath,
   findReservedKeys,
   manifestHeaderShape,
@@ -26,45 +27,64 @@ export const SPRITE_LAYERS_KIND = 'sprite-layers';
 /** Versiones del formato que este motor sabe leer. */
 const FORMAT_VERSION = '0.2';
 
-const positiveInt = z.number().int().positive();
-const nonNegativeInt = z.number().int().nonnegative();
+/**
+ * Lado máximo de una imagen del modelo. Por encima, el lienzo de los ojos no
+ * se puede crear y el motor fallaría al pintar.
+ */
+const MAX_SIDE = 8192;
+/** Topes de los mapas y listas: un manifiesto no debe poder pedir miles de imágenes. */
+const MAX_PIECES = 256;
+const MAX_ENTRIES = 64;
+
+const positiveInt = z.number().int().positive().max(MAX_SIDE);
+const nonNegativeInt = z.number().int().nonnegative().max(MAX_SIDE);
+/** Nombre de una pieza o de un estado de ojos, citado desde otro campo. */
+const name = z.string().min(1).max(MAX_NAME_LENGTH);
+/** Mapa abierto con un tope de entradas. */
+const boundedRecord = <T extends z.ZodType>(value: T, max: number) =>
+  z.record(mapKey, value).refine((map) => Object.keys(map).length <= max, {
+    message: `como mucho ${String(max)} entradas`,
+  });
 /** Una coordenada de mirada, de −1 a 1. */
 const unit = z.number().min(-1).max(1);
 
 const EyeStateSchema = z.strictObject({
   /** Hueco visible del ojo. `null` = ojo cerrado: no se pinta ni blanco ni iris. */
-  white: z.string().nullable(),
+  white: name.nullable(),
   /** Pestañas y contorno de ese estado. Va encima del iris. */
-  lines: z.string(),
+  lines: name,
 });
+
+/** Espera entre parpadeos, en segundos: ni un parpadeo continuo ni uno que nunca llega. */
+const blinkWait = z.number().min(0.1).max(600);
 
 const BlinkSchema = z.strictObject({
   /** Estado «del todo abierto»: solo las expresiones que lo usan pasan por el medio. */
-  open: z.string().default('eyes_open'),
-  half: z.string(),
-  closed: z.string(),
+  open: name.default('eyes_open'),
+  half: name,
+  closed: name,
   /** Espera al azar, en segundos, entre un parpadeo automático y el siguiente. */
-  interval_s: z.tuple([z.number().positive(), z.number().positive()]).default([2.5, 6]),
-  duration_ms: z.number().positive().default(130),
+  interval_s: z.tuple([blinkWait, blinkWait]).default([2.5, 6]),
+  duration_ms: z.number().min(10).max(5000).default(130),
 });
 
 const FaceSchema = z.strictObject({
   /** Caja de la cara dentro de la figura: `[x, y, ancho, alto]`. */
   rect: z.tuple([nonNegativeInt, nonNegativeInt, positiveInt, positiveInt]),
   /** Todas las imágenes de la cara; el resto del manifiesto las nombra por su clave. */
-  pieces: z.record(mapKey, assetPath),
-  eyes: z.record(mapKey, EyeStateSchema),
-  iris: z.string().optional(),
+  pieces: boundedRecord(assetPath, MAX_PIECES),
+  eyes: boundedRecord(EyeStateSchema, MAX_ENTRIES),
+  iris: name.optional(),
   /** Recorrido máximo del iris, en píxeles del modelo, cuando la mirada vale 1. */
   gaze: z
     .strictObject({ max: z.tuple([z.number().nonnegative(), z.number().nonnegative()]) })
     .default({ max: [0, 0] }),
   blink: BlinkSchema,
   /** Bocas abiertas, de menor a mayor apertura. */
-  mouth_open: z.array(z.string()),
+  mouth_open: z.array(name).max(MAX_ENTRIES),
   /** Apertura a partir de la cual entra cada boca, cada una en (0, 1]. */
-  mouth_thresholds: z.array(z.number().gt(0).lte(1)),
-  blush: z.string().optional(),
+  mouth_thresholds: z.array(z.number().gt(0).lte(1)).max(MAX_ENTRIES),
+  blush: name.optional(),
 });
 
 const GlowSchema = z.strictObject({
@@ -73,9 +93,9 @@ const GlowSchema = z.strictObject({
 });
 
 const ExpressionSchema = z.strictObject({
-  eyes: z.string(),
-  brows: z.string(),
-  mouth: z.string(),
+  eyes: name,
+  brows: name,
+  mouth: name,
   blush: z.number().min(0).max(1).default(0),
   /** Hacia dónde mira la expresión cuando nadie llama a `setLookAt`. */
   gaze: z.tuple([unit, unit]).default([0, 0]),
@@ -97,9 +117,9 @@ export const SpriteLayersManifestSchema = z
       outline: assetPath.optional(),
     }),
     face: FaceSchema,
-    expressions: z.record(mapKey, ExpressionSchema),
+    expressions: boundedRecord(ExpressionSchema, MAX_ENTRIES),
     /** Emoción del núcleo → expresión. Una emoción ausente cae en `idle`. */
-    emotions: z.record(mapKey, z.string()).default({}),
+    emotions: boundedRecord(name, MAX_ENTRIES).default({}),
   })
   .superRefine((manifest, ctx) => {
     const { face, expressions, emotions, size } = manifest;
@@ -163,6 +183,14 @@ export const SpriteLayersManifestSchema = z
     const [x, y, width, height] = face.rect;
     if (x + width > size[0] || y + height > size[1]) {
       issue(['face', 'rect'], 'la caja de la cara no cabe en la figura');
+    }
+
+    // El iris no puede desplazarse más de lo que mide la cara.
+    if (face.gaze.max[0] > width || face.gaze.max[1] > height) {
+      issue(
+        ['face', 'gaze', 'max'],
+        'el recorrido de la mirada no puede superar la caja de la cara',
+      );
     }
 
     if (face.blink.interval_s[0] > face.blink.interval_s[1]) {
