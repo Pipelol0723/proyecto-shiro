@@ -13,7 +13,7 @@
  * (sección Mapeo state ↔ EventBus).
  */
 
-import type { Emotion, MemoryEntry } from '@proyecto-shiro/core';
+import type { Emotion, MemoryEntry, TurnFailureReason } from '@proyecto-shiro/core';
 
 export type LLMTier = 'local' | 'cloud';
 
@@ -26,6 +26,12 @@ export interface CompanionMessage {
   emotion?: Emotion;
   tier?: LLMTier;
   latencyMs?: number;
+}
+
+/** Un LLM que no pudo responder en el turno en curso (`llm:failed`). */
+export interface TurnFailure {
+  reason: TurnFailureReason;
+  tier: LLMTier;
 }
 
 export interface CompanionState {
@@ -49,6 +55,12 @@ export interface CompanionState {
    * habla, o llega una respuesta nueva).
    */
   voiceCutByConnection: boolean;
+  /**
+   * Fallos de LLM del turno en curso, para explicar qué pasó. Se borran al
+   * empezar el turno siguiente; la respuesta de Shiro no los borra, porque
+   * llega después del fallo.
+   */
+  turnFailures: TurnFailure[];
   /** Historial completo de conversación. */
   history: CompanionMessage[];
 }
@@ -62,6 +74,7 @@ export const INITIAL_STATE: CompanionState = {
   sttLive: '',
   subtitle: '',
   voiceCutByConnection: false,
+  turnFailures: [],
   history: [],
 };
 
@@ -72,6 +85,7 @@ export type CompanionAction =
   | { type: 'USER_SAID'; text: string; userId: string }
   | { type: 'THINK_START'; tier: LLMTier }
   | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
+  | { type: 'TURN_FAILED'; reason: TurnFailureReason; tier: LLMTier }
   | { type: 'SPEAK_END' }
   | { type: 'LISTEN_END' }
   | { type: 'CONNECTION_LOST' }
@@ -113,7 +127,14 @@ function entryToMessage(entry: MemoryEntry): CompanionMessage {
 export function companionReducer(state: CompanionState, action: CompanionAction): CompanionState {
   switch (action.type) {
     case 'LISTEN_START':
-      return { ...state, listening: true, sttLive: '', subtitle: '', voiceCutByConnection: false };
+      return {
+        ...state,
+        listening: true,
+        sttLive: '',
+        subtitle: '',
+        voiceCutByConnection: false,
+        turnFailures: [],
+      };
 
     case 'STT_PARTIAL':
       return { ...state, sttLive: action.text };
@@ -130,6 +151,7 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
       return {
         ...state,
         voiceCutByConnection: false,
+        turnFailures: [],
         history: [
           ...state.history,
           { role: 'user', text: action.text, timestamp: new Date().toISOString() },
@@ -159,6 +181,17 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
           },
         ],
       };
+
+    case 'TURN_FAILED': {
+      const repeated = state.turnFailures.some(
+        (f) => f.reason === action.reason && f.tier === action.tier,
+      );
+      if (repeated) return state;
+      return {
+        ...state,
+        turnFailures: [...state.turnFailures, { reason: action.reason, tier: action.tier }],
+      };
+    }
 
     case 'SPEAK_END':
       return { ...state, speaking: false, subtitle: '' };
