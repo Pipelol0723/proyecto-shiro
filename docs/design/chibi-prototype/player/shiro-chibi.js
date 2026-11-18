@@ -82,7 +82,8 @@ export class LayeredAvatar {
 
   // ---- verbos -------------------------------------------------------------
   setExpression(name) {
-    if (!(name in this.manifest.expressions)) name = 'idle';
+    // Solo valen las claves propias: "toString" o "__proto__" no son expresiones.
+    if (!Object.hasOwn(this.manifest.expressions, name)) name = 'idle';
     if (name === this.expression) return;
     this.previous = this.expression;
     this.expression = name;
@@ -92,7 +93,8 @@ export class LayeredAvatar {
 
   /** Atajo: emocion del nucleo (neutral, divertida...) -> expresion. */
   setEmotion(emotion) {
-    this.setExpression(this.manifest.emotions?.[emotion] ?? 'idle');
+    const emotions = this.manifest.emotions ?? {};
+    this.setExpression(Object.hasOwn(emotions, emotion) ? emotions[emotion] : 'idle');
   }
 
   setMouthOpen(value) {
@@ -133,6 +135,8 @@ export class LayeredAvatar {
   /**
    * Suelta las imagenes y el lienzo auxiliar. Despues de llamarlo el avatar
    * ya no dibuja nada: es lo que usara el cambio de modelo en caliente.
+   * El motor no tiene temporizadores propios: el bucle de animacion es de
+   * quien lo usa, y le toca cancelarlo a la vez.
    */
   dispose() {
     this.disposed = true;
@@ -148,6 +152,9 @@ export class LayeredAvatar {
   }
 
   update(dtMs) {
+    // Un paso que no es un numero, o negativo, se ignora: si entrara, la
+    // mirada y los relojes quedarian en NaN para siempre.
+    if (!Number.isFinite(dtMs) || dtMs < 0) return;
     this.time += dtMs;
     this.sinceEnter += dtMs;
     if (this.fade < 1) {
@@ -179,6 +186,8 @@ export class LayeredAvatar {
     if (this.glowOverride !== null) return this.glowOverride;
     const { level = 1, pattern = 'steady' } = this.manifest.expressions[this.expression].glow ?? {};
     if (pattern === 'pulse') {
+      // El pulso va con el reloj total del motor, no con el de la expresion:
+      // no se reinicia al cambiar de cara.
       return level * (1 + 0.2 * Math.sin((2 * Math.PI * this.time) / 2600));
     }
     if (pattern === 'flash') {

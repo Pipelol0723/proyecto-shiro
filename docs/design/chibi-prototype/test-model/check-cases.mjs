@@ -166,7 +166,7 @@ for (const c of cases.gaze) {
 for (const c of cases.gazeSmoothing.cases) {
   const a = makeAvatar(manifest);
   a.setLookAt(1, 0);
-  for (const dt of c.steps) a.update(dt);
+  for (const dt of c.steps) a.update(num(dt));
   check('suavizado', `pasos ${c.steps}`, close(a.look[0], c.lookX), `${a.look[0]} ≠ ${c.lookX}`);
 }
 
@@ -175,15 +175,17 @@ for (const c of cases.gazeSmoothing.cases) {
   const e = cases.expression;
   check('expresión', 'FADE_MS', FADE_MS === e.fadeMs, `${FADE_MS} ≠ ${e.fadeMs}`);
 
-  const a = makeAvatar(manifest);
-  a.setExpression('smirk');
-  a.setExpression('no-existe');
-  check(
-    'expresión',
-    'desconocida',
-    a.expression === e.unknownFallsBackTo,
-    `${a.expression} ≠ ${e.unknownFallsBackTo}`,
-  );
+  for (const name of e.unknown) {
+    const a = makeAvatar(manifest);
+    a.setExpression('smirk');
+    a.setExpression(name);
+    check(
+      'expresión',
+      `desconocida "${name}"`,
+      a.expression === e.unknownFallsBackTo,
+      `${a.expression} ≠ ${e.unknownFallsBackTo}`,
+    );
+  }
 
   for (const c of e.fade) {
     const b = makeAvatar(manifest);
@@ -278,8 +280,57 @@ for (const c of cases.computeMouthOpen) {
   check('mínimo', 'dibujo principal', sameDraws(got.main, expect.main), show(got.main));
   check('mínimo', 'dibujo de ojos', sameDraws(got.eyes, expect.eyes, true), show(got.eyes));
   a.dispose();
+  let afterDispose = 'sin error';
+  try {
+    a.setExpression('idle');
+    a.setEmotion('divertida');
+    a.setMouthOpen(0.5);
+    a.setBlink(null);
+    a.setGlow(null);
+    a.setLookAt(null);
+    a.update(16);
+  } catch (error) {
+    afterDispose = String(error);
+  }
+  check('mínimo', 'los verbos no fallan tras dispose', afterDispose === 'sin error', afterDispose);
   const after = paint(a);
   check('mínimo', 'dispose deja de pintar', after.main.length === 0, show(after.main));
+}
+
+// ---- manifiestos invalidos: que cada caso cambie algo de verdad ---------------------------------------
+// El prototipo no valida; aqui solo se comprueba que los datos estan bien
+// escritos (la ruta existe o el valor es distinto), para que un caso mal
+// tecleado no pase por valido en el esquema del cliente.
+{
+  const apply = (source, c) => {
+    const copy = structuredClone(source);
+    const walk = (path) => {
+      const keys = path.split('.');
+      const last = keys.pop();
+      let node = copy;
+      for (const key of keys) node = node?.[key];
+      return [node, last];
+    };
+    for (const [path, value] of Object.entries(c.set ?? {})) {
+      const [node, last] = walk(path);
+      if (node === undefined) return null;
+      node[last] = value;
+    }
+    for (const path of c.remove ?? []) {
+      const [node, last] = walk(path);
+      if (node === undefined || !Object.hasOwn(node, last)) return null;
+      delete node[last];
+    }
+    return copy;
+  };
+  const original = JSON.stringify(manifest);
+  const names = new Set();
+  for (const c of cases.invalidManifests.cases) {
+    const changed = apply(manifest, c);
+    const ok = changed !== null && JSON.stringify(changed) !== original && !names.has(c.name);
+    names.add(c.name);
+    check('inválidos', c.name, ok, 'el caso no cambia el manifiesto o está repetido');
+  }
 }
 
 console.log(`${total - failed} de ${total} comprobaciones correctas`);

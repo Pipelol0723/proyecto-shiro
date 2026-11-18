@@ -93,24 +93,40 @@ arranque y a la que se cae cuando se pide una que no está.
 ## Reglas que cruzan campos
 
 El esquema debe rechazar un manifiesto que incumpla cualquiera de estas. Hay
-un caso de prueba por regla en
+al menos un caso de prueba por regla en
 [`test-model/behavior-cases.json`](test-model/behavior-cases.json)
-(`invalidManifests`).
+(`invalidManifests`), junto con los de campos obligatorios ausentes y
+valores fuera de rango. No es una lista cerrada: no cubre todas las
+combinaciones.
 
 1. Todo nombre de pieza citado (`white`, `lines`, `iris`, `blush`, `brows`,
    `mouth`, `mouth_open`) existe en `face.pieces`.
 2. Todo nombre de estado citado (`expressions.*.eyes`, `face.blink.*`) existe
-   en `face.eyes`.
+   en `face.eyes`. Vale también para el valor por defecto: si se omite
+   `face.blink.open`, tiene que existir un estado `eyes_open`.
 3. Toda expresión citada en `emotions` existe en `expressions`.
 4. `expressions.idle` existe.
 5. `face.mouth_open` y `face.mouth_thresholds` miden lo mismo, y los umbrales
    crecen.
 6. `face.rect` cabe dentro de `size`.
-7. Las rutas son relativas, sin `..`, sin barra inicial y sin esquema
-   (`https:`, `file:`…): un modelo no puede leer fuera de su carpeta.
+7. Las rutas son relativas, sin `..`, sin barra inicial, sin barra invertida,
+   sin letra de unidad (`C:/…`) y sin esquema (`https:`, `file:`…): un modelo
+   no puede leer fuera de su carpeta.
 
-Aparte del archivo: si **cualquier** imagen citada no carga, el modelo entero
-se da por no disponible. No se monta a medias.
+**Claves desconocidas.** En la raíz, en `face` y en cada expresión se
+**rechazan**: una errata (`gaze_max` por `face.gaze.max`) no debe pasar en
+silencio. La excepción son las capas: una entrada de `layers` que el motor
+no conoce se **ignora** y no se carga, para que un modelo pueda traer capas
+que un motor más nuevo sí use. Los mapas abiertos (`face.pieces`,
+`face.eyes`, `expressions`, `emotions`) admiten cualquier nombre.
+
+**Qué se carga.** Las capas conocidas de `layers` y **todas** las piezas de
+`face.pieces`, se citen o no en el resto del manifiesto: es más simple y
+predecible que calcular cuáles se usan. Una pieza sin citar no es un error
+del esquema, pero ocupa memoria; quien hace el modelo no debería dejarlas.
+
+Aparte del archivo: si **cualquier** imagen que se carga falla, el modelo
+entero se da por no disponible. No se monta a medias.
 
 ## Cambios de la v0.1 a la v0.2
 
@@ -169,6 +185,9 @@ tienen que poder leerla **sin cargar el motor** ni las imágenes:
 | `capabilities.body_motion` | Si el cuerpo se mueve (la chibi no)                                                                                                                                                                              |
 | `capabilities.framing`     | `"full-body"`, `"torso"` o `"bust"`: cuánto cuerpo trae. El 2D empezará por el torso, y el overlay y el encuadre lo necesitan para colocarlo                                                                     |
 
+Si faltan, se deducen del `kind` (así lo dice el ADR 0035): un manifiesto
+v0.2 sin estos campos sigue siendo válido.
+
 Lo declarado es solo el punto de partida: el coste real (fotogramas por
 segundo, tiempo de carga) solo lo puede medir el cliente en marcha, y debería
 poder corregir al manifiesto.
@@ -189,8 +208,14 @@ toca al arte.
 
 ### En el contrato del motor
 
-- **`dispose()`**: soltar imágenes, lienzos y temporizadores. El prototipo ya
-  lo tiene; después de llamarlo no pinta nada.
+- **`dispose()`**: soltar imágenes y lienzos. El prototipo ya lo tiene;
+  después de llamarlo no pinta nada, y los verbos y `update` siguen sin
+  fallar pero sin efecto visible. El motor no tiene temporizadores propios:
+  el bucle de animación es del cliente, y debe cancelarlo a la vez.
+- **`setLookAt(null)` y la `y` opcional**: amplían el ADR 0028, que solo
+  define `setLookAt(x, y)`. `null` suelta la mirada fijada, igual que en
+  `setBlink` y `setGlow`; hace falta para el traspaso de estado. La enmienda
+  del ADR viaja con el código que lo implemente.
 - **Carga cancelable**: si se pide otro modelo mientras uno carga, la carga
   vieja debe poder abandonarse sin montar nada.
 - **Traspaso de estado**: al cambiar, el modelo nuevo debería arrancar con la

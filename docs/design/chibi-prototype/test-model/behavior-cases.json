@@ -171,12 +171,18 @@
       { "steps": [55, 55], "lookX": 0.6321, "note": "dos pasos de 55 ms = uno de 110 ms" },
       { "steps": [220], "lookX": 0.8647 },
       { "steps": [330], "lookX": 0.9502 },
-      { "steps": [100, 100, 100, 100, 100], "lookX": 0.9894 }
+      { "steps": [100, 100, 100, 100, 100], "lookX": 0.9894 },
+      { "steps": [110, "NaN"], "lookX": 0.6321, "note": "un paso no finito se ignora" },
+      { "steps": ["NaN", 110], "lookX": 0.6321, "note": "…y no estropea los siguientes" },
+      { "steps": [110, "Infinity"], "lookX": 0.6321 },
+      { "steps": [110, -50], "lookX": 0.6321, "note": "un paso negativo se ignora" }
     ]
   },
 
   "expression": {
+    "unknown": ["no-existe", "toString", "constructor", "__proto__", "hasOwnProperty"],
     "unknownFallsBackTo": "idle",
+    "unknownNote": "solo cuentan las claves propias del mapa de expresiones, no las heredadas del objeto",
     "fadeMs": 140,
     "fade": [
       { "from": "idle", "to": "smirk", "afterMs": 0, "fade": 0, "previous": "idle" },
@@ -190,7 +196,8 @@
       { "emotion": "pensativa", "expression": "thinking" },
       { "emotion": "molesta", "expression": "annoyed" },
       { "emotion": "vulnerable", "expression": "soft" },
-      { "emotion": "desconocida", "expression": "idle" }
+      { "emotion": "desconocida", "expression": "idle" },
+      { "emotion": "toString", "expression": "idle", "note": "clave heredada: no es una emoción" }
     ]
   },
 
@@ -226,6 +233,27 @@
       "sinceEnterMs": 2600,
       "level": 0.9,
       "note": "periodo de 2,6 s"
+    },
+    {
+      "expression": "thinking",
+      "timeMs": 650,
+      "sinceEnterMs": 0,
+      "level": 1.08,
+      "note": "el pulso va con el reloj total del motor: recién entrada la expresión ya está en el pico"
+    },
+    {
+      "expression": "thinking",
+      "timeMs": 5200,
+      "sinceEnterMs": 650,
+      "level": 0.9,
+      "note": "…y el tiempo desde que entró no cuenta"
+    },
+    {
+      "expression": "smirk",
+      "timeMs": 5000,
+      "sinceEnterMs": 0,
+      "level": 1.6,
+      "note": "el destello, al revés: solo cuenta el tiempo desde que entró"
     },
     {
       "expression": "smirk",
@@ -471,9 +499,44 @@
         "set": { "layers.base": "../otro/base.png" }
       },
       {
-        "name": "ruta absoluta o con esquema",
+        "name": "ruta con esquema",
         "set": { "face.pieces.iris": "https://example.com/iris.png" }
-      }
+      },
+      { "name": "ruta con barra inicial", "set": { "layers.base": "/assets/base.png" } },
+      { "name": "ruta con barra invertida", "set": { "layers.base": "assets\\base.png" } },
+      { "name": "ruta con letra de unidad", "set": { "layers.base": "C:/modelos/base.png" } },
+      { "name": "sin name", "remove": ["name"] },
+      { "name": "sin version", "remove": ["version"] },
+      { "name": "versión del formato desconocida", "set": { "version": "0.3" } },
+      { "name": "sin size", "remove": ["size"] },
+      { "name": "tamaño negativo", "set": { "size": [120, -200] } },
+      { "name": "sin face.rect", "remove": ["face.rect"] },
+      { "name": "cara de ancho cero", "set": { "face.rect": [20, 30, 0, 60] } },
+      { "name": "sin face.pieces", "remove": ["face.pieces"] },
+      { "name": "sin face.eyes", "remove": ["face.eyes"] },
+      { "name": "sin el fotograma medio del parpadeo", "remove": ["face.blink.half"] },
+      { "name": "sin el ojo cerrado del parpadeo", "remove": ["face.blink.closed"] },
+      {
+        "name": "ojo abierto del parpadeo que no existe",
+        "set": { "face.blink.open": "eyes_nope" }
+      },
+      {
+        "name": "intervalo de parpadeo con mínimo cero",
+        "set": { "face.blink.interval_s": [0, 6] }
+      },
+      { "name": "sin face.mouth_open", "remove": ["face.mouth_open"] },
+      { "name": "sin face.mouth_thresholds", "remove": ["face.mouth_thresholds"] },
+      { "name": "umbral cero", "set": { "face.mouth_thresholds": [0, 0.34, 0.6] } },
+      { "name": "sin expressions", "remove": ["expressions"] },
+      { "name": "expresión sin ojos", "remove": ["expressions.smirk.eyes"] },
+      { "name": "expresión sin cejas", "remove": ["expressions.smirk.brows"] },
+      { "name": "expresión sin boca", "remove": ["expressions.smirk.mouth"] },
+      {
+        "name": "clave desconocida en la raíz",
+        "set": { "gaze_max": [5, 3] },
+        "note": "una errata no debe pasar en silencio"
+      },
+      { "name": "clave desconocida en la cara", "set": { "face.gaze.maximum": [5, 3] } }
     ]
   }
 }

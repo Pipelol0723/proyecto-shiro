@@ -9,7 +9,7 @@ escribir los tests del port a TypeScript.
 Los mismos casos están en datos en
 [`test-model/behavior-cases.json`](test-model/behavior-cases.json), sobre el
 modelo sintético de esa carpeta. `node test-model/check-cases.mjs` los
-comprueba contra el prototipo (136 comprobaciones). Los valores de ejemplo de
+comprueba contra el prototipo (203 comprobaciones). Los valores de ejemplo de
 este documento son los del modelo sintético: umbrales de boca
 `[0.12, 0.34, 0.6]`, recorrido de mirada `[5, 3]` píxeles, parpadeo de
 130 ms.
@@ -104,6 +104,10 @@ La mirada tiene un **objetivo** y un **valor actual** que lo persigue.
 | Cambia la expresión con la mirada fijada | sigue mandando `setLookAt`                                              |
 | Cambia la expresión sin mirada fijada    | el objetivo salta al `gaze` de la nueva; el valor lo sigue con suavidad |
 
+`setLookAt(null)` y la `y` opcional **amplían** el ADR 0028, que solo define
+`setLookAt(x, y)`. Los usa el prototipo y los necesita el traspaso de estado
+entre modelos; la enmienda del ADR viaja con el código que los implemente.
+
 **Valor actual:** se acerca al objetivo de forma exponencial, con una
 constante de tiempo de 110 ms: en cada paso avanza
 `1 − e^(−dt / 110)` de lo que falta. No depende de los fotogramas por
@@ -157,16 +161,18 @@ Casos límite:
 
 ## 4. Expresiones
 
-| Entrada                                                    | Resultado                                                                                 |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Arranque                                                   | `idle`, sin fundido                                                                       |
-| `setExpression("smirk")` desde `idle`                      | fundido de 140 ms: la cara anterior queda debajo, opaca, y la nueva entra encima de 0 a 1 |
-| A los 70 ms                                                | cara nueva al 50 %                                                                        |
-| A los 140 ms o más                                         | solo la cara nueva                                                                        |
-| `setExpression` con la que ya está                         | no hace nada; **no reinicia** el fundido ni el destello                                   |
-| `setExpression("no-existe")`                               | va a `idle`                                                                               |
-| `setEmotion("divertida")`                                  | la expresión que diga `emotions` (`smirk`)                                                |
-| `setEmotion` con una emoción desconocida, o sin `emotions` | `idle`                                                                                    |
+| Entrada                                                     | Resultado                                                                                 |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Arranque                                                    | `idle`, sin fundido                                                                       |
+| `setExpression("smirk")` desde `idle`                       | fundido de 140 ms: la cara anterior queda debajo, opaca, y la nueva entra encima de 0 a 1 |
+| A los 70 ms                                                 | cara nueva al 50 %                                                                        |
+| A los 140 ms o más                                          | solo la cara nueva                                                                        |
+| `setExpression` con la que ya está                          | no hace nada; **no reinicia** el fundido ni el destello                                   |
+| `setExpression("no-existe")`                                | va a `idle`                                                                               |
+| `setExpression("toString")`, `"constructor"`, `"__proto__"` | va a `idle`: solo cuentan las claves propias de `expressions`, no las heredadas           |
+| `setEmotion("divertida")`                                   | la expresión que diga `emotions` (`smirk`)                                                |
+| `setEmotion` con una emoción desconocida, o sin `emotions`  | `idle`                                                                                    |
+| `setEmotion("toString")`                                    | `idle`, por lo mismo                                                                      |
 
 El rubor de cada cara se pinta con la opacidad de su expresión por la del
 fundido; con opacidad 0 no se pinta.
@@ -190,6 +196,15 @@ ignora. Sin fijar, manda el patrón de la expresión:
 Cómo se pinta: la capa de brillo con opacidad `min(1, intensidad)`. Si la
 intensidad pasa de 1, una segunda pasada **sumada** (`lighter`) con opacidad
 `min(1, intensidad − 1)`. Sin capa de brillo no se pinta nada.
+
+Los dos patrones animados usan relojes distintos:
+
+- **`pulse`**: `t` es el **reloj total del motor**, la suma de todos los
+  pasos de `update` desde que se creó. No se reinicia al cambiar de
+  expresión: al entrar en `thinking` el pulso sigue por donde iba, sin
+  salto de fase entre dos expresiones que pulsen.
+- **`flash`**: `desde_que_entró` es el tiempo desde el último cambio de
+  expresión. Repetir la misma expresión no lo reinicia.
 
 ## 6. Orden de pintado
 
@@ -233,17 +248,34 @@ El orbe es siempre el último candidato y nunca falla. El cambio de modelo con
 la app en marcha queda fuera del ADR 0028; ver el ADR 0035 y el final de
 [`manifest-schema.md`](manifest-schema.md).
 
-## 8. Lo que el prototipo no cubre
+## 8. Paso de tiempo y `dispose()`
+
+| Entrada                                          | Resultado                                                                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `update(dt)` con `dt` finito y ≥ 0               | avanzan el reloj total, el fundido, la mirada y el parpadeo                                                   |
+| `update(0)`                                      | no cambia nada                                                                                                |
+| `update(NaN)`, `update(Infinity)`, `update(-50)` | **se ignora**: si entrara, la mirada y los relojes quedarían en `NaN` y ningún paso posterior los recuperaría |
+| `dispose()`                                      | suelta las imágenes y el lienzo auxiliar; desde entonces `draw` no pinta nada                                 |
+| Un verbo o `update` después de `dispose()`       | no falla y no tiene efecto visible                                                                            |
+
+El motor no tiene temporizadores propios: el parpadeo y los fundidos
+avanzan solo con `update`. **El bucle de animación es de quien usa el
+motor**, y le toca cancelarlo a la vez que llama a `dispose()`.
+
+## 9. Lo que el prototipo no cubre
 
 Para que no se dé por probado lo que no lo está:
 
 - **No valida el manifiesto.** Los casos de manifiestos inválidos de
   `behavior-cases.json` son la especificación del esquema, no algo que el
-  prototipo compruebe.
+  prototipo compruebe. `check-cases.mjs` solo mira que cada caso esté bien
+  escrito (que cambie algo del manifiesto de partida).
+- **Carga todas las capas de `layers`**, también las que no conoce; el
+  esquema pide ignorarlas (ver [`manifest-schema.md`](manifest-schema.md)).
 - **No tiene selector** ni tiempo límite.
 - **No mira `prefers-reduced-motion`** ni la densidad de píxeles de la
   pantalla (eso lo hace la página de pruebas, no el motor).
 - La página de pruebas limita cada paso a 100 ms cuando la pestaña vuelve de
-  estar oculta; el motor en sí acepta cualquier paso.
+  estar oculta; el motor en sí acepta cualquier paso finito y no negativo.
 - Comprobado a mano en el navegador con las dos poses de la chibi y con el
   modelo sintético; sin tests automáticos más allá de `check-cases.mjs`.
