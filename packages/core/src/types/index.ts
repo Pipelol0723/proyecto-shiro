@@ -16,4 +16,4 @@ export type {
 } from './events.js';
 
 export type { TurnFailureReason } from './turn-failure.js';
-export { MISSING_API_KEY_CODE, TURN_FAILURE_REASONS, classifyTurnFailure } from './turn-failure.js';
+export { TURN_FAILURE_REASONS, classifyTurnFailure, isTurnFailureReason } from './turn-failure.js';

@@ -175,8 +175,10 @@ El error específico (timeout de Ollama, 401 de Anthropic, etc.) va al log. El u
 - El pipeline emite un evento nuevo, **`llm:failed`**, cuando un LLM no puede
   responder: `{ reason, tier, userId }`. `reason` es una lista cerrada
   (`missing-key`, `auth`, `quota`, `unavailable`, `model-missing`, `unknown`)
-  que sale de recorrer la cadena `cause` del error. El texto del error no
-  viaja: se queda en el log.
+  que sale de recorrer la cadena `cause` del error. Cuando el SDK no deja una
+  pista legible (falta de clave, tiempo límite, saldo agotado), el módulo LLM
+  etiqueta su error con el motivo. El texto del error no viaja: se queda en
+  el log.
 - Si falla la nube, se emite `llm:failed` con `tier: 'cloud'` y el turno sigue
   en local, como antes. Si falla también el local (o un paso anterior), se
   emite otro con `tier: 'local'` y después la respuesta de error de siempre

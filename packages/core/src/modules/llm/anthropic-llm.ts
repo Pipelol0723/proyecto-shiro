@@ -37,7 +37,7 @@ import type {
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
 import { type Emotion, EMOTIONS, isEmotion } from '../../types/emotions.js';
-import { MISSING_API_KEY_CODE } from '../../types/turn-failure.js';
+import type { TurnFailureReason } from '../../types/turn-failure.js';
 
 // ─── Schema de config ─────────────────────────────────────────────────
 
@@ -63,14 +63,33 @@ export type AnthropicLLMConfig = z.infer<typeof AnthropicLLMConfigSchema>;
 // ─── Errores ──────────────────────────────────────────────────────────
 
 export class AnthropicLLMError extends Error {
-  /** Marca los fallos que no vienen de la API (hoy, solo la falta de clave). */
-  readonly code?: string;
+  /**
+   * Motivo del fallo cuando el error del SDK no trae una pista que se pueda
+   * leer desde fuera. Lo usa `classifyTurnFailure`.
+   */
+  readonly failureReason?: TurnFailureReason;
 
-  constructor(message: string, cause?: unknown, code?: string) {
+  constructor(message: string, cause?: unknown, failureReason?: TurnFailureReason) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'AnthropicLLMError';
-    if (code !== undefined) this.code = code;
+    if (failureReason !== undefined) this.failureReason = failureReason;
   }
+}
+
+/**
+ * Motivo de un error del SDK que no se deduce de su `status`:
+ * - Un fallo de conexión o un tiempo límite no traen `status`, `cause` ni
+ *   `code`, y el SDK no fija `name`.
+ * - El saldo agotado llega como un 400 corriente; solo lo distingue el texto.
+ * Lo demás (401, 404, 429, 5xx) lo clasifica `classifyTurnFailure` por el
+ * `status` de la causa.
+ */
+function sdkFailureReason(err: unknown): TurnFailureReason | undefined {
+  if (err instanceof Anthropic.APIConnectionError) return 'unavailable';
+  if (err instanceof Anthropic.BadRequestError && /credit balance/i.test(err.message)) {
+    return 'quota';
+  }
+  return undefined;
 }
 
 // ─── Opciones de DI ───────────────────────────────────────────────────
@@ -164,7 +183,7 @@ export class AnthropicLLM implements ILLMModule {
       throw new AnthropicLLMError(
         'AnthropicLLM: ANTHROPIC_API_KEY no está configurada — no se puede invocar generate.',
         undefined,
-        MISSING_API_KEY_CODE,
+        'missing-key',
       );
     }
 
@@ -182,7 +201,11 @@ export class AnthropicLLM implements ILLMModule {
         tool_choice: { type: 'tool', name: TOOL_NAME },
       });
     } catch (err) {
-      throw new AnthropicLLMError('AnthropicLLM: fallo al llamar a la API', err);
+      throw new AnthropicLLMError(
+        'AnthropicLLM: fallo al llamar a la API',
+        err,
+        sdkFailureReason(err),
+      );
     }
 
     const { text, emotion } = this.extractToolUse(response);
@@ -210,7 +233,7 @@ export class AnthropicLLM implements ILLMModule {
       throw new AnthropicLLMError(
         'AnthropicLLM: ANTHROPIC_API_KEY no está configurada — no se puede invocar generateWithTools.',
         undefined,
-        MISSING_API_KEY_CODE,
+        'missing-key',
       );
     }
     const client = this.client;
@@ -241,7 +264,11 @@ export class AnthropicLLM implements ILLMModule {
           tool_choice: { type: 'any' },
         });
       } catch (err) {
-        throw new AnthropicLLMError('AnthropicLLM: fallo al llamar a la API (tool loop)', err);
+        throw new AnthropicLLMError(
+          'AnthropicLLM: fallo al llamar a la API (tool loop)',
+          err,
+          sdkFailureReason(err),
+        );
       }
       totalTokens += response.usage.input_tokens + response.usage.output_tokens;
       // Un tool_use grande (p.ej. `fs:write` de un archivo entero) truncado por

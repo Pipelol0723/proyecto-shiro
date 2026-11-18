@@ -10,7 +10,7 @@ export const TURN_FAILURE_REASONS = [
   'missing-key',
   /** El servicio rechazó la clave (401 o 403). */
   'auth',
-  /** Límite de uso o de saldo (429). */
+  /** Límite de uso (429) o saldo agotado. */
   'quota',
   /** El servicio no responde o falla: red, tiempo límite o 5xx. */
   'unavailable',
@@ -21,8 +21,10 @@ export const TURN_FAILURE_REASONS = [
 
 export type TurnFailureReason = (typeof TURN_FAILURE_REASONS)[number];
 
-/** `code` de los errores de «falta la clave» de los módulos LLM. */
-export const MISSING_API_KEY_CODE = 'MISSING_API_KEY';
+/** `true` si el valor es uno de los motivos de la lista cerrada. */
+export function isTurnFailureReason(value: unknown): value is TurnFailureReason {
+  return typeof value === 'string' && (TURN_FAILURE_REASONS as readonly string[]).includes(value);
+}
 
 const UNAVAILABLE_CODES = new Set([
   'ECONNREFUSED',
@@ -43,9 +45,12 @@ const MAX_CAUSE_DEPTH = 5;
 
 /**
  * Clasifica un fallo recorriendo su cadena `cause`: gana el primer nivel con
- * una pista reconocible (`code`, `status` o `name`). Los módulos LLM envuelven
- * el error real en uno genérico, así que el motivo suele estar uno o dos
- * niveles más abajo.
+ * una pista reconocible. Los módulos LLM envuelven el error real en uno
+ * genérico, así que el motivo suele estar uno o dos niveles más abajo.
+ *
+ * Pistas, por orden: la etiqueta `failureReason` que pone el propio módulo
+ * cuando su SDK no deja otra (falta de clave, tiempo límite, saldo agotado),
+ * el `status` HTTP, el `code` de red y el `name` de una petición abortada.
  */
 export function classifyTurnFailure(err: unknown): TurnFailureReason {
   const seen = new Set<unknown>();
@@ -53,7 +58,7 @@ export function classifyTurnFailure(err: unknown): TurnFailureReason {
   for (let depth = 0; depth <= MAX_CAUSE_DEPTH; depth += 1) {
     if (typeof current !== 'object' || current === null || seen.has(current)) break;
     seen.add(current);
-    const level = current as { code?: unknown; status?: unknown; name?: unknown; cause?: unknown };
+    const level = current as FailureLevel & { cause?: unknown };
     const reason = classifyLevel(level);
     if (reason !== undefined) return reason;
     current = level.cause;
@@ -61,12 +66,15 @@ export function classifyTurnFailure(err: unknown): TurnFailureReason {
   return 'unknown';
 }
 
-function classifyLevel(level: {
+interface FailureLevel {
+  failureReason?: unknown;
   code?: unknown;
   status?: unknown;
   name?: unknown;
-}): TurnFailureReason | undefined {
-  if (level.code === MISSING_API_KEY_CODE) return 'missing-key';
+}
+
+function classifyLevel(level: FailureLevel): TurnFailureReason | undefined {
+  if (isTurnFailureReason(level.failureReason)) return level.failureReason;
   if (typeof level.status === 'number') {
     if (level.status === 401 || level.status === 403) return 'auth';
     if (level.status === 429) return 'quota';
