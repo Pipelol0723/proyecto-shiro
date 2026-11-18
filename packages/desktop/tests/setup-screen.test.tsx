@@ -148,3 +148,14 @@ describe('SetupScreen — vivo frente a listo', () => {
     expect(within(cardOf('Whisper (STT)')).getByText(/✓ activo/)).toBeDefined();
   });
 });
+
+describe('SetupScreen — Whisper caído', () => {
+  it('avisa de que, recién arrancado, puede estar cargando el modelo', () => {
+    state.report = {
+      ...makeReport({ anthropic: true, elevenlabs: true, gemini: true }),
+      services: { ollama: 'ok', letta: 'ok', whisper: 'down' },
+    };
+    render(<SetupScreen />);
+    expect(within(cardOf('Whisper (STT)')).getByText(/recién arrancado/)).toBeDefined();
+  });
+});

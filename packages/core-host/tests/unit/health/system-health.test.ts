@@ -22,19 +22,23 @@ function makeConfig(overrides?: {
   localModel?: string;
   classifierModel?: string;
   embeddingModel?: string;
+  embeddingEndpoint?: string;
+  lettaModel?: string;
+  localActive?: string;
+  routerActive?: string;
 }): ModulesConfig {
   return {
     version: 1,
     modules: {
       llm: {
         local: {
-          active: 'OllamaLLM',
+          active: overrides?.localActive ?? 'OllamaLLM',
           config: { host: overrides?.ollamaHost, model: overrides?.localModel },
         },
         cloud: { active: 'AnthropicLLM', config: {} },
       },
       router: {
-        active: 'HybridRouter',
+        active: overrides?.routerActive ?? 'HybridRouter',
         config: { classifier_model: overrides?.classifierModel },
       },
       stt: { active: 'WhisperSTT', config: { service_url: overrides?.whisperUrl } },
@@ -42,7 +46,12 @@ function makeConfig(overrides?: {
       memory: {
         active: 'MemoryManager',
         config: {
-          letta: { base_url: overrides?.lettaUrl, embedding_model: overrides?.embeddingModel },
+          letta: {
+            base_url: overrides?.lettaUrl,
+            embedding_model: overrides?.embeddingModel,
+            embedding_endpoint: overrides?.embeddingEndpoint,
+            model: overrides?.lettaModel,
+          },
         },
       },
       avatar: { active: 'Live2DAvatar', config: {} },
@@ -103,6 +112,43 @@ describe('resolveHealthTargets', () => {
       }),
     );
     expect(targets.ollamaModels).toEqual(['qwen2.5:3b', 'mxbai-embed-large']);
+  });
+
+  it('sin modelos en el YAML, exige los que los módulos usan por defecto', () => {
+    const targets = resolveHealthTargets(makeConfig());
+    expect(targets.ollamaModels).toEqual(['qwen2.5:3b', 'mxbai-embed-large']);
+  });
+
+  it('el modelo del agente de Letta cuenta, sin su prefijo «ollama/»', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({ localModel: 'qwen2.5:3b', lettaModel: 'ollama/qwen2.5:7b' }),
+    );
+    expect(targets.ollamaModels).toContain('qwen2.5:7b');
+    expect(targets.ollamaModels).not.toContain('ollama/qwen2.5:7b');
+  });
+
+  it('no exige el modelo de un slot que no usa Ollama', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({
+        localActive: 'OtroLLM',
+        localModel: 'modelo-de-otro',
+        routerActive: 'OtroRouter',
+        classifierModel: 'clasificador-de-otro',
+      }),
+    );
+    expect(targets.ollamaModels).not.toContain('modelo-de-otro');
+    expect(targets.ollamaModels).not.toContain('clasificador-de-otro');
+  });
+
+  it('no exige los modelos de Letta si sus embeddings van a otro Ollama', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({
+        localModel: 'qwen2.5:3b',
+        embeddingEndpoint: 'http://otra-maquina:11434/v1',
+        embeddingModel: 'embeddings-de-otra',
+      }),
+    );
+    expect(targets.ollamaModels).not.toContain('embeddings-de-otra');
   });
 
   it('cae a los defaults cuando la config no trae URLs', () => {
@@ -322,6 +368,29 @@ describe('checkSystemHealth — vivo frente a listo', () => {
       }),
     });
     expect(report.readiness).toEqual({ whisper: 'cpu' });
+  });
+
+  it('un modelo sin etiqueta de un registro con puerto también vale con su «:latest»', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      ollamaModels: ['localhost:5000/equipo/modelo'],
+      fetchImpl: makeJsonFetch({
+        ollama: { models: [{ name: 'localhost:5000/equipo/modelo:latest' }] },
+        whisper: whisperGpu,
+      }),
+    });
+    expect(report.readiness).toBeUndefined();
+  });
+
+  it('tolera elementos raros en la lista de Ollama', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({
+        ollama: { models: [null, 3, {}, { name: 'qwen2.5:3b' }, { name: 7 }] },
+        whisper: whisperGpu,
+      }),
+    });
+    expect(report.readiness).toEqual({ ollamaMissingModels: ['mxbai-embed-large'] });
   });
 
   it('un servicio caído no lleva readiness', async () => {
