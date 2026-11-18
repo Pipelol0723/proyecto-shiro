@@ -67,7 +67,7 @@ Decisiones del dueño tomadas al cerrar la Fase 1. Mandan sobre lo que digan las
 - **Fase 2, aprobada.** Se ejecuta intercalada con la vía del avatar ([«Vía paralela: avatar y modelos»](#vía-paralela-avatar-y-modelos)).
 - **Fase 5, reducida a su mínima expresión.** La estación, el móvil y los demás clientes no llegarán pronto. Se quedan P-17 y P-39; P-37, P-38, P-41a, P-40 y P-41b esperan a que se planee un segundo cliente. La «puerta de la estación» deja de tener fecha.
 - **Fase 4, recortada.** Esperan también los dos ítems que solo sirven para sacar servicios del portátil: P-34 (ADR 0032, topología por entorno) y P-35 (URL de STT publicada por el core-host). El resto de la fase no cambia y sigue pendiente de aprobación.
-- **Avatar.** Shiro tendrá tres modelos (chibi, 2D y 3D) que se cambian en caliente. Decide ella: lo que diga el dueño influye en su decisión pero no la cambia, y para asegurar un modelo existe «fijar». El orden de trabajo y lo ya decidido están en la vía paralela; el detalle, en el ADR 0035, propuesto en el PR #157 y pendiente de que el dueño lo acepte.
+- **Avatar.** Shiro tendrá tres modelos (chibi, 2D y 3D) que se cambian en caliente. Decide ella: lo que diga el dueño influye en su decisión pero no la cambia, y para asegurar un modelo existe «fijar». El orden de trabajo y lo ya decidido están en la vía paralela; el detalle, en el [ADR 0035](adr/0035-avatar-eleccion-de-modelo-en-caliente.md), que el dueño aceptó el 2026-11-18.
 - **Fusión.** El agente fusiona sus PRs y deja para el dueño los que sean un cambio grande o muy extenso (nota del 2026-11-14 en ADR 0029).
 - **Voz de Gemini.** Implementada y sin activar (ADR 0034): la voz por defecto sigue siendo ElevenLabs mientras la clave esté en el nivel gratuito.
 
@@ -315,7 +315,7 @@ Fuera de las fases. Decidida por el dueño el 2026-11-14; se intercala con la Fa
 
 **La idea.** Shiro tendrá tres modelos: la **chibi** (el más fácil y barato; el primero en hacerse, probarse e integrarse), el **2D** (el modelo VTuber completo y el principal; el primero será solo de torso, por presupuesto) y el **3D** (el modelo «completo»). Los tres se cambian en caliente, y lo deciden Shiro y el usuario según el rendimiento, los recursos, la latencia, la emoción o las ganas: chibi o 2D mientras el dueño juega o hace stream, 3D cuando está solo con ella, chibi al «dormirse» para ahorrar recursos, chibi en una Raspberry o en el móvil. Todos los modelos valen en el modo normal y en el modo overlay.
 
-**Qué cubre ya un ADR.** [ADR 0028](adr/0028-avatar-motores-y-manifiesto.md) decide el contrato común de los motores, el manifiesto por modelo y el selector que elige uno al arrancar. Deja fuera a propósito el cambio en caliente y que lo decida Shiro: eso pide un ADR nuevo (AV-1).
+**Qué cubre ya un ADR.** [ADR 0028](adr/0028-avatar-motores-y-manifiesto.md) decide el contrato común de los motores, el manifiesto por modelo y el selector que elige uno al arrancar. Deja fuera a propósito el cambio en caliente y que lo decida Shiro: eso lo decide el [ADR 0035](adr/0035-avatar-eleccion-de-modelo-en-caliente.md) (AV-1), aceptado el 2026-11-18.
 
 **Decidido por el dueño (2026-11-14):**
 
@@ -327,16 +327,16 @@ Fuera de las fases. Decidida por el dueño el 2026-11-14; se intercala con la Fa
 - Los **dispositivos van al final**: no hay ninguno comprado ni planeado.
 - El **modo overlay** se queda donde estaba: después de la base del rediseño de la app.
 
-| ID   | Paso                                                                                                | Depende de                                             |
-| ---- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| AV-1 | ADR 0035 (propuesto, PR #157): quién decide el modelo, con qué señales y cómo se cambia en caliente | Que el dueño lo acepte                                 |
-| AV-2 | Chibi en la app: contrato, manifiesto, selector y motor de capas, con la mirada móvil (ADR 0028)    | —                                                      |
-| AV-3 | Cambio manual de modelo desde la app                                                                | AV-1 y AV-2                                            |
-| AV-4 | Reglas automáticas: «dormida» pasa a chibi; con pocos recursos, a un modelo más ligero              | AV-3 y P-16 (rendimiento y latencia medidos)           |
-| AV-5 | Shiro decide: su preferencia cuenta en la elección                                                  | AV-4                                                   |
-| AV-6 | Los mismos modelos en el modo overlay                                                               | Modo overlay (enmienda de ADR 0024 §3)                 |
-| AV-7 | Modelo por dispositivo (Raspberry, móvil; en un ESP32, fotogramas ya dibujados)                     | Protocolo multicliente (resto de la Fase 5, en espera) |
-| AV-8 | Modelos 2D (Live2D, torso primero) y 3D (VRM, motor nuevo con su ADR)                               | Que existan el arte y el modelo; medir el 3D en la GPU |
+| ID                    | Paso                                                                                                                                          | Depende de                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| ~~AV-1~~ (2026-11-18) | [ADR 0035](adr/0035-avatar-eleccion-de-modelo-en-caliente.md), aceptado: quién decide el modelo, con qué señales y cómo se cambia en caliente | —                                                      |
+| AV-2                  | Chibi en la app: contrato, manifiesto, selector y motor de capas, con la mirada móvil (ADR 0028)                                              | —                                                      |
+| AV-3                  | Cambio manual de modelo desde la app                                                                                                          | AV-1 y AV-2                                            |
+| AV-4                  | Reglas automáticas: «dormida» pasa a chibi; con pocos recursos, a un modelo más ligero                                                        | AV-3 y P-16 (rendimiento y latencia medidos)           |
+| AV-5                  | Shiro decide: su preferencia cuenta en la elección                                                                                            | AV-4                                                   |
+| AV-6                  | Los mismos modelos en el modo overlay                                                                                                         | Modo overlay (enmienda de ADR 0024 §3)                 |
+| AV-7                  | Modelo por dispositivo (Raspberry, móvil; en un ESP32, fotogramas ya dibujados)                                                               | Protocolo multicliente (resto de la Fase 5, en espera) |
+| AV-8                  | Modelos 2D (Live2D, torso primero) y 3D (VRM, motor nuevo con su ADR)                                                                         | Que existan el arte y el modelo; medir el 3D en la GPU |
 
 AV-2 es el primer PR de código y lo revisa el dueño: cambia cómo la app elige y maneja el avatar. Las piezas, el prototipo y el modelo de prueba los prepara la sesión de diseño del personaje; el código de `packages/desktop` lo escribe una sola sesión.
 
