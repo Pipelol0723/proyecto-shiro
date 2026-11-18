@@ -80,8 +80,11 @@ export interface ServiceReadiness {
   /** Modelos de la configuración que Ollama no tiene descargados. */
   ollamaMissingModels?: string[];
   /**
-   * Whisper responde pero todavía carga el modelo (`loading`: aún no
-   * transcribe) o transcribe en CPU (`cpu`: funciona, más lento).
+   * Whisper transcribe en CPU (`cpu`: funciona, más lento) o responde pero
+   * todavía carga el modelo (`loading`: aún no transcribe). Hoy el servicio no
+   * abre el puerto hasta cargar el modelo, así que `loading` no llega: mientras
+   * carga, sale como caído. El valor queda previsto para cuando cargue en
+   * segundo plano.
    */
   whisper?: 'loading' | 'cpu';
 }

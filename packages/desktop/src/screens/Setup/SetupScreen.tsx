@@ -111,15 +111,20 @@ function StatusBadge({
   checking,
   unknown = false,
   notReady,
+  problem,
 }: {
   ok: boolean;
   checking: boolean;
   /** Sin reporte porque el core-host no responde: no se sabe, no es «no detectado». */
   unknown?: boolean;
-  /** El servicio responde pero no está listo: se dice qué le pasa, no «activo». */
+  /** El servicio responde pero aún no está listo: se dice qué espera, no «activo». */
   notReady?: string;
+  /** El servicio responde pero le falta algo que hay que arreglar. */
+  problem?: string;
 }): JSX.Element {
   if (unknown) return <span className={`${styles.badge} ${styles.badgeChecking}`}>sin datos</span>;
+  if (problem !== undefined)
+    return <span className={`${styles.badge} ${styles.badgeDown}`}>{problem}</span>;
   if (notReady !== undefined)
     return <span className={`${styles.badge} ${styles.badgeChecking}`}>{notReady}</span>;
   if (checking)
@@ -194,14 +199,13 @@ export function SetupScreen(): JSX.Element {
             const missing =
               ok && svc.key === 'ollama' ? (report?.readiness?.ollamaMissingModels ?? []) : [];
             const whisper = ok && svc.key === 'whisper' ? report?.readiness?.whisper : undefined;
-            const notReady =
+            const problem =
               missing.length === 1
                 ? 'falta un modelo'
                 : missing.length > 1
                   ? `faltan ${String(missing.length)} modelos`
-                  : whisper === 'loading'
-                    ? 'cargando el modelo…'
-                    : undefined;
+                  : undefined;
+            const notReady = whisper === 'loading' ? 'cargando el modelo…' : undefined;
             return (
               <li key={svc.key} className={styles.card}>
                 <div className={styles.cardHead}>
@@ -211,6 +215,7 @@ export function SetupScreen(): JSX.Element {
                     checking={report === null && checking}
                     unknown={unreachable}
                     {...(notReady !== undefined && { notReady })}
+                    {...(problem !== undefined && { problem })}
                   />
                 </div>
                 <p className={styles.cardPurpose}>{svc.purpose}</p>
@@ -241,6 +246,12 @@ export function SetupScreen(): JSX.Element {
                   <>
                     <code className={styles.command}>{svc.command}</code>
                     <p className={styles.degraded}>{svc.degraded}</p>
+                    {svc.key === 'whisper' && (
+                      <p className={styles.degraded}>
+                        Si está recién arrancado, puede estar cargando el modelo: hasta que termina
+                        no contesta. Espera un minuto y pulsa «rechequear».
+                      </p>
+                    )}
                   </>
                 )}
               </li>

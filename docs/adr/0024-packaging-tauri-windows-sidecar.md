@@ -282,10 +282,17 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
 - El informe `system:health` gana un campo opcional, **`readiness`**, con lo
   que le falta a un servicio que responde para poder usarse: los modelos de la
   configuración que Ollama no tiene descargados (`ollamaMissingModels`) y si
-  Whisper todavía carga su modelo o transcribe en CPU (`whisper`). `services`
+  Whisper transcribe en CPU o todavía carga su modelo (`whisper`). `services`
   no cambia: sigue diciendo solo si el servicio responde.
-- El asistente deja de marcar «activo» a un Ollama sin modelos o a un Whisper
-  que aún carga, dice qué modelo falta y da el comando para bajarlo.
+- Los modelos exigidos salen de leer cada slot con el esquema de su módulo
+  (así cuentan también los valores por defecto), y solo de los slots que usan
+  ese mismo Ollama.
+- El asistente deja de marcar «activo» a un Ollama sin modelos, dice qué
+  modelo falta y da el comando para bajarlo.
+- **Límite conocido**: el servicio Whisper no abre su puerto hasta cargar el
+  modelo, así que mientras carga sigue saliendo «no detectado» (el asistente
+  lo avisa en esa tarjeta). El estado «cargando» queda previsto para cuando el
+  servicio cargue en segundo plano; hoy no llega.
 - Si la respuesta de un servicio no se puede leer, cuenta como vivo y no se
   afirma nada más: el chequeo no inventa fallos.
 - Motivo: el asistente podía salir todo en verde con el chat roto (R-280,

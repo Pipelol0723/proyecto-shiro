@@ -20,6 +20,8 @@ import type {
   ServiceStatus,
   SystemHealthReport,
 } from '@proyecto-shiro/core';
+import { HybridRouterConfigSchema, OllamaLLMConfigSchema } from '@proyecto-shiro/core';
+import { LettaMemoryConfigSchema } from '@proyecto-shiro/core/node';
 
 /** URLs base de los tres servicios externos a chequear. */
 export interface HealthTargets {
@@ -44,26 +46,83 @@ export function resolveHealthTargets(config: ModulesConfig): HealthTargets {
   const llmLocal = config.modules.llm.local.config;
   const memory = config.modules.memory.config;
   const stt = config.modules.stt.config;
-  const router = config.modules.router.config;
 
   const lettaCfg =
     memory !== undefined && typeof memory.letta === 'object' && memory.letta !== null
       ? (memory.letta as Record<string, unknown>)
       : undefined;
 
+  const ollamaUrl = readString(llmLocal?.host, DEFAULT_OLLAMA);
   return {
-    ollamaUrl: readString(llmLocal?.host, DEFAULT_OLLAMA),
+    ollamaUrl,
     lettaUrl: readString(lettaCfg?.base_url, DEFAULT_LETTA),
     whisperUrl: readString(stt?.service_url, DEFAULT_WHISPER),
-    // El LLM local, el clasificador del router y los embeddings de Letta.
-    ollamaModels: [
-      ...new Set(
-        [llmLocal?.model, router?.classifier_model, lettaCfg?.embedding_model].filter(
-          (m): m is string => typeof m === 'string' && m.length > 0,
-        ),
-      ),
-    ],
+    ollamaModels: expectedOllamaModels(config, ollamaUrl, lettaCfg),
   };
+}
+
+const OLLAMA_PREFIX = 'ollama/';
+
+/**
+ * Modelos que la configuración espera encontrar en el Ollama de `ollamaUrl`.
+ *
+ * Cada slot se lee con el esquema de su módulo, para exigir también los
+ * modelos que se usan por defecto sin estar escritos en el YAML. Solo cuentan
+ * los slots que de verdad usan ese Ollama: avisar de que «falta» un modelo que
+ * nadie usa, o que vive en otro servidor, es peor que no avisar.
+ */
+function expectedOllamaModels(
+  config: ModulesConfig,
+  ollamaUrl: string,
+  lettaCfg: Record<string, unknown> | undefined,
+): string[] {
+  const { llm, router, memory } = config.modules;
+  const models: string[] = [];
+
+  if (llm.local.active === 'OllamaLLM') {
+    const parsed = OllamaLLMConfigSchema.safeParse(llm.local.config ?? {});
+    if (parsed.success) models.push(parsed.data.model);
+  }
+  if (router.active === 'HybridRouter') {
+    const parsed = HybridRouterConfigSchema.safeParse(router.config ?? {});
+    if (parsed.success && sameOllama(parsed.data.classifier_host, ollamaUrl)) {
+      models.push(parsed.data.classifier_model);
+    }
+  }
+  // Letta usa Ollama para los embeddings y como modelo de su agente. Su
+  // endpoint está escrito desde dentro del contenedor (host.docker.internal).
+  if (memory.active === 'MemoryManager' && lettaCfg !== undefined) {
+    const parsed = LettaMemoryConfigSchema.safeParse(lettaCfg);
+    if (parsed.success && sameOllama(parsed.data.embedding_endpoint, ollamaUrl)) {
+      models.push(parsed.data.embedding_model);
+      if (parsed.data.model.startsWith(OLLAMA_PREFIX)) {
+        models.push(parsed.data.model.slice(OLLAMA_PREFIX.length));
+      }
+    }
+  }
+  return [...new Set(models)];
+}
+
+/** Nombres con los que se llega a esta misma máquina, también desde Docker. */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', 'host.docker.internal']);
+
+/** `true` si las dos URLs apuntan al mismo servidor de Ollama. */
+function sameOllama(a: string, b: string): boolean {
+  try {
+    const x = new URL(a);
+    const y = new URL(b);
+    if (portOf(x) !== portOf(y)) return false;
+    return (
+      x.hostname === y.hostname || (LOCAL_HOSTS.has(x.hostname) && LOCAL_HOSTS.has(y.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function portOf(url: URL): string {
+  if (url.port !== '') return url.port;
+  return url.protocol === 'https:' ? '443' : '80';
 }
 
 function readString(value: unknown, fallback: string): string {
@@ -148,8 +207,10 @@ interface ProbeResult {
 /**
  * Modelos de `wanted` que no aparecen en la respuesta de `/api/tags`
  * (`{ models: [{ name }] }`). Ollama lista siempre con etiqueta, así que un
- * modelo pedido sin etiqueta vale con su `:latest`. Si la respuesta no tiene
- * la forma esperada devuelve `[]`: no se inventa que falte nada.
+ * modelo pedido sin etiqueta vale con su `:latest`. La etiqueta se busca tras
+ * la última barra: un registro con puerto (`host:5000/ns/modelo`) no la tiene.
+ * Si la respuesta no tiene la forma esperada devuelve `[]`: no se inventa que
+ * falte nada.
  */
 function missingOllamaModels(body: unknown, wanted: readonly string[]): string[] {
   if (typeof body !== 'object' || body === null) return [];
@@ -162,8 +223,9 @@ function missingOllamaModels(body: unknown, wanted: readonly string[]): string[]
       )
       .filter((name): name is string => typeof name === 'string'),
   );
+  const hasTag = (model: string): boolean => model.slice(model.lastIndexOf('/') + 1).includes(':');
   return wanted.filter(
-    (model) => !names.has(model) && !(!model.includes(':') && names.has(`${model}:latest`)),
+    (model) => !names.has(model) && !(!hasTag(model) && names.has(`${model}:latest`)),
   );
 }
 
