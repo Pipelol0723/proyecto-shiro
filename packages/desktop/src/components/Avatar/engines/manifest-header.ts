@@ -74,13 +74,15 @@ export const mapKey = z
  *   analizador de URL los quita o los recorta, así que lo comprobado dejaría de
  *   ser lo que se carga (`".\t./x"` se resuelve como `"../x"`).
  * - El segmento `.`.
+ * - `|`: con una base `file:`, `C|/x` es la forma antigua de escribir una
+ *   letra de unidad y se resolvería como `file:///C:/x`.
  *
  * Como última barrera, resuelve la ruta con el propio analizador de URL y
  * exige que el resultado sea exactamente la carpeta más la ruta.
  */
 export function isSafeRelativePath(route: string): boolean {
   if (route === '' || route.length > MAX_PATH_LENGTH) return false;
-  if (/[\u0000-\u0020\u007f-\u009f\\%?#]/.test(route)) return false;
+  if (/[\u0000-\u0020\u007f-\u009f\\%?#|]/.test(route)) return false;
   // Un esquema (`https:`, `data:`, `file:`) o una letra de unidad (`C:`).
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(route)) return false;
   const segments = route.split('/');
