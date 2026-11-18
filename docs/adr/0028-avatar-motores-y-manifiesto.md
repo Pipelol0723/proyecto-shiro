@@ -1,6 +1,6 @@
 # ADR 0028: Avatar — motores intercambiables, manifiesto por modelo y motor de capas
 
-- **Status**: Accepted (sin implementar; integración en el cliente aprobada el 2026-11-14)
+- **Status**: Accepted (en implementación: paso AV-2 del plan)
 - **Fecha**: 2026-11-12
 - **Decidido por**: Pipelol
 
@@ -197,3 +197,26 @@ Las capas de la chibi salen del borrador original del personaje y van en
   Sigue sin implementar.
 - El cambio de modelo con la app en marcha, que este ADR deja fuera, se
   propone en el ADR 0035 (pendiente de aceptar).
+
+## Nota 2026-11-18 — AV-2 en curso: contrato y selector
+
+- **Hecho** (paso AV-2 del plan): el selector por candidatos con tiempo límite
+  y el contrato de los motores. Live2D pasa a ser un candidato más, sin cambio
+  visible. El esquema del manifiesto va en su propio PR; falta el motor de
+  capas.
+- **Dónde quedó cada cosa.** El contrato está en `engines/types.ts` y el
+  selector en `engines/select.ts`. El esquema va en
+  `engines/manifest-header.ts` (cabecera común) y `engines/layers/manifest.ts`,
+  no dentro de `types.ts` como preveían las notas de implementación. Los
+  archivos de Live2D siguen donde estaban: moverlos a `engines/live2d/` queda
+  para un cambio aparte, sin mezclarlo con este.
+- **`setLookAt` se amplía**: acepta `null` (devuelve la mirada a la expresión)
+  y la `y` es opcional. Lo usa el prototipo y lo necesita el traspaso de
+  estado del ADR 0035.
+- **Hiyori sigue sin manifiesto.** Su candidato lleva la configuración de
+  siempre. El §2 preveía darle uno; se hará cuando haya un modelo Live2D de
+  Shiro: el de prueba lo descarga cada uno, y exigirle un archivo más rompería
+  las instalaciones que ya funcionan.
+- **Si el motor montado falla**, el selector pasa al siguiente candidato; el
+  orbe solo sale cuando no queda ninguno. Antes, con un solo motor, caía
+  directamente al orbe.

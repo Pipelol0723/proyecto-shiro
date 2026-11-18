@@ -15,12 +15,16 @@
 
 /**
  * Devuelve `true` si la URL responde con 2xx a un HEAD request. Nunca
- * lanza — un fail (404, red, CORS) se trata como "no disponible".
+ * lanza — un fail (404, red, CORS) se trata como "no disponible". Con
+ * `signal`, el selector puede cortar la petición al agotar su tiempo límite.
  */
-export async function isModelReachable(modelPath: string): Promise<boolean> {
+export async function isModelReachable(modelPath: string, signal?: AbortSignal): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   try {
-    const response = await fetch(modelPath, { method: 'HEAD' });
+    const response = await fetch(modelPath, {
+      method: 'HEAD',
+      ...(signal !== undefined && { signal }),
+    });
     return response.ok;
   } catch {
     return false;
