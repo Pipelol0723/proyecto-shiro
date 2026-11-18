@@ -5,6 +5,12 @@
 > que el dueño apruebe su fase ([plan de mejora](../plan-mejora-2026-11.md)).
 > Lo que pide un ADR está marcado en el §9.
 >
+> **Actualización (2026-11-18).** El dueño aprobó el diseño el 2026-11-14 y
+> está en el plan como vía paralela
+> ([«Rediseño de la app»](../plan-mejora-2026-11.md#vía-paralela-rediseño-de-la-app),
+> pasos RD-1 a RD-10). Sigue sin implementar. De su §8 ya están hechos el error
+> del turno con causa y el «vivo» frente a «listo» (P-12).
+>
 > **Nota de autoría.** Lo redactó Claude (el asistente de IA con el que se
 > desarrolla el proyecto) a partir de una revisión de la app en marcha y de
 > las respuestas de Pipe a tres tandas de preguntas. Las decisiones del §1 son
