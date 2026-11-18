@@ -405,3 +405,25 @@ describe('checkSystemHealth — vivo frente a listo', () => {
     expect(report.readiness).toBeUndefined();
   });
 });
+
+describe('checkSystemHealth — clave de la nube', () => {
+  const targets = {
+    ollamaUrl: 'http://localhost:11434',
+    lettaUrl: 'http://localhost:8283',
+    whisperUrl: 'http://localhost:8765',
+  };
+
+  it.each(['auth', 'quota'] as const)('lleva al informe el problema «%s»', async (cloudIssue) => {
+    const report = await checkSystemHealth({
+      ...targets,
+      cloudIssue,
+      fetchImpl: makeFetch(() => 200),
+    });
+    expect(report.readiness).toEqual({ cloud: cloudIssue });
+  });
+
+  it('sin problema anotado no añade nada', async () => {
+    const report = await checkSystemHealth({ ...targets, fetchImpl: makeFetch(() => 200) });
+    expect(report.readiness).toBeUndefined();
+  });
+});
