@@ -268,3 +268,31 @@ describe('useCompanionState — hot path no se rompe por suscripciones', () => {
     });
   });
 });
+
+describe('useCompanionState — llm:failed', () => {
+  it('un llm:failed del bus queda anotado en el estado', async () => {
+    const bus = makeBus();
+    const { result } = renderHook(() => useCompanionState(), { wrapper: wrap(bus) });
+
+    await act(async () => {
+      await bus.emit('llm:failed', { reason: 'quota', tier: 'cloud', userId: 'me' });
+    });
+
+    expect(result.current[0].turnFailures).toEqual([{ reason: 'quota', tier: 'cloud' }]);
+  });
+
+  it('un motivo que no está en la lista cerrada se anota como «unknown»', async () => {
+    const bus = makeBus();
+    const { result } = renderHook(() => useCompanionState(), { wrapper: wrap(bus) });
+
+    await act(async () => {
+      await bus.emit('llm:failed', {
+        reason: 'inventado',
+        tier: 'cloud',
+        userId: 'me',
+      } as unknown as EventMap['llm:failed']);
+    });
+
+    expect(result.current[0].turnFailures).toEqual([{ reason: 'unknown', tier: 'cloud' }]);
+  });
+});
