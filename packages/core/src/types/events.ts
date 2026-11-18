@@ -19,6 +19,7 @@
 
 import type { Emotion } from './emotions.js';
 import type { MemoryEntry } from '../interfaces/IMemoryModule.js';
+import type { TurnFailureReason } from './turn-failure.js';
 
 /*
  * EventMap es deliberadamente un interface con keys literales para que
@@ -175,6 +176,14 @@ export interface EventMap {
     /** ms desde user:message hasta esta emisión. */
     latencyMs: number;
   };
+
+  /**
+   * Un LLM no pudo responder. `reason` es una lista cerrada: el texto del
+   * error no sale del servidor. El turno puede seguir con el otro modelo; si
+   * después llega un `llm:responded` normal, solo falló ese `tier`. Ver la
+   * nota del 2026-11-14 en ADR 0016.
+   */
+  'llm:failed': { reason: TurnFailureReason; tier: 'local' | 'cloud'; userId: string };
 
   // ─── TTS (salida de voz) ────────────────────────────────────────────
   /**

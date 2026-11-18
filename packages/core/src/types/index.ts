@@ -14,3 +14,6 @@ export type {
   ServiceStatus,
   SystemHealthReport,
 } from './events.js';
+
+export type { TurnFailureReason } from './turn-failure.js';
+export { TURN_FAILURE_REASONS, classifyTurnFailure, isTurnFailureReason } from './turn-failure.js';
