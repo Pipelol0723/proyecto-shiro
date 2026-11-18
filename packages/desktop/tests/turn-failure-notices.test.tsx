@@ -34,6 +34,25 @@ describe('describeTurnFailure', () => {
     expect(texts.every((text) => text.length > 0)).toBe(true);
   });
 
+  it('en la nube, cada motivo tiene su propio texto', () => {
+    const texts = TURN_FAILURE_REASONS.map((reason) =>
+      describeTurnFailure({ reason, tier: 'cloud' }),
+    );
+    expect(new Set(texts).size).toBe(TURN_FAILURE_REASONS.length);
+  });
+
+  it('un fallo local sin motivo conocido no culpa al modelo: pudo ser otro paso', () => {
+    const text = describeTurnFailure({ reason: 'unknown', tier: 'local' });
+    expect(text).not.toMatch(/modelo local/);
+    expect(text).toMatch(/no pude/);
+  });
+
+  it('la nube no promete que el local vaya a responder: dice que lo prueba', () => {
+    expect(describeTurnFailure({ reason: 'auth', tier: 'cloud' })).toMatch(
+      /Pruebo con el modelo local/,
+    );
+  });
+
   it('un fallo de la nube dice que sigue con el modelo local', () => {
     for (const reason of TURN_FAILURE_REASONS) {
       expect(describeTurnFailure({ reason, tier: 'cloud' })).toMatch(/modelo local/);

@@ -295,4 +295,19 @@ describe('useCompanionState — llm:failed', () => {
 
     expect(result.current[0].turnFailures).toEqual([{ reason: 'unknown', tier: 'cloud' }]);
   });
+
+  it('un nivel que no es «cloud» ni «local» se trata como local', async () => {
+    const bus = makeBus();
+    const { result } = renderHook(() => useCompanionState(), { wrapper: wrap(bus) });
+
+    await act(async () => {
+      await bus.emit('llm:failed', {
+        reason: 'unavailable',
+        tier: 'otro',
+        userId: 'me',
+      } as unknown as EventMap['llm:failed']);
+    });
+
+    expect(result.current[0].turnFailures).toEqual([{ reason: 'unavailable', tier: 'local' }]);
+  });
 });
