@@ -156,6 +156,8 @@ export interface CheckSystemHealthOptions extends Omit<HealthTargets, 'ollamaMod
    * copia tal cual al informe; aquí no se vuelve a consultar.
    */
   geminiVoice?: GeminiVoiceStatus;
+  /** Lo que se sabe de la clave de la nube por los turnos (`watchCloudKey`). */
+  cloudIssue?: ServiceReadiness['cloud'];
 }
 
 /**
@@ -188,6 +190,7 @@ export async function checkSystemHealth(
   if (missing.length > 0) readiness.ollamaMissingModels = missing;
   const whisperState = whisperReadiness(whisper.body);
   if (whisperState !== undefined) readiness.whisper = whisperState;
+  if (options.cloudIssue !== undefined) readiness.cloud = options.cloudIssue;
 
   return {
     services: { ollama: ollama.status, letta: letta.status, whisper: whisper.status },

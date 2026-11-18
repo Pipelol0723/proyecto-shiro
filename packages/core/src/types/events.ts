@@ -87,6 +87,12 @@ export interface ServiceReadiness {
    * segundo plano.
    */
   whisper?: 'loading' | 'cpu';
+  /**
+   * La clave de la nube está, pero el último turno que la usó acabó con la
+   * nube rechazándola (`auth`) o sin cuota ni saldo (`quota`). Se borra cuando
+   * la nube vuelve a responder. No se comprueba con una petición de prueba.
+   */
+  cloud?: 'auth' | 'quota';
 }
 
 /**

@@ -289,6 +289,11 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
   ese mismo Ollama.
 - El asistente deja de marcar «activo» a un Ollama sin modelos, dice qué
   modelo falta y da el comando para bajarlo.
+- `readiness.cloud` dice si la nube rechazó la clave (`auth`) o no queda
+  cuota ni saldo (`quota`). No se hace ninguna petición de prueba: sale del
+  último turno que usó la nube (`llm:failed`, nota del 2026-11-14 en
+  [ADR 0016](0016-pipeline-conversational-wiring.md)) y se borra cuando la
+  nube vuelve a responder. Antes, una clave inválida salía en verde (R-296).
 - **Límite conocido**: el servicio Whisper no abre su puerto hasta cargar el
   modelo, así que mientras carga sigue saliendo «no detectado» (el asistente
   lo avisa en esa tarjeta). El estado «cargando» queda previsto para cuando el
@@ -296,5 +301,5 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
 - Si la respuesta de un servicio no se puede leer, cuenta como vivo y no se
   afirma nada más: el chequeo no inventa fallos.
 - Motivo: el asistente podía salir todo en verde con el chat roto (R-280,
-  R-155). Parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md). Queda
-  fuera el estado del agente de Letta.
+  R-155). Parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md). Quedan
+  fuera el estado del agente de Letta y el de las claves de voz.

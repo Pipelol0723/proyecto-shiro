@@ -159,3 +159,53 @@ describe('SetupScreen — Whisper caído', () => {
     expect(within(cardOf('Whisper (STT)')).getByText(/recién arrancado/)).toBeDefined();
   });
 });
+
+describe('SetupScreen — clave de la nube', () => {
+  const allKeys = { anthropic: true, elevenlabs: true, gemini: true };
+
+  it('si la nube rechazó la clave, no sale como activa y dice qué hacer', () => {
+    state.report = { ...makeReport(allKeys), readiness: { cloud: 'auth' } };
+    render(<SetupScreen />);
+    const card = cardOf('Anthropic (Claude)');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText('clave rechazada')).toBeDefined();
+    expect(within(card).getByText(/mal escrita o caducada/)).toBeDefined();
+  });
+
+  it('si no queda cuota o saldo, lo dice', () => {
+    state.report = { ...makeReport(allKeys), readiness: { cloud: 'quota' } };
+    render(<SetupScreen />);
+    const card = cardOf('Anthropic (Claude)');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText('sin cuota o saldo')).toBeDefined();
+  });
+
+  it('sin clave, manda «no detectado»: el problema de una clave que no está no se pinta', () => {
+    state.report = {
+      ...makeReport({ ...allKeys, anthropic: false }),
+      readiness: { cloud: 'auth' },
+    };
+    render(<SetupScreen />);
+    const card = cardOf('Anthropic (Claude)');
+    expect(within(card).getByText(/no detectado/)).toBeDefined();
+    expect(within(card).queryByText('clave rechazada')).toBeNull();
+  });
+
+  it('el problema de la nube no toca las otras claves', () => {
+    state.report = { ...makeReport(allKeys), readiness: { cloud: 'auth' } };
+    render(<SetupScreen />);
+    expect(within(cardOf('ElevenLabs')).getByText(/✓ activo/)).toBeDefined();
+  });
+});
+
+describe('SetupScreen — clave de la nube, texto', () => {
+  it('no promete el modelo local: solo lo ofrece si está disponible', () => {
+    state.report = {
+      ...makeReport({ anthropic: true, elevenlabs: true, gemini: true }),
+      readiness: { cloud: 'auth' },
+    };
+    render(<SetupScreen />);
+    const text = within(cardOf('Anthropic (Claude)')).getByText(/mal escrita o caducada/);
+    expect(text.textContent).toMatch(/si está disponible/);
+  });
+});
