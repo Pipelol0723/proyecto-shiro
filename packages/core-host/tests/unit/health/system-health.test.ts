@@ -19,20 +19,40 @@ function makeConfig(overrides?: {
   ollamaHost?: string;
   lettaUrl?: string;
   whisperUrl?: string;
+  localModel?: string;
+  classifierModel?: string;
+  embeddingModel?: string;
+  embeddingEndpoint?: string;
+  lettaModel?: string;
+  localActive?: string;
+  routerActive?: string;
 }): ModulesConfig {
   return {
     version: 1,
     modules: {
       llm: {
-        local: { active: 'OllamaLLM', config: { host: overrides?.ollamaHost } },
+        local: {
+          active: overrides?.localActive ?? 'OllamaLLM',
+          config: { host: overrides?.ollamaHost, model: overrides?.localModel },
+        },
         cloud: { active: 'AnthropicLLM', config: {} },
       },
-      router: { active: 'HybridRouter', config: {} },
+      router: {
+        active: overrides?.routerActive ?? 'HybridRouter',
+        config: { classifier_model: overrides?.classifierModel },
+      },
       stt: { active: 'WhisperSTT', config: { service_url: overrides?.whisperUrl } },
       tts: { active: 'ElevenLabsTTS', config: {} },
       memory: {
         active: 'MemoryManager',
-        config: { letta: { base_url: overrides?.lettaUrl } },
+        config: {
+          letta: {
+            base_url: overrides?.lettaUrl,
+            embedding_model: overrides?.embeddingModel,
+            embedding_endpoint: overrides?.embeddingEndpoint,
+            model: overrides?.lettaModel,
+          },
+        },
       },
       avatar: { active: 'Live2DAvatar', config: {} },
       tools: { active: 'ToolsRegistry', config: {} },
@@ -79,7 +99,56 @@ describe('resolveHealthTargets', () => {
       ollamaUrl: 'http://ollama:1',
       lettaUrl: 'http://letta:2',
       whisperUrl: 'http://whisper:3',
+      ollamaModels: [],
     });
+  });
+
+  it('reúne, sin repetir, los modelos que Ollama tiene que tener', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({
+        localModel: 'qwen2.5:3b',
+        classifierModel: 'qwen2.5:3b',
+        embeddingModel: 'mxbai-embed-large',
+      }),
+    );
+    expect(targets.ollamaModels).toEqual(['qwen2.5:3b', 'mxbai-embed-large']);
+  });
+
+  it('sin modelos en el YAML, exige los que los módulos usan por defecto', () => {
+    const targets = resolveHealthTargets(makeConfig());
+    expect(targets.ollamaModels).toEqual(['qwen2.5:3b', 'mxbai-embed-large']);
+  });
+
+  it('el modelo del agente de Letta cuenta, sin su prefijo «ollama/»', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({ localModel: 'qwen2.5:3b', lettaModel: 'ollama/qwen2.5:7b' }),
+    );
+    expect(targets.ollamaModels).toContain('qwen2.5:7b');
+    expect(targets.ollamaModels).not.toContain('ollama/qwen2.5:7b');
+  });
+
+  it('no exige el modelo de un slot que no usa Ollama', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({
+        localActive: 'OtroLLM',
+        localModel: 'modelo-de-otro',
+        routerActive: 'OtroRouter',
+        classifierModel: 'clasificador-de-otro',
+      }),
+    );
+    expect(targets.ollamaModels).not.toContain('modelo-de-otro');
+    expect(targets.ollamaModels).not.toContain('clasificador-de-otro');
+  });
+
+  it('no exige los modelos de Letta si sus embeddings van a otro Ollama', () => {
+    const targets = resolveHealthTargets(
+      makeConfig({
+        localModel: 'qwen2.5:3b',
+        embeddingEndpoint: 'http://otra-maquina:11434/v1',
+        embeddingModel: 'embeddings-de-otra',
+      }),
+    );
+    expect(targets.ollamaModels).not.toContain('embeddings-de-otra');
   });
 
   it('cae a los defaults cuando la config no trae URLs', () => {
@@ -203,5 +272,136 @@ describe('checkSystemHealth', () => {
   it('omite geminiVoice cuando no hay estado', async () => {
     const report = await checkSystemHealth({ ...targets, fetchImpl: makeFetch(() => 200) });
     expect('geminiVoice' in report).toBe(false);
+  });
+});
+
+describe('checkSystemHealth — vivo frente a listo', () => {
+  const targets = {
+    ollamaUrl: 'http://localhost:11434',
+    lettaUrl: 'http://localhost:8283',
+    whisperUrl: 'http://localhost:8765',
+    ollamaModels: ['qwen2.5:3b', 'mxbai-embed-large'],
+  };
+
+  /** fetch fake con cuerpo JSON por servicio; `undefined` = responde sin cuerpo legible. */
+  function makeJsonFetch(bodies: { ollama?: unknown; whisper?: unknown }): typeof fetch {
+    const impl = (input: string | URL): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input.href;
+      const isOllama = url.includes('11434');
+      const isWhisper = url.includes('8765');
+      const body = isOllama ? bodies.ollama : isWhisper ? bodies.whisper : {};
+      const res = {
+        ok: true,
+        status: 200,
+        json: () =>
+          body === undefined ? Promise.reject(new Error('no es JSON')) : Promise.resolve(body),
+      };
+      return Promise.resolve(res as Response);
+    };
+    return impl as typeof fetch;
+  }
+
+  const allModels = { models: [{ name: 'qwen2.5:3b' }, { name: 'mxbai-embed-large:latest' }] };
+  const whisperGpu = { status: 'ok', model: 'small', device: 'cuda' };
+
+  it('con todo listo, el informe no trae readiness', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({ ollama: allModels, whisper: whisperGpu }),
+    });
+    expect(report.services).toEqual({ ollama: 'ok', letta: 'ok', whisper: 'ok' });
+    expect(report.readiness).toBeUndefined();
+  });
+
+  it('Ollama responde pero le falta un modelo: sigue vivo y dice cuál', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({
+        ollama: { models: [{ name: 'mxbai-embed-large:latest' }, { name: 'llama3:8b' }] },
+        whisper: whisperGpu,
+      }),
+    });
+    expect(report.services.ollama).toBe('ok');
+    expect(report.readiness).toEqual({ ollamaMissingModels: ['qwen2.5:3b'] });
+  });
+
+  it('un modelo sin etiqueta vale con su «:latest»; uno con etiqueta no vale con otra', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({
+        ollama: { models: [{ name: 'mxbai-embed-large:latest' }, { name: 'qwen2.5:7b' }] },
+        whisper: whisperGpu,
+      }),
+    });
+    expect(report.readiness?.ollamaMissingModels).toEqual(['qwen2.5:3b']);
+  });
+
+  it('si la lista de Ollama no se puede leer, no se inventa que falten modelos', async () => {
+    const unreadable = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({ ollama: undefined, whisper: whisperGpu }),
+    });
+    const odd = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({ ollama: { models: 'raro' }, whisper: whisperGpu }),
+    });
+    expect(unreadable.services.ollama).toBe('ok');
+    expect(unreadable.readiness).toBeUndefined();
+    expect(odd.readiness).toBeUndefined();
+  });
+
+  it('Whisper cargando el modelo: vivo pero no listo', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({ ollama: allModels, whisper: { status: 'loading' } }),
+    });
+    expect(report.services.whisper).toBe('ok');
+    expect(report.readiness).toEqual({ whisper: 'loading' });
+  });
+
+  it('Whisper en CPU se avisa', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({
+        ollama: allModels,
+        whisper: { status: 'ok', model: 'small', device: 'cpu' },
+      }),
+    });
+    expect(report.readiness).toEqual({ whisper: 'cpu' });
+  });
+
+  it('un modelo sin etiqueta de un registro con puerto también vale con su «:latest»', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      ollamaModels: ['localhost:5000/equipo/modelo'],
+      fetchImpl: makeJsonFetch({
+        ollama: { models: [{ name: 'localhost:5000/equipo/modelo:latest' }] },
+        whisper: whisperGpu,
+      }),
+    });
+    expect(report.readiness).toBeUndefined();
+  });
+
+  it('tolera elementos raros en la lista de Ollama', async () => {
+    const report = await checkSystemHealth({
+      ...targets,
+      fetchImpl: makeJsonFetch({
+        ollama: { models: [null, 3, {}, { name: 'qwen2.5:3b' }, { name: 7 }] },
+        whisper: whisperGpu,
+      }),
+    });
+    expect(report.readiness).toEqual({ ollamaMissingModels: ['mxbai-embed-large'] });
+  });
+
+  it('un servicio caído no lleva readiness', async () => {
+    const down = (input: string | URL): Promise<Response> => {
+      const url = typeof input === 'string' ? input : input.href;
+      return url.includes('8283')
+        ? Promise.resolve({ ok: true, status: 200 } as Response)
+        : Promise.reject(new Error('network down'));
+    };
+    const report = await checkSystemHealth({ ...targets, fetchImpl: down as typeof fetch });
+    expect(report.services).toEqual({ ollama: 'down', letta: 'ok', whisper: 'down' });
+    expect(report.readiness).toBeUndefined();
   });
 });

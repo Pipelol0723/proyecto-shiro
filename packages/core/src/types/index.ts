@@ -11,6 +11,7 @@ export type {
   EventMap,
   EventName,
   GeminiVoiceStatus,
+  ServiceReadiness,
   ServiceStatus,
   SystemHealthReport,
 } from './events.js';

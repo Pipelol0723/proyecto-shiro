@@ -276,3 +276,25 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
 - §8: [ADR 0029](0029-proceso-de-mantenimiento-de-una-persona.md) fija que las versiones son tags `vX.Y.Z` sobre `develop`, que `main` solo avanza al publicar un tag y una checklist pre-release antes del próximo tag.
 - «ADR 0022/0023 (Proposed)» del Contexto refleja el momento de escribirlo; ambos están Accepted.
 - Enmiendas planificadas en el plan de mejora, sin implementar: rotación y custodia de la clave del updater (P-09), §5 capability recortada (P-22), `SHIRO_PACKAGED` (P-25b) y override de config en `app_local_data_dir` (P-34).
+
+## Nota 2026-11-18 — el healthcheck distingue vivo de listo (§6)
+
+- El informe `system:health` gana un campo opcional, **`readiness`**, con lo
+  que le falta a un servicio que responde para poder usarse: los modelos de la
+  configuración que Ollama no tiene descargados (`ollamaMissingModels`) y si
+  Whisper transcribe en CPU o todavía carga su modelo (`whisper`). `services`
+  no cambia: sigue diciendo solo si el servicio responde.
+- Los modelos exigidos salen de leer cada slot con el esquema de su módulo
+  (así cuentan también los valores por defecto), y solo de los slots que usan
+  ese mismo Ollama.
+- El asistente deja de marcar «activo» a un Ollama sin modelos, dice qué
+  modelo falta y da el comando para bajarlo.
+- **Límite conocido**: el servicio Whisper no abre su puerto hasta cargar el
+  modelo, así que mientras carga sigue saliendo «no detectado» (el asistente
+  lo avisa en esa tarjeta). El estado «cargando» queda previsto para cuando el
+  servicio cargue en segundo plano; hoy no llega.
+- Si la respuesta de un servicio no se puede leer, cuenta como vivo y no se
+  afirma nada más: el chequeo no inventa fallos.
+- Motivo: el asistente podía salir todo en verde con el chat roto (R-280,
+  R-155). Parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md). Queda
+  fuera el estado del agente de Letta.
