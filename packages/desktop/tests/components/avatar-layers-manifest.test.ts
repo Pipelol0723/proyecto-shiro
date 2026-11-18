@@ -102,6 +102,21 @@ describe('parseSpriteLayersManifest — los casos inválidos del prototipo', () 
     expect(issuesOf(applyCase(full, change)).length).toBeGreaterThan(0);
   });
 
+  it.each(invalidCases.map((c) => [c.name, c] as const))(
+    'el problema de «%s» está donde el caso lo puso',
+    (_name, change) => {
+      const changed = [...Object.keys(change.set ?? {}), ...(change.remove ?? [])];
+      const paths = issuesOf(applyCase(full, change)).map((issue) => issue.path);
+      // El problema cae en la ruta cambiada, dentro de ella o en el mapa que la contiene.
+      const related = (issuePath: string, target: string): boolean =>
+        issuePath !== '' &&
+        (issuePath === target ||
+          issuePath.startsWith(`${target}.`) ||
+          target.startsWith(`${issuePath}.`));
+      expect(paths.some((p) => changed.some((target) => related(p, target)))).toBe(true);
+    },
+  );
+
   it('el error dice dónde está el problema', () => {
     const brows = issuesOf(applyCase(full, { set: { 'expressions.idle.brows': 'brows_nope' } }));
     expect(brows.map((issue) => issue.path)).toContain('expressions.idle.brows');
@@ -121,13 +136,25 @@ describe('parseSpriteLayersManifest — rutas que no pueden salir de la carpeta'
     ['segmento vacío', 'assets//base.png'],
     ['esquema de datos', 'data:image/png;base64,AAAA'],
     ['dos puntos en medio', 'assets/../../base.png'],
+    ['un tabulador que esconde dos puntos', '.\t./base.png'],
+    ['dos puntos seguidos de un tabulador', '..\t'],
+    ['un salto de línea que esconde dos puntos', 'assets/.\n./base.png'],
+    ['un retorno de carro', 'assets/..\r/base.png'],
+    ['un carácter nulo', '\u0000'],
+    ['un espacio delante', ' assets/base.png'],
+    ['un espacio detrás', 'assets/base.png '],
+    ['un espacio en medio', 'assets/base final.png'],
+    ['un punto solo', '.'],
+    ['un segmento de un punto', 'assets/./base.png'],
+    ['más larga de lo razonable', `assets/${'a'.repeat(300)}.png`],
   ])('rechaza una ruta %s', (_name, route) => {
     expect(issuesOf(applyCase(full, { set: { 'layers.base': route } })).length).toBeGreaterThan(0);
   });
 
-  it('acepta subcarpetas y nombres con puntos, guiones y espacios', () => {
-    const ok = applyCase(full, { set: { 'layers.base': 'assets/v1.2/base-final 2.png' } });
-    expect(issuesOf(ok)).toEqual([]);
+  it('acepta subcarpetas y nombres con puntos, guiones, dos puntos y letras con tilde', () => {
+    for (const route of ['assets/v1.2/base-final_2.png', 'assets/a:b.png', 'capas/cañón.png']) {
+      expect(issuesOf(applyCase(full, { set: { 'layers.base': route } }))).toEqual([]);
+    }
   });
 });
 
@@ -157,6 +184,11 @@ describe('parseSpriteLayersManifest — claves', () => {
         return copy;
       };
       expect(issuesOf(withKey('face.pieces', 'assets/base.png')).length).toBeGreaterThan(0);
+      expect(
+        issuesOf(withKey('face.eyes', { white: null, lines: 'eyes_closed_lines' })).length,
+      ).toBeGreaterThan(0);
+      expect(issuesOf(withKey('emotions', 'idle')).length).toBeGreaterThan(0);
+      expect(issuesOf(withKey('layers', 'assets/base.png')).length).toBeGreaterThan(0);
       expect(
         issuesOf(
           withKey('expressions', { eyes: 'eyes_open', brows: 'brows_idle', mouth: 'mouth_idle' }),
@@ -200,5 +232,26 @@ describe('parseSpriteLayersManifest — cabecera del ADR 0035', () => {
 describe('parseSpriteLayersManifest — entradas que no son un manifiesto', () => {
   it.each([null, undefined, 3, 'texto', [], true])('rechaza %j sin lanzar', (raw) => {
     expect(issuesOf(raw).length).toBeGreaterThan(0);
+  });
+});
+
+describe('parseSpriteLayersManifest — topes', () => {
+  it.each([
+    ['una figura enorme', { size: [100000, 200], 'face.rect': [20, 30, 80, 60] }],
+    ['un parpadeo sin pausa', { 'face.blink.interval_s': [0.0001, 0.0001] }],
+    ['una espera entre parpadeos absurda', { 'face.blink.interval_s': [1, 100000] }],
+    ['un parpadeo que no acaba', { 'face.blink.duration_ms': 1e9 }],
+    ['un parpadeo instantáneo', { 'face.blink.duration_ms': 0.001 }],
+    ['un recorrido de mirada mayor que la cara', { 'face.gaze.max': [500, 3] }],
+    ['un draw_order kilométrico', { draw_order: Array.from({ length: 500 }, () => 'x') }],
+    ['un nombre kilométrico', { name: 'x'.repeat(5000) }],
+    ['una memoria declarada absurda', { cost: { tier: 'light', memory_mb: 1e300 } }],
+  ])('rechaza %s', (_name, set) => {
+    expect(issuesOf(applyCase(full, { set })).length).toBeGreaterThan(0);
+  });
+
+  it('una clave desconocida se nombra en el problema', () => {
+    const issues = issuesOf(applyCase(full, { set: { gaze_max: [5, 3] } }));
+    expect(issues.map((issue) => issue.path)).toContain('gaze_max');
   });
 });
