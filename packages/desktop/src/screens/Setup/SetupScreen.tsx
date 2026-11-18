@@ -48,7 +48,7 @@ const SERVICES: readonly ServiceRow[] = [
     key: 'ollama',
     name: 'Ollama',
     purpose: 'LLM local (Qwen 2.5) + clasificador del router',
-    command: 'ollama serve   ·   ollama pull qwen2.5:3b',
+    command: 'ollama serve   ·   ollama pull qwen2.5:3b   ·   ollama pull mxbai-embed-large',
     degraded:
       'Sin Ollama, Shiro depende del LLM cloud (Claude). Sin key de Claude tampoco, no responde.',
   },
@@ -110,13 +110,18 @@ function StatusBadge({
   ok,
   checking,
   unknown = false,
+  notReady,
 }: {
   ok: boolean;
   checking: boolean;
   /** Sin reporte porque el core-host no responde: no se sabe, no es «no detectado». */
   unknown?: boolean;
+  /** El servicio responde pero no está listo: se dice qué le pasa, no «activo». */
+  notReady?: string;
 }): JSX.Element {
   if (unknown) return <span className={`${styles.badge} ${styles.badgeChecking}`}>sin datos</span>;
+  if (notReady !== undefined)
+    return <span className={`${styles.badge} ${styles.badgeChecking}`}>{notReady}</span>;
   if (checking)
     return <span className={`${styles.badge} ${styles.badgeChecking}`}>comprobando…</span>;
   return ok ? (
@@ -184,6 +189,19 @@ export function SetupScreen(): JSX.Element {
         <ul className={styles.cards}>
           {SERVICES.map((svc) => {
             const ok = serviceStatus(report?.services[svc.key]);
+            // Vivo no es listo: a Ollama le pueden faltar modelos y Whisper
+            // puede estar aún cargando el suyo (o ir en CPU, que solo avisa).
+            const missing =
+              ok && svc.key === 'ollama' ? (report?.readiness?.ollamaMissingModels ?? []) : [];
+            const whisper = ok && svc.key === 'whisper' ? report?.readiness?.whisper : undefined;
+            const notReady =
+              missing.length === 1
+                ? 'falta un modelo'
+                : missing.length > 1
+                  ? `faltan ${String(missing.length)} modelos`
+                  : whisper === 'loading'
+                    ? 'cargando el modelo…'
+                    : undefined;
             return (
               <li key={svc.key} className={styles.card}>
                 <div className={styles.cardHead}>
@@ -192,9 +210,33 @@ export function SetupScreen(): JSX.Element {
                     ok={ok}
                     checking={report === null && checking}
                     unknown={unreachable}
+                    {...(notReady !== undefined && { notReady })}
                   />
                 </div>
                 <p className={styles.cardPurpose}>{svc.purpose}</p>
+                {missing.length > 0 && (
+                  <>
+                    <p className={styles.degraded}>
+                      Ollama responde, pero no tiene descargado todo lo que uso. Bájalo con:
+                    </p>
+                    {missing.map((model) => (
+                      <code key={model} className={styles.command}>
+                        {`ollama pull ${model}`}
+                      </code>
+                    ))}
+                  </>
+                )}
+                {whisper === 'loading' && (
+                  <p className={styles.degraded}>
+                    Whisper está arrancando y todavía no puedo oírte. Suele tardar menos de un
+                    minuto; pulsa «rechequear».
+                  </p>
+                )}
+                {whisper === 'cpu' && (
+                  <p className={styles.degraded}>
+                    Whisper transcribe en CPU: te oigo, pero más lento que con la tarjeta gráfica.
+                  </p>
+                )}
                 {!ok && report !== null && (
                   <>
                     <code className={styles.command}>{svc.command}</code>

@@ -63,8 +63,27 @@ export interface SystemHealthReport {
    * reutiliza. Puede faltar en los informes previos a que termine la consulta. Estado derivado: nunca lleva la clave.
    */
   geminiVoice?: GeminiVoiceStatus;
+  /**
+   * Lo que le falta a un servicio que **responde** para poder usarse. Ausente
+   * cuando todo lo vivo está listo, o cuando no se pudo averiguar.
+   */
+  readiness?: ServiceReadiness;
   /** ISO timestamp del momento del chequeo. */
   checkedAt: string;
+}
+
+/**
+ * Diferencia entre vivo y listo (R-280): un servicio puede contestar a su
+ * healthcheck y aun así no servir.
+ */
+export interface ServiceReadiness {
+  /** Modelos de la configuración que Ollama no tiene descargados. */
+  ollamaMissingModels?: string[];
+  /**
+   * Whisper responde pero todavía carga el modelo (`loading`: aún no
+   * transcribe) o transcribe en CPU (`cpu`: funciona, más lento).
+   */
+  whisper?: 'loading' | 'cpu';
 }
 
 /**

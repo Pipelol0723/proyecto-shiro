@@ -276,3 +276,18 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
 - §8: [ADR 0029](0029-proceso-de-mantenimiento-de-una-persona.md) fija que las versiones son tags `vX.Y.Z` sobre `develop`, que `main` solo avanza al publicar un tag y una checklist pre-release antes del próximo tag.
 - «ADR 0022/0023 (Proposed)» del Contexto refleja el momento de escribirlo; ambos están Accepted.
 - Enmiendas planificadas en el plan de mejora, sin implementar: rotación y custodia de la clave del updater (P-09), §5 capability recortada (P-22), `SHIRO_PACKAGED` (P-25b) y override de config en `app_local_data_dir` (P-34).
+
+## Nota 2026-11-18 — el healthcheck distingue vivo de listo (§6)
+
+- El informe `system:health` gana un campo opcional, **`readiness`**, con lo
+  que le falta a un servicio que responde para poder usarse: los modelos de la
+  configuración que Ollama no tiene descargados (`ollamaMissingModels`) y si
+  Whisper todavía carga su modelo o transcribe en CPU (`whisper`). `services`
+  no cambia: sigue diciendo solo si el servicio responde.
+- El asistente deja de marcar «activo» a un Ollama sin modelos o a un Whisper
+  que aún carga, dice qué modelo falta y da el comando para bajarlo.
+- Si la respuesta de un servicio no se puede leer, cuenta como vivo y no se
+  afirma nada más: el chequeo no inventa fallos.
+- Motivo: el asistente podía salir todo en verde con el chat roto (R-280,
+  R-155). Parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md). Queda
+  fuera el estado del agente de Letta.
