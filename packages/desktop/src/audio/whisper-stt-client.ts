@@ -14,8 +14,9 @@
  * coincide con la coreografía descrita en ADR 0019 (decisión 3).
  *
  * **Nada se queda esperando para siempre** (R-322): abrir tiene un plazo y
- * la transcripción final, otro. Con Whisper apagado en otro equipo, sin
- * ellos el turno seguía colgado hasta el timeout de TCP, con el micro abierto.
+ * la transcripción final, otro, que crece con lo que dura el audio. Con
+ * Whisper apagado en otro equipo, sin ellos el turno seguía colgado hasta el
+ * timeout de TCP, con el micro abierto.
  *
  * **Lo dicho mientras abre no se pierde** (R-143): los trozos que llegan
  * antes de que el WS esté abierto se guardan y salen, en orden, al abrir. Un
@@ -32,12 +33,23 @@ const PARTIAL = 'partial';
 const TRANSCRIBED = 'transcribed';
 const ERROR_MSG = 'error';
 
+/** Bytes de un segundo del audio que se envía: PCM de 16 bits, mono, a 16 kHz. */
+export const PCM_BYTES_PER_SECOND = 16_000 * 2;
 /** Plazo para que el WS abra. Con Whisper en marcha en local tarda milisegundos. */
 export const DEFAULT_CONNECT_TIMEOUT_MS = 3_000;
-/** Plazo para la transcripción final tras pedirla. Una frase larga en CPU tarda varios segundos. */
+/**
+ * Plazo base para la transcripción final tras pedirla. Se le suma lo que dura
+ * el audio del turno: en CPU, Whisper tarda del orden de lo que dura el audio,
+ * y antes de atender el final termina el parcial que tuviera a medias. Con el
+ * tope del servicio (90 s de audio) el plazo llega a 105 s.
+ */
 export const DEFAULT_FINAL_TIMEOUT_MS = 15_000;
-/** Audio que se guarda como mucho mientras el WS abre: unos 5 s de PCM a 16 kHz. */
-export const MAX_PENDING_BYTES = 16_000 * 2 * 5;
+/**
+ * Audio que se guarda como mucho mientras el WS abre: 5 s. Con el plazo de
+ * conexión por defecto (3 s) no se llega; si se alarga ese plazo por encima,
+ * lo que pase del tope se descarta (`sendChunk` devuelve `false`).
+ */
+export const MAX_PENDING_BYTES = PCM_BYTES_PER_SECOND * 5;
 
 /**
  * Por qué falló el turno:
@@ -114,7 +126,10 @@ export interface WhisperSttClientOptions {
   onError?: (reason: string, code: SttFailureCode) => void;
   /** Plazo de apertura del WS. Por defecto, `DEFAULT_CONNECT_TIMEOUT_MS`. */
   connectTimeoutMs?: number;
-  /** Plazo de la transcripción final. Por defecto, `DEFAULT_FINAL_TIMEOUT_MS`. */
+  /**
+   * Plazo base de la transcripción final; se le suma la duración del audio
+   * del turno. Por defecto, `DEFAULT_FINAL_TIMEOUT_MS`.
+   */
   finalTimeoutMs?: number;
   /** Permite inyectar un constructor de WS en tests. */
   webSocketCtor?: new (url: string) => WebSocket;
@@ -143,7 +158,8 @@ export class WhisperSttClient {
     | { kind: 'pending' }
     | { kind: 'final'; text: string }
     | { kind: 'failed'; error: WhisperSttError } = { kind: 'pending' };
-  /** Settle del `stop()` actual, si hay alguno esperando. */
+  /** El `stop()` en curso: pedirlo otra vez devuelve esta misma espera. */
+  private stopPromise: Promise<void> | null = null;
   private stopResolve: (() => void) | null = null;
   private stopReject: ((err: Error) => void) | null = null;
   /** Rechazo del `open()` en curso, para cuando se aborta o vence su plazo. */
@@ -151,6 +167,8 @@ export class WhisperSttClient {
   /** Audio recibido mientras el WS abre. */
   private pending: ArrayBuffer[] = [];
   private pendingBytes = 0;
+  /** Audio aceptado en el turno (enviado o guardado): de él sale el plazo del final. */
+  private audioBytes = 0;
   /** Se pidió `stop()` antes de que el WS abriera. */
   private stopRequested = false;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -219,6 +237,10 @@ export class WhisperSttClient {
       });
 
       ws.addEventListener('message', (event) => {
+        // Un socket que se está cerrando aún entrega lo que venía de camino. Con
+        // el turno abortado o fallido, ni un parcial ni una transcripción tardía
+        // deben salir: la UI ya enseña otra cosa.
+        if (this._state === 'closed' || this._state === 'error') return;
         if (typeof event.data !== 'string') return; // chunks binarios no llegan del server
         const msg = parseServerMessage(event.data);
         if (msg === null) return;
@@ -273,12 +295,14 @@ export class WhisperSttClient {
   sendChunk(buffer: ArrayBuffer): boolean {
     if (this._state === 'streaming' && this.ws !== null) {
       this.ws.send(buffer);
+      this.audioBytes += buffer.byteLength;
       return true;
     }
     if (this._state !== 'connecting') return false;
     if (this.pendingBytes + buffer.byteLength > MAX_PENDING_BYTES) return false;
     this.pending.push(buffer);
     this.pendingBytes += buffer.byteLength;
+    this.audioBytes += buffer.byteLength;
     return true;
   }
 
@@ -287,6 +311,7 @@ export class WhisperSttClient {
    * WS aún está abriendo, lo manda en cuanto abra, después de lo guardado.
    * Resuelve cuando llega la transcripción; rechaza con un `WhisperSttError`
    * si el servidor cierra antes, emite un error, o no contesta a tiempo.
+   * Llamarlo otra vez mientras espera devuelve la misma promesa.
    */
   stop(): Promise<void> {
     // Si ya tenemos resultado terminal cacheado, settle inmediatamente.
@@ -294,16 +319,17 @@ export class WhisperSttClient {
     if (this.terminal.kind === 'failed') return Promise.reject(this.terminal.error);
     if (this._state === 'closed') return Promise.resolve();
     if (this._state === 'error') return Promise.reject(new Error('cliente en estado error'));
+    if (this.stopPromise !== null) return this.stopPromise;
     if (this._state !== 'streaming' && this._state !== 'connecting') {
       return Promise.reject(new Error(`stop() en estado ${this._state}`));
     }
-    const settled = new Promise<void>((resolve, reject) => {
+    this.stopPromise = new Promise<void>((resolve, reject) => {
       this.stopResolve = resolve;
       this.stopReject = reject;
     });
     if (this._state === 'connecting') this.stopRequested = true;
     else this.sendStop();
-    return settled;
+    return this.stopPromise;
   }
 
   /**
@@ -332,15 +358,17 @@ export class WhisperSttClient {
   private sendStop(): void {
     this._state = 'stopping';
     this.ws?.send(JSON.stringify({ type: 'stop' }));
+    const audioMs = Math.round((this.audioBytes / PCM_BYTES_PER_SECOND) * 1_000);
+    const deadlineMs = this.finalTimeoutMs + audioMs;
     this.finalTimer = setTimeout(() => {
       if (this._state !== 'stopping') return;
       this.failTurn(
         new WhisperSttError(
           'final-timeout',
-          `Whisper no devolvió la transcripción en ${String(this.finalTimeoutMs)} ms`,
+          `Whisper no devolvió la transcripción en ${String(deadlineMs)} ms`,
         ),
       );
-    }, this.finalTimeoutMs);
+    }, deadlineMs);
   }
 
   /** El WS no llegó a abrir. Lo cuenta `open()`, no `onError`. */

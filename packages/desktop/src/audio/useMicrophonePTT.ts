@@ -5,8 +5,8 @@
  * Ciclo de un turno:
  *
  *   keydown(activationKey)
- *     → se empieza a abrir el WS y, a la vez, getUserMedia,
- *       AudioContext({ sampleRate: 16000 }) y worklet.
+ *     → getUserMedia; con el micro concedido se empieza a abrir el WS y,
+ *       a la vez, AudioContext({ sampleRate: 16000 }) y worklet.
  *     → bus.emit('stt:listening') en cuanto el micro captura
  *     → chunks PCM Int16 LE → cliente de Whisper (binario)
  *     → partial JSON del server → bus.emit('stt:partial')
@@ -20,9 +20,13 @@
  * - **El micro no espera a Whisper** (R-143): se captura desde que el micro
  *   está listo, aunque el WS siga abriendo. El cliente guarda esos primeros
  *   trozos y los envía al abrir; si no, se perdía la primera sílaba.
+ * - **A Whisper se le llama con el micro ya concedido**: el servicio cierra
+ *   una sesión que pasa 15 s sin tráfico, y contestar al diálogo de permiso
+ *   (o un micro Bluetooth que despierta) puede tardar más que eso.
  * - **Nada se queda colgado** (R-322): si Whisper no abre o no devuelve la
  *   transcripción a tiempo, el cliente falla y aquí se suelta el micro.
- *   Soltar la tecla antes de que el micro esté listo cancela el turno.
+ *   Soltar la tecla antes de que el micro esté listo cancela el turno, y
+ *   desmontar la pantalla también: el micro que llegue después se suelta.
  * - **getUserMedia por turno**: pedir permiso una vez sí, pero
  *   liberar la `MediaStreamTrack` al soltar la tecla para que el browser
  *   apague el indicador de micro entre turnos. Cuesta ~100 ms al inicio
@@ -137,6 +141,10 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
    * (éxito o error) — esto apaga el indicador del micro.
    */
   const teardown = useCallback(() => {
+    // El turno acaba aquí también para lo que aún no ha llegado (el permiso
+    // del micro, la carga del worklet): al llegar lo ve terminado y se suelta.
+    if (turnRef.current !== null) turnRef.current.over = true;
+
     workletNodeRef.current?.port.close();
     workletNodeRef.current?.disconnect();
     workletNodeRef.current = null;
@@ -177,24 +185,6 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       teardown();
     };
 
-    const client = new WhisperSttClient({
-      url: serviceUrl,
-      onPartial: (text) => {
-        void bus.emit('stt:partial', { text, userId });
-      },
-      onFinal: (text) => {
-        void bus.emit('stt:transcribed', { text, userId, isFinal: true });
-      },
-      onError: (_reason, code) => {
-        fail(describeSttFailure(code));
-      },
-    });
-    clientRef.current = client;
-    // El WS se abre mientras se prepara el micro; no se espera aquí.
-    client.open().catch((err: unknown) => {
-      fail(describeMicError(err));
-    });
-
     let mediaStream: MediaStream | null = null;
     let audioContext: AudioContext | null = null;
     /** Suelta lo que este arranque llegó a abrir y aún no estaba en los refs. */
@@ -208,11 +198,30 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
-      // Mientras se pedía el micro, el turno se canceló o Whisper falló.
+      // Mientras se pedía el micro, el turno se canceló o la pantalla se fue.
       if (turn.over) {
         releaseLocal();
         return;
       }
+
+      const client = new WhisperSttClient({
+        url: serviceUrl,
+        onPartial: (text) => {
+          void bus.emit('stt:partial', { text, userId });
+        },
+        onFinal: (text) => {
+          void bus.emit('stt:transcribed', { text, userId, isFinal: true });
+        },
+        onError: (_reason, code) => {
+          fail(describeSttFailure(code));
+        },
+      });
+      clientRef.current = client;
+      // El WS se abre mientras se prepara la captura; no se espera aquí. Lo
+      // que se diga antes de que abra lo guarda el cliente.
+      client.open().catch((err: unknown) => {
+        fail(describeMicError(err));
+      });
 
       // El browser podría rechazar el sampleRate solicitado y devolver otro;
       // el worklet leerá su `sampleRate` global real y decimará si hace falta.
@@ -224,6 +233,7 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       }
       audioContext = new ContextCtor({ sampleRate: TARGET_SAMPLE_RATE });
       await audioContext.audioWorklet.addModule(workletUrl);
+      // Mientras cargaba el worklet, el turno se canceló o Whisper falló.
       if (turn.over) {
         releaseLocal();
         return;
@@ -306,7 +316,8 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
         setStateAndRef('error');
       }
     } finally {
-      teardown();
+      // Solo lo de este turno: si ya hubiera otro en marcha, sus recursos no se tocan.
+      if (turnRef.current === turn) teardown();
     }
   }, [cancelTurn, setStateAndRef, teardown]);
 

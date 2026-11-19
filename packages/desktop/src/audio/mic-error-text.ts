@@ -18,7 +18,9 @@ const STT_TEXT: Record<SttFailureCode, string> = {
   'final-timeout':
     'Whisper no terminó de transcribir lo que dijiste. Inténtalo otra vez; si se repite, mira su estado en Setup.',
   closed: 'Se cortó la conexión con Whisper mientras te escuchaba. Inténtalo otra vez.',
-  server: 'Whisper no pudo transcribir lo que dijiste. Inténtalo otra vez.',
+  // También llega antes de hablar (el modelo aún carga): no da nada por dicho.
+  server:
+    'Whisper contestó con un error y no pudo transcribir. Inténtalo otra vez en unos segundos; si se repite, mira su estado en Setup.',
 };
 
 /** Fallos de `getUserMedia`, por el `name` que les pone el navegador. */
