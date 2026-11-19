@@ -45,9 +45,11 @@ export interface AppProps {
   bus?: IEventBus<EventMap>;
   /** Transport observable del bus de producción. Omitir => siempre conectado. */
   connection?: ConnectionSource;
+  /** URL del bus de producción: de ella sale el servidor del audio. Omitir => el local. */
+  hostUrl?: string;
 }
 
-export function App({ bus, connection }: AppProps = {}): JSX.Element {
+export function App({ bus, connection, hostUrl }: AppProps = {}): JSX.Element {
   return (
     <BusProvider bus={bus}>
       <ConnectionProvider source={connection}>
@@ -56,7 +58,7 @@ export function App({ bus, connection }: AppProps = {}): JSX.Element {
             se llevaba TODA la app a blanco. Ahora el boundary muestra el
             error (diagnosticable) en vez de una pantalla muerta. El Avatar
             tiene además su propio boundary que cae al Orbe sin molestar. */}
-          <AudioProvider>
+          <AudioProvider hostUrl={hostUrl}>
             <ErrorBoundary fallback={(error) => <AppCrashFallback error={error} />}>
               <AppShell />
             </ErrorBoundary>

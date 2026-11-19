@@ -237,3 +237,13 @@ Sustituir el bloque actual del slot `tts` por la versión post-decisión (quitar
 ## Nota 2026-11-14
 
 - [ADR 0034](0034-tts-gemini-voz-disenada.md) sustituirá el §1 (primaria y cadena de dos) y el §6 (voz) y amplía el §5 con `tts_style` cuando se active `GeminiTTS` (pendiente del nivel de pago; hoy sigue activa `ElevenLabsTTS`); sigue vigente en topología, transporte y cancelación.
+
+## Nota 2026-11-19
+
+Enmienda del contrato de la URL de audio (P-14 del plan de mejora; cierra R-314), implementada en el mismo PR. Es la que la nota del 2026-11-12 daba como planificada:
+
+- **`tts:audio.url` es una ruta, no una URL completa**: `/audio/<id>.<ext>`. El core-host dejó de anteponer `http://localhost:<puerto>`: no puede saber con qué dirección llega cada cliente hasta él, y a un cliente en otra máquina esa URL le apuntaba a sí mismo. El ejemplo de «Eventos del bus que añadimos» se deja como se escribió.
+- **Cada cliente resuelve la ruta contra el origen de su conexión al bus**, cambiando `ws` por `http` (y `wss` por `https`). En el escritorio esa conexión es `VITE_SHIRO_HOST_URL`; por defecto, `ws://localhost:9876/bus`.
+- **El cliente solo reproduce audio de ese servidor**. Lo que no resuelva a ese mismo origen y a una ruta con la forma `/audio/<id>.<ext>` (un solo tramo, sin credenciales, consulta ni fragmento) se descarta, con un aviso en la consola y un `tts:audio-ended` para que el turno no se quede «hablando». Una URL completa de ese mismo servidor sigue valiendo.
+- **CORS**: este PR no lo cambia; se anota cómo está, porque ya no es lo que dice este ADR. Desde el paso 2a del [ADR 0027](0027-autenticacion-token-bus-stt-multicliente.md), `/audio` responde 403 a un `Origin` que no esté permitido y, a uno permitido, le devuelve `Access-Control-Allow-Origin` con ese mismo origen y `Vary: Origin` (antes era `*`). El lip-sync lo necesita: el audio se pide con `crossOrigin='anonymous'`.
+- **Lo que esto no resuelve**: usar desde el binario un core-host que está en otra máquina. La CSP de Tauri solo deja cargar audio de `http://localhost:*`, el core-host escucha en `127.0.0.1` salvo `SHIRO_BIND_HOST`, y los orígenes permitidos son los del cliente local. Eso es de la topología por entorno (P-34 del plan de mejora, que escribirá el ADR 0032) y del token del ADR 0027.
