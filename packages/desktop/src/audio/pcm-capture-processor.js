@@ -21,6 +21,11 @@
  * para reducir overhead de postMessage (128 samples/llamada al `process`
  * son ~8 ms a 16 kHz; postear cada vez serían 125 msgs/s).
  *
+ * Al soltar la tecla, el main thread manda `{ type: 'flush' }` por el
+ * puerto. El procesador entrega lo que tuviera a medias y contesta con
+ * `{ type: 'flushed' }`. Sin eso se perdían hasta 250 ms del final de cada
+ * frase: la última palabra.
+ *
  * Este archivo es **JavaScript puro** porque los AudioWorklets se
  * cargan vía `audioWorklet.addModule(url)` desde un archivo servido
  * directamente — TypeScript añadiría un paso de transpilación que
@@ -48,6 +53,25 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
     this.buffer = new Int16Array(this.flushSize);
     this.bufferIndex = 0;
     this.decimationCounter = 0;
+
+    this.port.onmessage = (event) => {
+      if (event.data?.type === 'flush') this.flush();
+    };
+  }
+
+  /** Entrega lo que hay a medias y avisa de que ya no queda nada. */
+  flush() {
+    this.emit();
+    this.port.postMessage({ type: 'flushed' });
+  }
+
+  /** Manda al main thread lo acumulado, si hay algo, y empieza de cero. */
+  emit() {
+    if (this.bufferIndex === 0) return;
+    // Copia transferible de lo acumulado.
+    const out = this.buffer.slice(0, this.bufferIndex);
+    this.port.postMessage(out.buffer, [out.buffer]);
+    this.bufferIndex = 0;
   }
 
   process(inputs) {
@@ -70,12 +94,7 @@ class PcmCaptureProcessor extends AudioWorkletProcessor {
       this.buffer[this.bufferIndex] = s < 0 ? s * 0x8000 : s * 0x7fff;
       this.bufferIndex += 1;
 
-      if (this.bufferIndex >= this.flushSize) {
-        // Crear copia transferible del buffer lleno.
-        const out = this.buffer.slice(0, this.bufferIndex);
-        this.port.postMessage(out.buffer, [out.buffer]);
-        this.bufferIndex = 0;
-      }
+      if (this.bufferIndex >= this.flushSize) this.emit();
     }
     return true;
   }
