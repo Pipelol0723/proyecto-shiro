@@ -267,6 +267,20 @@ describe('MemoryManager', () => {
       expect(local.pendingCount()).toBe(0);
     });
 
+    it('borra toda la conversación, la guardara quien la guardara, y conserva el agente', async () => {
+      // El cliente guarda como «me» y el servidor como el usuario de la config.
+      await manager.save(makeEntry({ id: 'cliente', userId: 'me' }));
+      await manager.save(makeEntry({ id: 'servidor', userId: 'default' }));
+      local.setMeta('letta_agent_id', 'agent-1');
+
+      await manager.clear('default');
+
+      expect(await manager.getRecent('default', 10)).toEqual([]);
+      expect(local.stats().turns).toBe(0);
+      // Lo que no es conversación se queda: sin esto Letta se reprovisionaría.
+      expect(local.getMeta('letta_agent_id')).toBe('agent-1');
+    });
+
     it('si Letta está arriba también borra allí', async () => {
       vi.spyOn(letta, 'ping').mockResolvedValue(true);
       const clearSpy = vi.spyOn(letta, 'clear').mockResolvedValue();
