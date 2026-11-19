@@ -30,6 +30,13 @@ import type { ILLMModule, LLMRequest, LLMResponse } from '../../interfaces/ILLMM
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
 import { type Emotion, EMOTIONS, isEmotion } from '../../types/emotions.js';
+import {
+  DEFAULT_OLLAMA_KEEP_ALIVE,
+  DEFAULT_OLLAMA_NUM_CTX,
+  OllamaKeepAliveSchema,
+  misnamedOllamaOption,
+  salvageTruncatedText,
+} from './ollama-options.js';
 
 // ─── Schema de config ─────────────────────────────────────────────────
 
@@ -42,6 +49,22 @@ export const OllamaLLMConfigSchema = z.object({
   temperature: z.number().min(0).max(2).default(0.7),
   /** Timeout de la request en ms. Default 60s (modelos chicos responden <10s). */
   timeoutMs: z.number().int().positive().default(60_000),
+  /**
+   * Cuánto mantiene Ollama el modelo cargado tras la llamada: una duración
+   * (`30m`, `1h`) o un número de segundos (`-1`: no descargarlo nunca).
+   */
+  keepAlive: OllamaKeepAliveSchema.default(DEFAULT_OLLAMA_KEEP_ALIVE),
+  /**
+   * Ventana de contexto en tokens. Tiene que ser la misma que la del
+   * clasificador (`router.config.num_ctx`) si comparten modelo: con otra,
+   * Ollama recarga el modelo en cada cambio.
+   */
+  numCtx: z.number().int().positive().default(DEFAULT_OLLAMA_NUM_CTX),
+  /**
+   * Tope de tokens de la respuesta. Acota una respuesta que se alarga sin
+   * fin. Si se alcanza, se entrega el texto que llegó (ver `generate`).
+   */
+  numPredict: z.number().int().positive().default(1024),
 });
 
 export type OllamaLLMConfig = z.infer<typeof OllamaLLMConfigSchema>;
@@ -70,6 +93,8 @@ const OllamaChatResponseSchema = z.object({
     content: z.string(),
   }),
   done: z.boolean(),
+  /** `length` cuando la respuesta se cortó al llegar a `num_predict`. */
+  done_reason: z.string().optional(),
   eval_count: z.number().optional(),
   prompt_eval_count: z.number().optional(),
 });
@@ -95,6 +120,10 @@ export class OllamaLLM implements ILLMModule {
   private readonly logger: Logger;
 
   constructor(rawConfig: unknown, deps: ModuleDeps) {
+    const misnamed = misnamedOllamaOption(rawConfig, 'camel');
+    if (misnamed !== null) {
+      throw new OllamaLLMError(`OllamaLLM: config inválida — ${misnamed}`);
+    }
     const result = OllamaLLMConfigSchema.safeParse(rawConfig);
     if (!result.success) {
       throw new OllamaLLMError(
@@ -123,8 +152,11 @@ export class OllamaLLM implements ILLMModule {
       messages,
       stream: false,
       format: buildOutputSchema(),
+      keep_alive: this.config.keepAlive,
       options: {
         temperature: this.config.temperature,
+        num_ctx: this.config.numCtx,
+        num_predict: this.config.numPredict,
       },
     };
 
@@ -171,14 +203,64 @@ export class OllamaLLM implements ILLMModule {
       );
     }
 
+    this.warnIfContextIsTight(parsed.data.prompt_eval_count);
+
     const content = parsed.data.message.content;
-    const { text, emotion } = this.parseContent(content);
+    const { text, emotion } =
+      parsed.data.done_reason === 'length'
+        ? this.parseTruncated(content)
+        : this.parseContent(content);
 
     return {
       text,
       emotion,
       tokensUsed: parsed.data.eval_count,
     };
+  }
+
+  /**
+   * Si el prompt y el tope de la respuesta no caben juntos en el contexto,
+   * Ollama recorta el prompt por su cuenta y sin avisar: Shiro pierde parte
+   * de su personaje o de lo que recuerda. Aquí queda dicho.
+   */
+  private warnIfContextIsTight(promptTokens: number | undefined): void {
+    if (promptTokens === undefined) return;
+    const { numCtx, numPredict } = this.config;
+    if (promptTokens + numPredict <= numCtx) return;
+    this.logger.warn(
+      `el prompt (${String(promptTokens)} tokens) y el tope de respuesta (${String(numPredict)}) no caben en num_ctx (${String(numCtx)}): Ollama puede estar recortando el contexto`,
+    );
+  }
+
+  /**
+   * La respuesta se cortó al llegar al tope de longitud (`num_predict`, o el
+   * contexto lleno), así que el JSON suele venir a medias. Se entrega el
+   * texto que llegó; sin esto, lo que se decía y se mostraba era el JSON
+   * crudo. Si no llegó texto, el turno falla con su motivo.
+   */
+  private parseTruncated(content: string): { text: string; emotion: Emotion } {
+    try {
+      JSON.parse(content);
+      // Se cortó justo al terminar: el JSON está entero.
+      return this.parseContent(content);
+    } catch {
+      // Lo normal: JSON a medias.
+    }
+    const salvaged = salvageTruncatedText(content);
+    if (salvaged === null) {
+      throw new OllamaLLMError(
+        `OllamaLLM: la respuesta llegó cortada por longitud (num_predict ${String(this.config.numPredict)}, num_ctx ${String(this.config.numCtx)}) antes de tener texto`,
+      );
+    }
+    this.logger.warn(
+      `respuesta cortada por longitud (num_predict ${String(this.config.numPredict)}, num_ctx ${String(this.config.numCtx)}): se entrega el texto que llegó`,
+    );
+    // La emoción, si llegó entera antes del corte.
+    const emotionMatch = /"emotion"\s*:\s*"([a-z_]+)"/.exec(content);
+    const emotion = isEmotion(emotionMatch?.[1]) ? emotionMatch[1] : 'neutral';
+    // Los puntos suspensivos, solo si lo que se cortó fue el propio texto.
+    const text = salvaged.complete ? salvaged.text : `${salvaged.text.trimEnd()}…`;
+    return { text, emotion };
   }
 
   /**
