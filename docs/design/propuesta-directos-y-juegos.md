@@ -60,10 +60,14 @@ misma voz, y gana **sentidos** y **manos** que tiene siempre:
 - Si hay chat, lo oye. Si hay un juego conectado, lo ve.
 - Si nada de eso está conectado, esos sentidos están callados y ya.
 
-Esto roza una decisión vigente: el
-[ADR 0035](../adr/0035-avatar-eleccion-de-modelo-en-caliente.md) prevé que
-«jugando» y «en directo» los **indique el usuario** con un atajo. Aquí «en
-directo» pasaría a ser algo que Shiro percibe. Habría que enmendarlo.
+Esto roza una decisión vigente. En el
+[ADR 0035](../adr/0035-avatar-eleccion-de-modelo-en-caliente.md) hay un
+«modo de actividad» (nada, jugando, en directo) que **indica el usuario**
+con un atajo. No es un modo de Shiro: es una señal para elegir qué forma
+tiene, y no choca con lo que pidió el dueño. Lo que cambiaría es de dónde
+sale: además de indicarla él, Shiro podría **percibirla**. Ese ADR ya deja
+«detectar solos el juego o el directo» como pendiente y dice qué pide, así
+que sería una enmienda que añade una fuente, no que quita la que hay.
 
 Son tres clases de piezas, y dos ya tienen patrón en el proyecto:
 
@@ -72,6 +76,12 @@ Son tres clases de piezas, y dos ya tienen patrón en el proyecto:
 | **Sentidos** | Chat de Twitch, estado de OBS, estado del juego y, al final, la pantalla  | Módulos que publican eventos en el bus                                              |
 | **Manos**    | Escribir en el chat, encuestas, clips, escenas de OBS, acciones del juego | Herramientas del registro ([ADR 0022](../adr/0022-shiro-agentic-tools-fs-shell.md)) |
 | **Criterio** | Decidir cuándo toma la palabra y a qué le hace caso                       | La iniciativa de la [propuesta de vida propia](propuesta-vida-propia.md), paso 4    |
+
+Un matiz sobre las manos: el ADR 0022 da el patrón, pero su primera versión
+solo cubre archivos y comandos. Deja fuera tres categorías, cada una con su
+ADR: herramientas de red, dispositivos y manejo del sistema. Las manos de
+Twitch y de OBS son **herramientas de red**, así que hoy tampoco existen: el
+ADR de esta faceta (D-0) tiene que abrir esa categoría.
 
 Lo importante: **los directos no son un sistema aparte**. Son la iniciativa
 de Shiro más unos sentidos y unas manos nuevos. Por eso dependen de ese
@@ -140,7 +150,7 @@ entera a la vez no caben, así que cada peldaño depende de medidas:
 
 | Paso | Qué                                                                                  | Depende de                                 |
 | ---- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
-| D-0  | ADR de la faceta: sentidos, manos, filtro y memoria en público                       | ADR de la iniciativa (vida propia, paso 4) |
+| D-0  | ADR de la faceta: sentidos, manos (herramientas de red), filtro y memoria en público | ADR de la iniciativa (vida propia, paso 4) |
 | D-1  | Sentidos de solo lectura: Shiro sabe que está en directo y oye el chat; no dice nada | D-0                                        |
 | D-2  | Copresentar (C1), con filtro, botón de pánico y subtítulos                           | D-1, iniciativa y latencia medida          |
 | D-3  | Jugar con el chat (J1) y manos de Twitch                                             | D-2                                        |

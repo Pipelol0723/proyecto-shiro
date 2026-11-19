@@ -37,9 +37,10 @@ versión públicas. No se copia arte, texto ni código.
 3. **Emoción con inercia.** Hoy la cara se queda en la emoción de la última
    respuesta hasta la siguiente. Pasado un rato debería volver sola a la
    calma, con el fundido de siempre.
-4. **Iniciativa propia, y mucha.** Lilith solo avisa de que es tarde. Shiro
-   debe ir bastante más lejos: hablar primero, retomar temas, proponer y
-   empezar cosas por su cuenta. Es la pieza principal de esta propuesta (ver
+4. **Iniciativa propia, y mucha.** Lilith solo avisa de que es tarde. El
+   dueño quiere que Shiro vaya bastante más lejos. Propuesta de la sesión de
+   diseño para concretarlo: hablar primero, retomar temas, proponer y
+   empezar cosas por su cuenta. Es la pieza principal de este documento (ver
    el paso 4).
 5. **Recordatorios y temporizadores por voz.** «Avísame en veinte minutos».
    Lilith reconoce fechas con reglas; Shiro lo haría con su modelo, como una
@@ -83,7 +84,7 @@ escribir el ADR; esta lectura es de la sesión de diseño, no del dueño.
 | ---- | ---------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------- | ------------------------ |
 | 1    | Expresiones `sleepy` y `asleep` de la chibi, y el bostezo                          | Sesión de diseño               | Nada                                   | Pequeño                  |
 | 2    | Gestos en reposo y emoción con inercia, en el prototipo y con su tabla de casos    | Sesión de diseño               | Paso 1                                 | Pequeño                  |
-| 3    | Llevar los pasos 1 y 2 a la app; el estado «somnolienta» en el módulo de presencia | Sesión que escribe `packages/` | AV-2 y AV-4; enmienda del ADR 0035     | Mediano                  |
+| 3    | Llevar los pasos 1 y 2 a la app; el estado «somnolienta» en el módulo de presencia | Sesión que escribe `packages/` | AV-3 y AV-4; enmienda del ADR 0035     | Mediano                  |
 | 4    | Iniciativa de Shiro, amplia: la define y la escribe la sesión que lleva el código  | Sesión que escribe `packages/` | **ADR nuevo**, aprobado por el dueño   | Muy grande, por entregas |
 | 5    | Convivencia en el escritorio                                                       | Quien haga el modo overlay     | Modo overlay (enmienda de ADR 0024 §3) | —                        |
 
@@ -103,12 +104,24 @@ Se añaden al generador de piezas, al modelo sintético de prueba y a los casos
 de [`chibi-prototype/`](chibi-prototype/README.md). `sleepy` ya estaba
 prevista en la biblia (§6.2).
 
+Caben en el formato actual: las expresiones son un mapa libre, y el bostezo
+es boca abierta más parpadeo fijado. Dos cuidados:
+
+- **Nada de campos nuevos en el manifiesto** (un bloque de gestos, una pieza
+  con clave propia): el esquema de la app es estricto y lo rechazaría.
+  Cambiarlo es código de `packages/desktop`, de la otra sesión.
+- **Los tests de la app leen `test-model/` sin copia**, y algunos comparan
+  listas exactas de lo que se pinta. Tocar ese modelo o sus casos puede
+  romperlos; se coordina antes.
+
 ### Paso 2 — gestos en reposo
 
 Un planificador **por encima de los cinco verbos** del motor
-([ADR 0028](../adr/0028-avatar-motores-y-manifiesto.md)), para que sirva igual
-con la chibi, el 2D y el 3D. Se prototipa en la página de pruebas y se
-entrega con su tabla de comportamientos esperados:
+([ADR 0028](../adr/0028-avatar-motores-y-manifiesto.md)), para que llegue a
+servir igual con la chibi, el 2D y el 3D. Eso es el objetivo, no lo que hay:
+hoy solo el motor de capas tiene los cinco verbos (Live2D traduce emoción y
+boca, nada más), y en la app son internos de cada motor. Se prototipa en la
+página de pruebas y se entrega con su tabla de comportamientos esperados:
 
 - No hace nada mientras Shiro habla, escucha o piensa.
 - Pausa al azar entre gestos, del orden de un minuto; nunca dos seguidos.
@@ -118,9 +131,11 @@ entrega con su tabla de comportamientos esperados:
 
 ### Paso 3 — a la app
 
-Lo escribe la sesión que lleva el código, cuando AV-2 (chibi en la app) y
-AV-4 (reglas de dormida) estén hechos. Lo nuevo respecto al ADR 0035 es
-pequeño, pero cambia su texto, así que viaja como **enmienda en el mismo PR**:
+Lo escribe la sesión que lleva el código, cuando AV-3 y AV-4 (reglas de
+dormida) estén hechos. AV-2, la chibi en la app, ya lo está; falta AV-3
+porque es el que saca los verbos del motor a donde un planificador pueda
+usarlos. Lo nuevo respecto al ADR 0035 es pequeño, pero cambia su texto, así
+que viaja como **enmienda en el mismo PR**:
 
 - Un tercer estado de presencia, `drowsy`, antes de `asleep`.
 - Despertarla con un clic, sin mensaje, la deja despierta un rato corto y
@@ -136,17 +151,28 @@ su ADR es trabajo de la sesión que lleva la reestructuración del proyecto.
 Hoy todo turno empieza en el usuario. La idea es que Shiro también pueda
 empezar. Tipos de iniciativa, de menos a más:
 
-| Tipo                   | Ejemplos                                                                                                          |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Hablar primero         | Saludar al llegar o al volver, comentar la hora, avisar de un recordatorio, decir algo tras un silencio largo     |
-| Retomar                | Volver a un tema que quedó a medias, preguntar cómo salió algo que se le contó, acordarse de una fecha            |
-| Opinar sin que pidan   | Comentar lo que se está haciendo, discrepar, señalar algo que ve mal                                              |
-| Proponer               | Sugerir un descanso, una tarea pendiente, una mejora de sí misma (lo que ya hace por encargo el self-improvement) |
-| Empezar a hacer        | Arrancar por su cuenta una tarea con sus herramientas, dentro de los permisos y aprobaciones que ya existen       |
-| Decidir sobre sí misma | Qué forma tener (ya en el ADR 0035), cuándo dormirse o callarse, de qué humor está                                |
+| Tipo                   | Ejemplos                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Hablar primero         | Saludar al llegar o al volver, comentar la hora, avisar de un recordatorio, decir algo tras un silencio largo |
+| Retomar                | Volver a un tema que quedó a medias, preguntar cómo salió algo que se le contó, acordarse de una fecha        |
+| Opinar sin que pidan   | Comentar lo que se está haciendo, discrepar, señalar algo que ve mal                                          |
+| Proponer               | Sugerir un descanso, una tarea pendiente, una mejora de sí misma                                              |
+| Empezar a hacer        | Arrancar por su cuenta una tarea con sus herramientas, dentro de los permisos y aprobaciones que ya existen   |
+| Decidir sobre sí misma | Qué forma tener (ya en el ADR 0035), cuándo dormirse o callarse, de qué humor está                            |
 
 Los recordatorios y temporizadores por voz son un caso más de la primera
 fila.
+
+Dos filas rozan decisiones vigentes, y el ADR tendría que decirlo:
+
+- **Proponer una mejora de sí misma.** El self-improvement existe, pero hoy
+  solo arranca por encargo
+  ([ADR 0023](../adr/0023-shiro-self-improvement-propose-only.md)). Que lo
+  proponga ella cambia quién lo dispara.
+- **Decidir cuándo dormirse.** El ADR 0035 fija tres vías, respuesta
+  expresa del dueño: inactividad, que se lo digan y horario. Que lo decida
+  Shiro sería una cuarta y pediría enmendarlo, junto con el estado
+  `drowsy` del paso 3.
 
 Esta iniciativa es también la base de otra faceta: que Shiro copresente,
 dirija y juegue en los directos del dueño. Está en
@@ -170,7 +196,13 @@ Preguntas abiertas para el ADR:
   frontera de confianza nueva y se decide aparte.
 - Con qué frecuencia, y cómo evitar que canse.
 - Qué modelo piensa esos turnos, y cuánto cuestan si son muchos.
-- Por qué cliente sale la voz si hay más de uno.
+- Por qué cliente sale la voz si hay más de uno. No es hipotético: hoy, con
+  varias copias de la app conectadas, suena en todas las que no estén
+  silenciadas.
+- Qué pasa si un turno propio pide una herramienta que necesita aprobación
+  y no hay nadie delante: caduca, espera o se descarta.
+- Si lo que dispara un turno propio sale de la memoria o de un chat, es un
+  dato no fiable: sería un camino nuevo hacia las herramientas.
 - Cómo se guarda lo pendiente (recordatorios, temas a retomar) y qué pasa si
   la app estaba cerrada.
 - Por dónde empezar: el ADR debería partirlo en entregas pequeñas.
