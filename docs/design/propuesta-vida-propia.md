@@ -9,6 +9,12 @@ enmienda o un ADR.
 > **dirección** del paso 4: quiere que Shiro tenga «mucha más iniciativa»
 > que la de la primera versión de este documento. El detalle queda por
 > definir (ver el paso 4).
+>
+> **Nota 2026-11-19:** el dueño respondió a las preguntas de este documento y
+> el reparto en pasos está en la
+> [vía de iniciativa del plan de mejora](../plan-mejora-2026-11.md#vía-paralela-iniciativa-sentidos-vida-propia-y-directos).
+> Los pasos 1 y 2 **todavía no** empiezan; el estado «somnolienta» y el
+> despertar corto, sí los quiere.
 
 ## De dónde sale
 

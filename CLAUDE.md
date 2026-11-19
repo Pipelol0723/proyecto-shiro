@@ -7,14 +7,14 @@ en este repo. Léelo entero antes de hacer cualquier cosa estructural.
 
 AI Companion modular tipo VTuber con voz, memoria y avatar animado.
 Diseñado para escalar de app desktop a sistema con múltiples clientes
-(móvil, Arduino, IoT, robots simples). Lo mantiene una persona, 4-6 h/semana,
-con agentes de IA como apoyo. Hardware de desarrollo: un portátil con una
+(móvil, Arduino, IoT, robots simples). Lo mantiene una persona, sin horas
+fijas ni plazos, con agentes de IA como apoyo. Hardware de desarrollo: un portátil con una
 GTX 1650 de 4 GB, donde corre todo el stack.
 
 **Lectura obligatoria antes de tomar decisiones arquitectónicas:**
 
 - [`README.md` → Roadmap](README.md#roadmap) — **única fuente** del estado de los hitos y de la hoja de ruta (ADR 0029).
-- [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md) — lo que toca ahora (Fase 1 hecha salvo el release; Fase 2 aprobada el 2026-11-14 y en ejecución, intercalada con las vías del avatar y del rediseño de la app; Fases 3 y 4 pendientes de aprobación, la 4 recortada; Fase 5 reducida), con la [revisión](docs/revision-estado-2026-11.md) y su [anexo](docs/revision-estado-2026-11-anexo.md). Ningún ítem P-xx se ejecuta sin que el dueño apruebe su fase.
+- [`docs/plan-mejora-2026-11.md`](docs/plan-mejora-2026-11.md) — lo que toca ahora (Fase 1 hecha salvo el release; Fase 2 aprobada el 2026-11-14 y en ejecución, intercalada con las vías del avatar, del rediseño de la app y de la iniciativa de Shiro; Fases 3 y 4 pendientes de aprobación, la 4 recortada; Fase 5 reducida), con la [revisión](docs/revision-estado-2026-11.md) y su [anexo](docs/revision-estado-2026-11-anexo.md). Ningún ítem P-xx se ejecuta sin que el dueño apruebe su fase.
 - [`docs/architecture.md`](docs/architecture.md) — vista actual de la arquitectura, con diagramas mermaid.
 - [`docs/adr/`](docs/adr/) — historial de decisiones con su porqué. Léelo cuando algo te haga dudar de "por qué se hizo así".
 - [`docs/design/shiro-character-bible.md`](docs/design/shiro-character-bible.md) — biblia del personaje (v0.2): identidad visual aprobada, tono y sistema de expresiones. Léela antes de tocar el avatar o producir arte de Shiro. El formato del avatar está en [ADR 0028](docs/adr/0028-avatar-motores-y-manifiesto.md) (Accepted e implementado en el paso AV-2 del plan: `<Avatar>` prueba una lista de modelos, Live2D y después la chibi por capas, y cae al orbe). Quién elige el modelo con la app en marcha lo decide el [ADR 0035](docs/adr/0035-avatar-eleccion-de-modelo-en-caliente.md) (Accepted el 2026-11-18, sin implementar).
