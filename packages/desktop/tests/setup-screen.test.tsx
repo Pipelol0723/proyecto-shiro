@@ -4,11 +4,16 @@
  */
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SystemHealthReport } from '@proyecto-shiro/core';
 
 const saveMock = vi.fn();
 const state: { report: SystemHealthReport | null } = { report: null };
+/** Lo que devuelve el guardado de claves; los tests lo mueven a mano. */
+const secretsState: { status: 'idle' | 'saving' | 'saved' | 'error'; error: string | undefined } = {
+  status: 'idle',
+  error: undefined,
+};
 
 vi.mock('../src/use-bus', () => ({ useBus: () => ({}) }));
 vi.mock('../src/connection/use-connection', () => ({ useConnectionState: () => 'open' }));
@@ -24,9 +29,9 @@ vi.mock('../src/health/useSystemHealth', () => ({
 vi.mock('../src/health/useSecretsSave', () => ({
   useSecretsSave: () => ({
     save: saveMock,
-    status: 'idle',
+    status: secretsState.status,
     restartRequired: false,
-    error: undefined,
+    error: secretsState.error,
   }),
 }));
 
@@ -207,5 +212,63 @@ describe('SetupScreen — clave de la nube, texto', () => {
     render(<SetupScreen />);
     const text = within(cardOf('Anthropic (Claude)')).getByText(/mal escrita o caducada/);
     expect(text.textContent).toMatch(/si está disponible/);
+  });
+});
+
+// P-15b, R-307: lo escrito se vaciaba al pulsar «Guardar», antes de saber si
+// se había guardado. Si fallaba, había que volver a pegar la clave.
+describe('SetupScreen — guardar una clave', () => {
+  beforeEach(() => {
+    secretsState.status = 'idle';
+    secretsState.error = undefined;
+    state.report = makeReport({ anthropic: true, elevenlabs: true, gemini: false });
+  });
+
+  /** Escribe una clave de Gemini, pulsa «Guardar» y deja el guardado «en curso». */
+  function typeAndSave(): { input: HTMLInputElement; settle: (status: 'saved' | 'error') => void } {
+    const view = render(<SetupScreen />);
+    const card = cardOf('Google Gemini');
+    const input = within(card).getByPlaceholderText<HTMLInputElement>(/GEMINI_API_KEY/);
+    fireEvent.change(input, { target: { value: 'clave-de-prueba' } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Guardar' }));
+    secretsState.status = 'saving';
+    view.rerender(<SetupScreen />);
+    return {
+      input,
+      settle: (status) => {
+        secretsState.status = status;
+        secretsState.error = status === 'error' ? 'No se pudo guardar.' : undefined;
+        view.rerender(<SetupScreen />);
+      },
+    };
+  }
+
+  it('mientras no hay respuesta, lo escrito sigue en el campo', () => {
+    const { input } = typeAndSave();
+    expect(input.value).toBe('clave-de-prueba');
+  });
+
+  it('cuando el core-host confirma, el campo se vacía', () => {
+    const { input, settle } = typeAndSave();
+    settle('saved');
+    expect(input.value).toBe('');
+  });
+
+  it('si el guardado falla, lo escrito no se pierde', () => {
+    const { input, settle } = typeAndSave();
+    settle('error');
+    expect(input.value).toBe('clave-de-prueba');
+  });
+
+  it('un guardado confirmado no vacía lo que se escriba después en otro campo', () => {
+    const { settle } = typeAndSave();
+    settle('saved');
+
+    const other = within(cardOf('ElevenLabs')).getByPlaceholderText<HTMLInputElement>(
+      /reemplazar key/,
+    );
+    fireEvent.change(other, { target: { value: 'otra-clave' } });
+
+    expect(other.value).toBe('otra-clave');
   });
 });
