@@ -35,6 +35,20 @@ const BLINK_CLOSED = 0.7;
 /** Cualquier cosa que un contexto 2D sepa pintar. */
 export type LayerImage = CanvasImageSource;
 
+/**
+ * Las imágenes del modelo, ya cargadas. Van en dos mapas porque en el
+ * manifiesto son dos listas de nombres distintas: una pieza de cara puede
+ * llamarse `base` o `glow` sin suplantar a la capa.
+ */
+export interface LayerImages {
+  /** Capas de figura completa (`outline`, `base`, `glow`), por su nombre en `layers`. */
+  readonly layers: ReadonlyMap<string, LayerImage>;
+  /** Piezas de la cara, por su nombre en `face.pieces`. */
+  readonly pieces: ReadonlyMap<string, LayerImage>;
+}
+
+const NO_IMAGES: LayerImages = { layers: new Map(), pieces: new Map() };
+
 /** El lienzo auxiliar de los ojos: se pinta en él y luego se pinta él. */
 export type EyeCanvas = LayerImage & {
   width: number;
@@ -47,7 +61,10 @@ export interface LayersPlayerOptions {
   createCanvas?: (width: number, height: number) => EyeCanvas;
   /** Fuente de azar del parpadeo, de 0 a 1. Por defecto, `Math.random`. */
   random?: () => number;
-  /** El sistema pide reducir el movimiento: sin respiración ni pulso del brillo. */
+  /**
+   * El sistema pide reducir el movimiento: sin respiración ni pulso del
+   * brillo. Se puede cambiar después con `setReducedMotion`.
+   */
   reducedMotion?: boolean;
 }
 
@@ -61,6 +78,8 @@ export interface PlayerClocks {
   /** Espera hasta el siguiente parpadeo automático. */
   nextBlink: number;
 }
+
+const CLOCK_KEYS = ['time', 'sinceEnter', 'blinkClock', 'nextBlink'] as const;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -77,11 +96,11 @@ export class LayersPlayer {
   readonly height: number;
 
   private readonly manifest: SpriteLayersManifest;
-  private images: ReadonlyMap<string, LayerImage>;
+  private images: LayerImages;
   private readonly eyeCanvas: EyeCanvas;
   private readonly eyeContext: CanvasRenderingContext2D;
   private readonly random: () => number;
-  private readonly reducedMotion: boolean;
+  private reducedMotion: boolean;
 
   private current = 'idle';
   /** Expresión de la que se viene, mientras dura el fundido. */
@@ -107,7 +126,7 @@ export class LayersPlayer {
    */
   constructor(
     manifest: SpriteLayersManifest,
-    images: ReadonlyMap<string, LayerImage>,
+    images: LayerImages,
     options: LayersPlayerOptions = {},
   ) {
     this.manifest = manifest;
@@ -137,20 +156,29 @@ export class LayersPlayer {
   get fade(): number {
     return this.fadeValue;
   }
+  /** Mirada actual, ya suavizada. Es una copia: no cambia al avanzar el reproductor. */
   get look(): readonly [number, number] {
-    return this.lookValue;
+    return [this.lookValue[0], this.lookValue[1]];
   }
   /** Parpadeo automático, de 0 (abierto) a 1 (cerrado). */
   get blink(): number {
     return this.blinkValue;
   }
+  /** Los relojes en este instante. Es una copia. */
   get clocks(): Readonly<PlayerClocks> {
-    return this.clock;
+    return { ...this.clock };
   }
 
-  /** Coloca los relojes a mano. Para pruebas y herramientas, no para la app. */
+  /**
+   * Coloca los relojes a mano. Para pruebas y herramientas, no para la app.
+   * Un valor que no sea un número finito y no negativo se ignora: si entrara,
+   * el reloj quedaría en NaN y ningún paso posterior lo recuperaría.
+   */
   setClocks(clocks: Partial<PlayerClocks>): void {
-    Object.assign(this.clock, clocks);
+    for (const key of CLOCK_KEYS) {
+      const value = clocks[key];
+      if (value !== undefined && Number.isFinite(value) && value >= 0) this.clock[key] = value;
+    }
   }
 
   // ── verbos (ADR 0028 §1) ───────────────────────────────────────────────────
@@ -206,13 +234,18 @@ export class LayersPlayer {
     this.outline = enabled;
   }
 
+  /** Aplica o retira «reducir el movimiento»; la preferencia puede cambiar con la app abierta. */
+  setReducedMotion(enabled: boolean): void {
+    this.reducedMotion = enabled;
+  }
+
   /**
    * Suelta las imágenes y el lienzo de los ojos. Después ya no pinta nada, y
    * los verbos y `update` no fallan ni tienen efecto visible.
    */
   dispose(): void {
     this.disposed = true;
-    this.images = new Map();
+    this.images = NO_IMAGES;
     this.eyeCanvas.width = 0;
     this.eyeCanvas.height = 0;
   }
@@ -300,6 +333,10 @@ export class LayersPlayer {
   /**
    * Dibuja el avatar ajustado a la caja `(x, y, w, h)`: conserva la
    * proporción, centrado en horizontal y apoyado en el borde inferior.
+   *
+   * Pinta con su propia opacidad y mezcla, y deja el contexto como lo
+   * encontró aunque una imagen falle al pintarse. Ese error sale tal cual:
+   * quien lleva el bucle de animación decide qué hacer con el modelo.
    */
   draw(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
     if (this.disposed) return;
@@ -311,43 +348,52 @@ export class LayersPlayer {
       : 1 + BREATH_AMOUNT * Math.sin((2 * Math.PI * this.clock.time) / BREATH_PERIOD_MS);
 
     ctx.save();
-    ctx.translate(x + (w - drawnWidth) / 2, y + h);
-    ctx.scale(scale, scale * breath);
-    ctx.translate(0, -this.height);
-    ctx.imageSmoothingQuality = 'high';
+    try {
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.translate(x + (w - drawnWidth) / 2, y + h);
+      ctx.scale(scale, scale * breath);
+      ctx.translate(0, -this.height);
+      ctx.imageSmoothingQuality = 'high';
 
-    if (this.outline) this.put(ctx, 'outline', 0, 0);
-    this.put(ctx, 'base', 0, 0);
+      if (this.outline) this.putLayer(ctx, 'outline');
+      this.putLayer(ctx, 'base');
 
-    if (this.from !== null && this.fadeValue < 1) {
-      // Durante el fundido la cara anterior queda debajo, opaca, y la nueva
-      // entra encima: así no se ve la cara en blanco entre las dos.
-      this.drawFace(ctx, this.from, 1);
-      this.drawFace(ctx, this.current, this.fadeValue);
-    } else {
-      this.drawFace(ctx, this.current, 1);
-    }
-
-    const glowImage = this.images.get('glow');
-    if (glowImage !== undefined) {
-      const glow = this.glowLevel();
-      ctx.globalAlpha = Math.min(1, glow);
-      ctx.drawImage(glowImage, 0, 0);
-      if (glow > 1) {
-        // Por encima de 1 el brillo se suma a sí mismo.
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = Math.min(1, glow - 1);
-        ctx.drawImage(glowImage, 0, 0);
+      if (this.from !== null && this.fadeValue < 1) {
+        // Durante el fundido la cara anterior queda debajo, opaca, y la nueva
+        // entra encima: así no se ve la cara en blanco entre las dos.
+        this.drawFace(ctx, this.from, 1);
+        this.drawFace(ctx, this.current, this.fadeValue);
+      } else {
+        this.drawFace(ctx, this.current, 1);
       }
+
+      const glowImage = this.images.layers.get('glow');
+      if (glowImage !== undefined) {
+        const glow = this.glowLevel();
+        ctx.globalAlpha = Math.min(1, glow);
+        ctx.drawImage(glowImage, 0, 0);
+        if (glow > 1) {
+          // Por encima de 1 el brillo se suma a sí mismo.
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = Math.min(1, glow - 1);
+          ctx.drawImage(glowImage, 0, 0);
+        }
+      }
+    } finally {
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   // ── interno ────────────────────────────────────────────────────────────────
 
   private randomBlinkInterval(): number {
     const [min, max] = this.manifest.face.blink.interval_s;
-    return (min + this.random() * (max - min)) * 1000;
+    // Un azar roto no puede dejar el parpadeo sin fecha: fuera de 0..1 se
+    // recorta, y si no es un número cae a mitad del intervalo.
+    const drawn = this.random();
+    const unit = Number.isFinite(drawn) ? clamp(drawn, 0, 1) : 0.5;
+    return (min + unit * (max - min)) * 1000;
   }
 
   /** La expresión pedida, o `idle` si no existe (el esquema garantiza `idle`). */
@@ -358,10 +404,18 @@ export class LayersPlayer {
     return found;
   }
 
-  /** Pinta una imagen por su nombre. Si no está cargada, no pinta nada. */
-  private put(ctx: CanvasRenderingContext2D, name: string, x: number, y: number): void {
-    const image = this.images.get(name);
-    if (image !== undefined) ctx.drawImage(image, x, y);
+  /** Pinta una capa de figura completa. Si no está cargada, no pinta nada. */
+  private putLayer(ctx: CanvasRenderingContext2D, name: string): void {
+    const image = this.images.layers.get(name);
+    if (image !== undefined) ctx.drawImage(image, 0, 0);
+  }
+
+  /** Pinta una pieza de la cara en la caja de la cara. Si no está cargada, no pinta nada. */
+  private putPiece(ctx: CanvasRenderingContext2D, name: string): void {
+    const image = this.images.pieces.get(name);
+    if (image === undefined) return;
+    const [faceX, faceY] = this.manifest.face.rect;
+    ctx.drawImage(image, faceX, faceY);
   }
 
   /** Ojos en un estado de párpado: blanco, iris desplazado y líneas. */
@@ -372,13 +426,14 @@ export class LayersPlayer {
     if (parts === undefined) return;
 
     ctx.globalAlpha = alpha;
-    const white = parts.white === null ? undefined : this.images.get(parts.white);
+    const { pieces } = this.images;
+    const white = parts.white === null ? undefined : pieces.get(parts.white);
     if (white !== undefined) {
       const eye = this.eyeContext;
       eye.globalCompositeOperation = 'source-over';
       eye.clearRect(0, 0, faceWidth, faceHeight);
       eye.drawImage(white, 0, 0);
-      const iris = face.iris === undefined ? undefined : this.images.get(face.iris);
+      const iris = face.iris === undefined ? undefined : pieces.get(face.iris);
       if (iris !== undefined) {
         // El iris solo se pinta donde ya hay blanco: el párpado lo tapa solo.
         eye.globalCompositeOperation = 'source-atop';
@@ -387,17 +442,16 @@ export class LayersPlayer {
       }
       ctx.drawImage(this.eyeCanvas, faceX, faceY);
     }
-    this.put(ctx, parts.lines, faceX, faceY);
+    this.putPiece(ctx, parts.lines);
   }
 
   private drawFace(ctx: CanvasRenderingContext2D, expression: string, alpha: number): void {
     const { face } = this.manifest;
-    const [faceX, faceY] = face.rect;
     const definition = this.expressionOf(expression);
     const putWithAlpha = (name: string, opacity: number): void => {
       if (opacity <= 0) return;
       ctx.globalAlpha = opacity;
-      this.put(ctx, name, faceX, faceY);
+      this.putPiece(ctx, name);
     };
 
     this.drawEyes(ctx, this.eyesFor(expression), alpha);
