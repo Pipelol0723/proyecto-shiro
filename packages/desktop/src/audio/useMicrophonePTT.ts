@@ -11,6 +11,7 @@
  *     → chunks PCM Int16 LE → cliente de Whisper (binario)
  *     → partial JSON del server → bus.emit('stt:partial')
  *   keyup(activationKey)
+ *     → se pide al worklet lo que tenga a medias (el final de la frase)
  *     → se pide el final; espera `transcribed`.
  *     → bus.emit('stt:transcribed')
  *     → libera AudioContext, MediaStream, WS.
@@ -47,6 +48,20 @@ import { WhisperSttClient } from './whisper-stt-client.js';
 import workletUrl from './pcm-capture-processor.js?url';
 
 const TARGET_SAMPLE_RATE = 16_000;
+
+/**
+ * Cuánto se espera, al soltar, a que el worklet entregue lo que tenía a
+ * medias. Contesta en el siguiente paso de audio (milisegundos); el plazo es
+ * para no quedarse esperando a uno que no conteste.
+ */
+export const FLUSH_TIMEOUT_MS = 150;
+
+/** El aviso del worklet de que ya entregó lo pendiente. */
+function isFlushedMessage(data: unknown): boolean {
+  return (
+    typeof data === 'object' && data !== null && (data as { type?: unknown }).type === 'flushed'
+  );
+}
 
 export type MicrophonePTTState =
   'idle' | 'requesting' | 'recording' | 'finalizing' | 'error' | 'unsupported';
@@ -129,6 +144,8 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
    * que ya se canceló o falló (el permiso del micro, el WS) lo mira y se retira.
    */
   const turnRef = useRef<{ over: boolean } | null>(null);
+  /** Da por terminada la espera al worklet de `flushWorklet`, si hay una. */
+  const flushWaiterRef = useRef<(() => void) | null>(null);
 
   const setStateAndRef = useCallback((next: MicrophonePTTState) => {
     stateRef.current = next;
@@ -144,6 +161,8 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     // El turno acaba aquí también para lo que aún no ha llegado (el permiso
     // del micro, la carga del worklet): al llegar lo ve terminado y se suelta.
     if (turnRef.current !== null) turnRef.current.over = true;
+    // Quien esperaba al worklet no tiene ya nada que esperar.
+    flushWaiterRef.current?.();
 
     workletNodeRef.current?.port.close();
     workletNodeRef.current?.disconnect();
@@ -257,8 +276,12 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       // Chunks PCM Int16 LE del worklet al cliente, que los envía o, si el WS
       // sigue abriendo, los guarda hasta que abra.
       worklet.port.onmessage = (event) => {
-        if (!(event.data instanceof ArrayBuffer)) return;
-        client.sendChunk(event.data);
+        const data: unknown = event.data;
+        if (data instanceof ArrayBuffer) {
+          client.sendChunk(data);
+          return;
+        }
+        if (isFlushedMessage(data)) flushWaiterRef.current?.();
       };
 
       source.connect(worklet);
@@ -276,6 +299,38 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       fail(describeMicError(err));
     }
   }, [bus, serviceUrl, userId, setStateAndRef, teardown]);
+
+  /**
+   * Pide al worklet lo que tenga a medias y espera a que lo entregue. Lo
+   * entregado llega por su puerto como un trozo más y sale hacia Whisper.
+   * Nunca rechaza: si el worklet no contesta, se sigue al vencer el plazo.
+   */
+  const flushWorklet = useCallback((): Promise<void> => {
+    const worklet = workletNodeRef.current;
+    if (worklet === null) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer);
+        flushWaiterRef.current = null;
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        // Lo que entregue después de esto llega con el final ya pedido y el
+        // cliente de Whisper lo descarta: que al menos quede dicho.
+        console.warn(
+          '[Micro] el worklet no entregó a tiempo lo que tenía pendiente; puede faltar el final de la frase',
+        );
+        done();
+      }, FLUSH_TIMEOUT_MS);
+      flushWaiterRef.current = done;
+      try {
+        worklet.port.postMessage({ type: 'flush' });
+      } catch {
+        // Puerto cerrado o inservible: no hay nada que esperar.
+        done();
+      }
+    });
+  }, []);
 
   /** Corta el turno en curso sin pedir transcripción y vuelve a reposo. */
   const cancelTurn = useCallback((): void => {
@@ -299,6 +354,11 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     const turn = turnRef.current;
     const client = clientRef.current;
     try {
+      // El worklet junta 250 ms antes de entregar: lo que tiene a medias es
+      // el final de la frase, y tiene que salir antes que el «stop». Se pide
+      // con la entrada aún conectada: cortándola antes, lo último que entró
+      // podía quedarse fuera.
+      await flushWorklet();
       // Cortar la entrada de audio al worklet antes de pedir el final
       // — evita que sigan llegando chunks tras el stop.
       sourceNodeRef.current?.disconnect();
@@ -319,7 +379,7 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       // Solo lo de este turno: si ya hubiera otro en marcha, sus recursos no se tocan.
       if (turnRef.current === turn) teardown();
     }
-  }, [cancelTurn, setStateAndRef, teardown]);
+  }, [cancelTurn, flushWorklet, setStateAndRef, teardown]);
 
   const cancel = useCallback((): void => {
     if (stateRef.current !== 'recording' && stateRef.current !== 'requesting') return;
