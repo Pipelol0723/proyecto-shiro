@@ -116,6 +116,26 @@ describe('core-host bootstrap end-to-end', () => {
     expect(result.transport.address).toBe('127.0.0.1');
   });
 
+  it('un fallo de clave de la nube vuelve a emitir system:health con el problema', async () => {
+    result = await bootstrap({
+      port: 0,
+      config: loadFixtureConfig(),
+      character: FIXTURE_CHARACTER,
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+    const reports: EventMap['system:health'][] = [];
+    result.bus.on('system:health', (report) => {
+      reports.push(report);
+    });
+
+    await result.bus.emit('llm:failed', { reason: 'auth', tier: 'cloud', userId: 'me' });
+
+    await waitFor(() => reports.some((report) => report.readiness?.cloud === 'auth'), {
+      timeoutMs: 8000,
+    });
+  }, 15_000);
+
   it('arranca, registra mocks, emite bus:ready', async () => {
     const readyEvents: { startedAt: string }[] = [];
 

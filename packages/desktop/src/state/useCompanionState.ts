@@ -43,6 +43,7 @@
  */
 
 import { useReducer } from 'react';
+import { isTurnFailureReason } from '@proyecto-shiro/core';
 import { useBus, useBusEvent } from '../use-bus';
 import {
   companionReducer,
@@ -90,6 +91,13 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
       tier: p.tier,
       latencyMs: p.latencyMs,
     });
+  });
+
+  useBusEvent('llm:failed', (p) => {
+    // El motivo viene del servidor; si no es de la lista cerrada (un servidor
+    // más nuevo, o un frame raro), se muestra el aviso genérico.
+    const reason = isTurnFailureReason(p.reason) ? p.reason : 'unknown';
+    dispatch({ type: 'TURN_FAILED', reason, tier: p.tier === 'cloud' ? 'cloud' : 'local' });
   });
 
   useBusEvent('tts:audio-ended', () => {

@@ -92,3 +92,120 @@ describe('SetupScreen', () => {
     expect(saveMock).toHaveBeenCalledWith({ gemini: 'clave-de-prueba' });
   });
 });
+
+describe('SetupScreen — vivo frente a listo', () => {
+  const secrets = { anthropic: true, elevenlabs: true, gemini: true };
+
+  it('si a Ollama le falta un modelo, dice cuál y cómo bajarlo', () => {
+    state.report = { ...makeReport(secrets), readiness: { ollamaMissingModels: ['qwen2.5:3b'] } };
+    render(<SetupScreen />);
+    const card = cardOf('Ollama');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText(/falta un modelo/)).toBeDefined();
+    expect(within(card).getByText('ollama pull qwen2.5:3b')).toBeDefined();
+  });
+
+  it('con varios modelos que faltan, da un comando por modelo', () => {
+    state.report = {
+      ...makeReport(secrets),
+      readiness: { ollamaMissingModels: ['qwen2.5:3b', 'mxbai-embed-large'] },
+    };
+    render(<SetupScreen />);
+    const card = cardOf('Ollama');
+    expect(within(card).getByText('ollama pull qwen2.5:3b')).toBeDefined();
+    expect(within(card).getByText('ollama pull mxbai-embed-large')).toBeDefined();
+  });
+
+  it('Whisper cargando el modelo no sale como activo', () => {
+    state.report = { ...makeReport(secrets), readiness: { whisper: 'loading' } };
+    render(<SetupScreen />);
+    const card = cardOf('Whisper (STT)');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText(/cargando/)).toBeDefined();
+  });
+
+  it('Whisper en CPU sale activo, con el aviso de que irá lento', () => {
+    state.report = { ...makeReport(secrets), readiness: { whisper: 'cpu' } };
+    render(<SetupScreen />);
+    const card = cardOf('Whisper (STT)');
+    expect(within(card).getByText(/✓ activo/)).toBeDefined();
+    expect(within(card).getByText(/CPU/)).toBeDefined();
+  });
+
+  it('con Ollama caído, el comando incluye también el modelo de embeddings', () => {
+    state.report = {
+      ...makeReport(secrets),
+      services: { ollama: 'down', letta: 'ok', whisper: 'ok' },
+    };
+    render(<SetupScreen />);
+    expect(within(cardOf('Ollama')).getByText(/mxbai-embed-large/)).toBeDefined();
+  });
+
+  it('sin readiness todo sigue como antes', () => {
+    state.report = makeReport(secrets);
+    render(<SetupScreen />);
+    expect(within(cardOf('Ollama')).getByText(/✓ activo/)).toBeDefined();
+    expect(within(cardOf('Whisper (STT)')).getByText(/✓ activo/)).toBeDefined();
+  });
+});
+
+describe('SetupScreen — Whisper caído', () => {
+  it('avisa de que, recién arrancado, puede estar cargando el modelo', () => {
+    state.report = {
+      ...makeReport({ anthropic: true, elevenlabs: true, gemini: true }),
+      services: { ollama: 'ok', letta: 'ok', whisper: 'down' },
+    };
+    render(<SetupScreen />);
+    expect(within(cardOf('Whisper (STT)')).getByText(/recién arrancado/)).toBeDefined();
+  });
+});
+
+describe('SetupScreen — clave de la nube', () => {
+  const allKeys = { anthropic: true, elevenlabs: true, gemini: true };
+
+  it('si la nube rechazó la clave, no sale como activa y dice qué hacer', () => {
+    state.report = { ...makeReport(allKeys), readiness: { cloud: 'auth' } };
+    render(<SetupScreen />);
+    const card = cardOf('Anthropic (Claude)');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText('clave rechazada')).toBeDefined();
+    expect(within(card).getByText(/mal escrita o caducada/)).toBeDefined();
+  });
+
+  it('si no queda cuota o saldo, lo dice', () => {
+    state.report = { ...makeReport(allKeys), readiness: { cloud: 'quota' } };
+    render(<SetupScreen />);
+    const card = cardOf('Anthropic (Claude)');
+    expect(within(card).queryByText(/✓ activo/)).toBeNull();
+    expect(within(card).getByText('sin cuota o saldo')).toBeDefined();
+  });
+
+  it('sin clave, manda «no detectado»: el problema de una clave que no está no se pinta', () => {
+    state.report = {
+      ...makeReport({ ...allKeys, anthropic: false }),
+      readiness: { cloud: 'auth' },
+    };
+    render(<SetupScreen />);
+    const card = cardOf('Anthropic (Claude)');
+    expect(within(card).getByText(/no detectado/)).toBeDefined();
+    expect(within(card).queryByText('clave rechazada')).toBeNull();
+  });
+
+  it('el problema de la nube no toca las otras claves', () => {
+    state.report = { ...makeReport(allKeys), readiness: { cloud: 'auth' } };
+    render(<SetupScreen />);
+    expect(within(cardOf('ElevenLabs')).getByText(/✓ activo/)).toBeDefined();
+  });
+});
+
+describe('SetupScreen — clave de la nube, texto', () => {
+  it('no promete el modelo local: solo lo ofrece si está disponible', () => {
+    state.report = {
+      ...makeReport({ anthropic: true, elevenlabs: true, gemini: true }),
+      readiness: { cloud: 'auth' },
+    };
+    render(<SetupScreen />);
+    const text = within(cardOf('Anthropic (Claude)')).getByText(/mal escrita o caducada/);
+    expect(text.textContent).toMatch(/si está disponible/);
+  });
+});

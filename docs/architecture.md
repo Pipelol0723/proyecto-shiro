@@ -215,6 +215,7 @@ acciones cuando el usuario actúa:
 | `USER_SAID`           | `bus.on('user:message')` — texto tipeado **o** transcrito                 | `user:message`      |
 | `THINK_START`         | `bus.on('router:routed')`                                                 | `router:routed`     |
 | `SHIRO_REPLY`         | `bus.on('llm:responded')`                                                 | `llm:responded`     |
+| `TURN_FAILED`         | `bus.on('llm:failed')` — un LLM no pudo responder; aviso con el motivo    | `llm:failed`        |
 | (sin acción)          | `bus.on('tts:audio')` → `useTtsPlayback` hace fetch + reproduce el blob   | `tts:audio`         |
 | (cliente origina)     | `bus.emit('tts:cancel')` cuando el usuario interrumpe a Shiro mid-speech  | `tts:cancel`        |
 | `SPEAK_END`           | `bus.on('tts:audio-ended')` — emitido por el cliente al `ended` del audio | `tts:audio-ended`   |

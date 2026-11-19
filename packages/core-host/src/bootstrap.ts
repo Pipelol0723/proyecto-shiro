@@ -63,6 +63,7 @@ import { buildTtsChain } from './tts/build-tts-chain.js';
 import { FileTtsUsageCounter } from './tts/tts-usage-counter.js';
 import { checkGeminiVoice, resolveGeminiVoiceTarget } from './health/gemini-voice-check.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
+import { watchCloudKey, type CloudKeyIssue } from './health/cloud-key-watch.js';
 import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
 
 export interface BootstrapOptions {
@@ -249,6 +250,8 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     y en respuesta a `system:health-check`. Nunca expone el valor de
   //     las keys, solo su presencia.
   const healthTargets = resolveHealthTargets(options.config);
+  // Lo que se sabe de la clave de la nube por los turnos (ver más abajo).
+  let cloudIssue: CloudKeyIssue | undefined;
   const checkAndEmitHealth = (): void => {
     void (async (): Promise<void> => {
       try {
@@ -256,6 +259,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
           ...healthTargets,
           logger,
           ...(geminiVoice !== undefined && { geminiVoice }),
+          ...(cloudIssue !== undefined && { cloudIssue }),
         });
         await bus.emit('system:health', report);
       } catch (err) {
@@ -299,6 +303,12 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     })();
   }
   const unsubscribeHealth = bus.on('system:health-check', () => {
+    checkAndEmitHealth();
+  });
+  // Si un turno acaba con la nube rechazando la clave o sin cuota, el informe
+  // lo dice y se vuelve a emitir en ese momento; igual cuando se arregla.
+  const cloudKey = watchCloudKey(bus, (issue) => {
+    cloudIssue = issue;
     checkAndEmitHealth();
   });
   transport.onConnection(() => {
@@ -469,6 +479,7 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
       disposeFlow();
       disposeSelfDev();
       unsubscribeHealth();
+      cloudKey.dispose();
       unsubscribeSecrets();
       audioCache?.stop();
       await memoryManager.stop();

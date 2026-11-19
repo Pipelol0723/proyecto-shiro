@@ -48,7 +48,7 @@ const SERVICES: readonly ServiceRow[] = [
     key: 'ollama',
     name: 'Ollama',
     purpose: 'LLM local (Qwen 2.5) + clasificador del router',
-    command: 'ollama serve   ·   ollama pull qwen2.5:3b',
+    command: 'ollama serve   ·   ollama pull qwen2.5:3b   ·   ollama pull mxbai-embed-large',
     degraded:
       'Sin Ollama, Shiro depende del LLM cloud (Claude). Sin key de Claude tampoco, no responde.',
   },
@@ -110,13 +110,23 @@ function StatusBadge({
   ok,
   checking,
   unknown = false,
+  notReady,
+  problem,
 }: {
   ok: boolean;
   checking: boolean;
   /** Sin reporte porque el core-host no responde: no se sabe, no es «no detectado». */
   unknown?: boolean;
+  /** El servicio responde pero aún no está listo: se dice qué espera, no «activo». */
+  notReady?: string;
+  /** El servicio responde pero le falta algo que hay que arreglar. */
+  problem?: string;
 }): JSX.Element {
   if (unknown) return <span className={`${styles.badge} ${styles.badgeChecking}`}>sin datos</span>;
+  if (problem !== undefined)
+    return <span className={`${styles.badge} ${styles.badgeDown}`}>{problem}</span>;
+  if (notReady !== undefined)
+    return <span className={`${styles.badge} ${styles.badgeChecking}`}>{notReady}</span>;
   if (checking)
     return <span className={`${styles.badge} ${styles.badgeChecking}`}>comprobando…</span>;
   return ok ? (
@@ -184,6 +194,18 @@ export function SetupScreen(): JSX.Element {
         <ul className={styles.cards}>
           {SERVICES.map((svc) => {
             const ok = serviceStatus(report?.services[svc.key]);
+            // Vivo no es listo: a Ollama le pueden faltar modelos y Whisper
+            // puede estar aún cargando el suyo (o ir en CPU, que solo avisa).
+            const missing =
+              ok && svc.key === 'ollama' ? (report?.readiness?.ollamaMissingModels ?? []) : [];
+            const whisper = ok && svc.key === 'whisper' ? report?.readiness?.whisper : undefined;
+            const problem =
+              missing.length === 1
+                ? 'falta un modelo'
+                : missing.length > 1
+                  ? `faltan ${String(missing.length)} modelos`
+                  : undefined;
+            const notReady = whisper === 'loading' ? 'cargando el modelo…' : undefined;
             return (
               <li key={svc.key} className={styles.card}>
                 <div className={styles.cardHead}>
@@ -192,13 +214,44 @@ export function SetupScreen(): JSX.Element {
                     ok={ok}
                     checking={report === null && checking}
                     unknown={unreachable}
+                    {...(notReady !== undefined && { notReady })}
+                    {...(problem !== undefined && { problem })}
                   />
                 </div>
                 <p className={styles.cardPurpose}>{svc.purpose}</p>
+                {missing.length > 0 && (
+                  <>
+                    <p className={styles.degraded}>
+                      Ollama responde, pero no tiene descargado todo lo que uso. Bájalo con:
+                    </p>
+                    {missing.map((model) => (
+                      <code key={model} className={styles.command}>
+                        {`ollama pull ${model}`}
+                      </code>
+                    ))}
+                  </>
+                )}
+                {whisper === 'loading' && (
+                  <p className={styles.degraded}>
+                    Whisper está arrancando y todavía no puedo oírte. Suele tardar menos de un
+                    minuto; pulsa «rechequear».
+                  </p>
+                )}
+                {whisper === 'cpu' && (
+                  <p className={styles.degraded}>
+                    Whisper transcribe en CPU: te oigo, pero más lento que con la tarjeta gráfica.
+                  </p>
+                )}
                 {!ok && report !== null && (
                   <>
                     <code className={styles.command}>{svc.command}</code>
                     <p className={styles.degraded}>{svc.degraded}</p>
+                    {svc.key === 'whisper' && (
+                      <p className={styles.degraded}>
+                        Si está recién arrancado, puede estar cargando el modelo: hasta que termina
+                        no contesta. Espera un minuto y pulsa «rechequear».
+                      </p>
+                    )}
                   </>
                 )}
               </li>
@@ -213,6 +266,14 @@ export function SetupScreen(): JSX.Element {
           {SECRETS.map((sec) => {
             const ok = report?.secrets[sec.key] ?? false;
             const field = SECRET_FIELD[sec.key];
+            // La clave está, pero la nube la rechazó o no queda cuota (R-296).
+            const cloudIssue = ok && sec.key === 'anthropic' ? report?.readiness?.cloud : undefined;
+            const keyProblem =
+              cloudIssue === 'auth'
+                ? 'clave rechazada'
+                : cloudIssue === 'quota'
+                  ? 'sin cuota o saldo'
+                  : undefined;
             return (
               <li key={sec.key} className={styles.card}>
                 <div className={styles.cardHead}>
@@ -221,10 +282,24 @@ export function SetupScreen(): JSX.Element {
                     ok={ok}
                     checking={report === null && checking}
                     unknown={unreachable}
+                    {...(keyProblem !== undefined && { problem: keyProblem })}
                   />
                 </div>
                 <p className={styles.cardPurpose}>{sec.purpose}</p>
                 {!ok && report !== null && <p className={styles.degraded}>{sec.degraded}</p>}
+                {cloudIssue === 'auth' && (
+                  <p className={styles.degraded}>
+                    La nube rechazó esta clave la última vez que la usé: puede estar mal escrita o
+                    caducada. Pega una nueva y guárdala. Mientras tanto uso el modelo local, si está
+                    disponible.
+                  </p>
+                )}
+                {cloudIssue === 'quota' && (
+                  <p className={styles.degraded}>
+                    La nube dice que esta clave llegó a su límite de uso o que la cuenta no tiene
+                    saldo. Mientras tanto uso el modelo local, si está disponible.
+                  </p>
+                )}
                 {sec.notice !== undefined && <p className={styles.notice}>{sec.notice}</p>}
                 <div className={styles.secretRow}>
                   <input
