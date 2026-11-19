@@ -207,19 +207,21 @@ recompilar. Ver el bundle de diseño en
 El reducer del cliente se alimenta de eventos del core, y dispara
 acciones cuando el usuario actúa:
 
-| Acción del reducer    | Origen                                                                    | Evento del EventBus |
-| --------------------- | ------------------------------------------------------------------------- | ------------------- |
-| `LISTEN_START`        | `bus.on('stt:listening')` — emitido por el hook PTT al arrancar           | `stt:listening`     |
-| `STT_PARTIAL`         | `bus.on('stt:partial')` — partial del microservicio whisper               | `stt:partial`       |
-| `STT_FINAL`           | `bus.on('stt:transcribed')` — final del microservicio whisper             | `stt:transcribed`   |
-| `USER_SAID`           | `bus.on('user:message')` — texto tipeado **o** transcrito                 | `user:message`      |
-| `THINK_START`         | `bus.on('router:routed')`                                                 | `router:routed`     |
-| `SHIRO_REPLY`         | `bus.on('llm:responded')`                                                 | `llm:responded`     |
-| `TURN_FAILED`         | `bus.on('llm:failed')` — un LLM no pudo responder; aviso con el motivo    | `llm:failed`        |
-| (sin acción)          | `bus.on('tts:audio')` → `useTtsPlayback` hace fetch + reproduce el blob   | `tts:audio`         |
-| (cliente origina)     | `bus.emit('tts:cancel')` cuando el usuario interrumpe a Shiro mid-speech  | `tts:cancel`        |
-| `SPEAK_END`           | `bus.on('tts:audio-ended')` — emitido por el cliente al `ended` del audio | `tts:audio-ended`   |
-| `HYDRATE_FROM_MEMORY` | `bus.on('memory:snapshot')` — server empuja al reconectar                 | `memory:snapshot`   |
+| Acción del reducer    | Origen                                                                     | Evento del EventBus |
+| --------------------- | -------------------------------------------------------------------------- | ------------------- |
+| `LISTEN_START`        | `bus.on('stt:listening')` — emitido por el hook PTT al arrancar            | `stt:listening`     |
+| `STT_PARTIAL`         | `bus.on('stt:partial')` — partial del microservicio whisper                | `stt:partial`       |
+| `STT_FINAL`           | `bus.on('stt:transcribed')` — final del microservicio whisper              | `stt:transcribed`   |
+| `USER_SAID`           | `bus.on('user:message')` — texto tipeado **o** transcrito                  | `user:message`      |
+| `THINK_START`         | `bus.on('router:routed')`                                                  | `router:routed`     |
+| `SHIRO_REPLY`         | `bus.on('llm:responded')`                                                  | `llm:responded`     |
+| `TURN_FAILED`         | `bus.on('llm:failed')` — un LLM no pudo responder; aviso con el motivo     | `llm:failed`        |
+| `TURN_MEASURED`       | `bus.on('turn:measured')` — tiempos por etapa, en la respuesta de su turno | `turn:measured`     |
+| (cliente origina)     | `bus.emit('tts:audio-started')` cuando la voz empieza a sonar              | `tts:audio-started` |
+| (sin acción)          | `bus.on('tts:audio')` → `useTtsPlayback` hace fetch + reproduce el blob    | `tts:audio`         |
+| (cliente origina)     | `bus.emit('tts:cancel')` cuando el usuario interrumpe a Shiro mid-speech   | `tts:cancel`        |
+| `SPEAK_END`           | `bus.on('tts:audio-ended')` — emitido por el cliente al `ended` del audio  | `tts:audio-ended`   |
+| `HYDRATE_FROM_MEMORY` | `bus.on('memory:snapshot')` — server empuja al reconectar                  | `memory:snapshot`   |
 
 > **Wiring voz → texto unificado**: `useCompanionState` re-emite
 > `user:message` al recibir `stt:transcribed` con texto no vacío. Así
@@ -287,6 +289,8 @@ sequenceDiagram
     Client->>TTS: GET /audio/&lt;id&gt;.&lt;ext&gt;
     TTS-->>Client: bytes
     Client->>Speaker: HTMLAudioElement.play()
+    Client->>Bus: emit("tts:audio-started", { audioId })
+    Note over LLM: log: latencia hasta el primer audio
     Avatar->>Speaker: lip sync sincronizado
     Speaker->>User: voz + animación
     Client->>Bus: emit("tts:audio-ended", { audioId })

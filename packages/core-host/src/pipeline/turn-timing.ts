@@ -6,13 +6,15 @@
  * oye. Sin el reparto por etapas no se podía saber dónde se iba el tiempo.
  */
 
+import type { EventMap } from '@proyecto-shiro/core';
+
+/** Milisegundos por etapa, como viajan en `turn:measured`. Una etapa que no ocurrió no aparece. */
+export type TurnStageTimes = EventMap['turn:measured']['stages'];
+
+export type TurnStage = keyof TurnStageTimes;
+
 /** Las etapas del turno, en el orden en que ocurren. */
-export const TURN_STAGES = ['route', 'context', 'llm', 'persist', 'tts'] as const;
-
-export type TurnStage = (typeof TURN_STAGES)[number];
-
-/** Milisegundos por etapa. Una etapa que no ocurrió no aparece. */
-export type TurnStageTimes = Partial<Record<TurnStage, number>>;
+export const TURN_STAGES: readonly TurnStage[] = ['route', 'context', 'llm', 'persist', 'tts'];
 
 export class TurnTiming {
   private readonly startedAt: number;
@@ -53,10 +55,22 @@ export class TurnTiming {
   }
 }
 
-/** Una línea para el log: `route=120ms context=35ms llm=900ms … total=1480ms`. */
+/**
+ * Lo que no es de ninguna etapa: emitir los eventos del turno y esperar a
+ * quien los escucha, guardar el mensaje del usuario… Las etapas no suman el
+ * total, y la diferencia se dice para que las cuentas cuadren.
+ */
+export function unaccountedMs(stages: TurnStageTimes, totalMs: number): number {
+  const measured = TURN_STAGES.reduce((sum, stage) => sum + (stages[stage] ?? 0), 0);
+  return Math.max(0, totalMs - measured);
+}
+
+/** Una línea para el log: `route=120ms context=35ms llm=900ms … resto=13ms total=1480ms`. */
 export function formatTurnTiming(stages: TurnStageTimes, totalMs: number): string {
   const parts = TURN_STAGES.filter((stage) => stages[stage] !== undefined).map(
     (stage) => `${stage}=${String(stages[stage])}ms`,
   );
+  const rest = unaccountedMs(stages, totalMs);
+  if (rest > 0) parts.push(`resto=${String(rest)}ms`);
   return [...parts, `total=${String(totalMs)}ms`].join(' ');
 }

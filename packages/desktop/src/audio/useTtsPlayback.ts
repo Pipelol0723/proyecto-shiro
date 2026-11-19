@@ -214,7 +214,8 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
       // `playing` se repite tras cada pausa por falta de datos; cuenta la primera.
       let started = false;
       audio.addEventListener('playing', () => {
-        if (started) return;
+        // Un audio que ya cortamos no «empieza»: su aviso sería de otro turno.
+        if (started || cutAudiosRef.current.has(audio)) return;
         started = true;
         void bus.emit('tts:audio-started', {
           audioId: payload.audioId,

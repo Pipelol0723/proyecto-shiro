@@ -24,12 +24,15 @@ const STAGE_LABELS: [keyof TurnStages, string][] = [
 ];
 
 /** El desglose del turno para el texto emergente: «elegir modelo 120 ms · memoria 35 ms · …». */
-function describeStages(stages: TurnStages | undefined): string {
+function describeStages(stages: TurnStages | undefined, totalMs: number): string {
   const intro = 'Tiempo hasta tener lista la voz de la respuesta';
   if (stages === undefined) return intro;
   const parts = STAGE_LABELS.filter(([stage]) => stages[stage] !== undefined).map(
     ([stage, label]) => `${label} ${String(stages[stage])} ms`,
   );
+  // Lo que no es de ninguna etapa, para que la suma cuadre con el total.
+  const measured = STAGE_LABELS.reduce((sum, [stage]) => sum + (stages[stage] ?? 0), 0);
+  if (totalMs > measured) parts.push(`resto ${String(totalMs - measured)} ms`);
   return parts.length === 0 ? intro : `${intro}: ${parts.join(' · ')}`;
 }
 
@@ -63,7 +66,7 @@ export function ChatPanel({ history, open, onToggle }: ChatPanelProps): JSX.Elem
                   </span>
                 )}
                 {msg.voiceReadyMs !== undefined && (
-                  <span className={styles.tag} title={describeStages(msg.stages)}>
+                  <span className={styles.tag} title={describeStages(msg.stages, msg.voiceReadyMs)}>
                     voz {msg.voiceReadyMs}ms
                   </span>
                 )}

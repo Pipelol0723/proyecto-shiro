@@ -203,6 +203,12 @@ export interface EventMap {
     tier: 'local' | 'cloud';
     /** ms desde user:message hasta esta emisión. */
     latencyMs: number;
+    /**
+     * Id del turno: el del mensaje del usuario que lo abrió. Es el mismo que
+     * lleva `turn:measured`, para saber de qué respuesta son sus tiempos. No
+     * lo llevan las respuestas que no vienen de un turno (un anuncio).
+     */
+    turnId?: string;
   };
 
   /**

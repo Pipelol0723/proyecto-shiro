@@ -25,6 +25,8 @@ export interface CompanionMessage {
   /** Solo en mensajes de Shiro. */
   emotion?: Emotion;
   tier?: LLMTier;
+  /** Id del turno al que responde, si se conoce: enlaza con `turn:measured`. */
+  turnId?: string;
   /** ms hasta que llegó el texto de la respuesta. */
   latencyMs?: number;
   /** ms hasta que la voz de la respuesta quedó lista (`turn:measured`). */
@@ -100,8 +102,15 @@ export type CompanionAction =
   | { type: 'STT_FINAL'; text: string; userId: string }
   | { type: 'USER_SAID'; text: string; userId: string }
   | { type: 'THINK_START'; tier: LLMTier }
-  | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
-  | { type: 'TURN_MEASURED'; stages: TurnStages; totalMs: number }
+  | {
+      type: 'SHIRO_REPLY';
+      text: string;
+      emotion: Emotion;
+      tier: LLMTier;
+      latencyMs: number;
+      turnId?: string;
+    }
+  | { type: 'TURN_MEASURED'; turnId: string; stages: TurnStages; totalMs: number }
   | { type: 'TURN_FAILED'; reason: TurnFailureReason; tier: LLMTier }
   | { type: 'SPEAK_END' }
   | { type: 'LISTEN_END' }
@@ -200,16 +209,18 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
             emotion: action.emotion,
             tier: action.tier,
             latencyMs: action.latencyMs,
+            ...(action.turnId !== undefined && { turnId: action.turnId }),
             timestamp: new Date().toISOString(),
           },
         ],
       };
 
     case 'TURN_MEASURED': {
-      // Los tiempos son de la última respuesta de Shiro: `turn:measured`
-      // llega al final del turno, después de `llm:responded`.
+      // Los tiempos van a la respuesta de ESE turno, no a la última: con dos
+      // turnos solapados la última puede ser de otro, y un cliente que
+      // conecta a mitad de turno recibe medidas de respuestas que no vio.
       let index = state.history.length - 1;
-      while (index >= 0 && state.history[index]?.role !== 'shiro') index -= 1;
+      while (index >= 0 && state.history[index]?.turnId !== action.turnId) index -= 1;
       const reply = state.history[index];
       if (reply === undefined) return state;
       const history = [...state.history];

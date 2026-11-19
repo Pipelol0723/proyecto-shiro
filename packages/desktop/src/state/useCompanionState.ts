@@ -90,11 +90,12 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
       emotion: p.emotion,
       tier: p.tier,
       latencyMs: p.latencyMs,
+      ...(p.turnId !== undefined && { turnId: p.turnId }),
     });
   });
 
   useBusEvent('turn:measured', (p) => {
-    dispatch({ type: 'TURN_MEASURED', stages: p.stages, totalMs: p.totalMs });
+    dispatch({ type: 'TURN_MEASURED', turnId: p.turnId, stages: p.stages, totalMs: p.totalMs });
   });
 
   useBusEvent('llm:failed', (p) => {
