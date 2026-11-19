@@ -89,6 +89,9 @@ export interface WireConversationFlowOptions {
   audioCache?: AudioCache;
 }
 
+/** Cuántos audios se recuerdan a la espera de que un cliente diga que suenan. */
+const MAX_PENDING_FIRST_AUDIO = 20;
+
 const FALLBACK_RESPONSE = 'Algo salió mal procesando tu mensaje. ¿Lo intentas de nuevo?';
 const MIN_SIMULATED_TTS_MS = 2_200;
 const MS_PER_CHARACTER = 45;
@@ -135,6 +138,32 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       }),
     );
   }
+
+  // Audios emitidos de los que aún no se sabe cuándo empezaron a sonar. El
+  // cliente lo dice con `tts:audio-started` y aquí queda en el log la
+  // latencia hasta el primer audio, que es la que nota quien escucha.
+  const awaitingFirstAudio = new Map<string, { turnId: string; timing: TurnTiming }>();
+  const trackFirstAudio = (
+    audioId: string | undefined,
+    turnId: string,
+    timing: TurnTiming,
+  ): void => {
+    if (audioId === undefined) return;
+    awaitingFirstAudio.set(audioId, { turnId, timing });
+    // Un cliente silenciado nunca avisa: lo más antiguo se olvida.
+    for (const stale of awaitingFirstAudio.keys()) {
+      if (awaitingFirstAudio.size <= MAX_PENDING_FIRST_AUDIO) break;
+      awaitingFirstAudio.delete(stale);
+    }
+  };
+  const unsubscribeFirstAudio = bus.on('tts:audio-started', (payload) => {
+    const pending = awaitingFirstAudio.get(payload.audioId);
+    if (pending === undefined) return;
+    awaitingFirstAudio.delete(payload.audioId);
+    child.info(
+      `turno ${pending.turnId}: primer audio a los ${String(pending.timing.elapsedMs())} ms`,
+    );
+  });
 
   const unsubscribe = bus.on('user:message', async (payload) => {
     const startTime = Date.now();
@@ -262,7 +291,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       // 6. TTS: sintetiza, cachea, emite tts:audio (cliente reproduce y
       //    emitirá tts:audio-ended cuando termine). Si el cache no está
       //    configurado (tests legacy), cae al simulador.
-      await timing.measure('tts', () =>
+      const audioId = await timing.measure('tts', () =>
         dispatchTTS(
           bus,
           modules.tts,
@@ -274,6 +303,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           child,
         ),
       );
+      trackFirstAudio(audioId, userEntryId, timing);
       await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, effectiveTier);
     } catch (err) {
       child.error('error procesando turno, emitiendo fallback', { err });
@@ -292,7 +322,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         tier: 'local',
         latencyMs,
       });
-      await timing.measure('tts', () =>
+      const audioId = await timing.measure('tts', () =>
         dispatchTTS(
           bus,
           modules.tts,
@@ -304,12 +334,14 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           child,
         ),
       );
+      trackFirstAudio(audioId, userEntryId, timing);
       await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, 'local');
     }
   });
 
   return () => {
     unsubscribe();
+    unsubscribeFirstAudio();
     for (const u of unsubscribers) u();
   };
 }
@@ -483,6 +515,8 @@ function formatContext(recent: readonly MemoryEntry[], semantic: readonly Memory
  * delay proporcional al texto — así el resto del estado del cliente
  * (Orbe que vuelve a idle, subtítulos) se desbloquea aunque no haya audio.
  *
+ * Devuelve el `audioId` emitido, o `undefined` si no hubo audio.
+ *
  * Exportado para que el reporte hablado de self-dev (ADR 0023) reuse la misma
  * cadena TTS: el bootstrap lo llama desde el callback `announce`.
  */
@@ -495,12 +529,12 @@ export async function dispatchTTS(
   userId: string,
   simulationSpeed: number,
   logger: Logger,
-): Promise<void> {
+): Promise<string | undefined> {
   if (audioCache === undefined) {
     // Camino legacy: simula `tts:audio-ended` tras un delay. Permite
     // que tests existentes que no inyectan audioCache sigan funcionando.
     simulateTTSEnd(bus, text, userId, simulationSpeed);
-    return;
+    return undefined;
   }
   try {
     const { audio, mimeType } = await tts.synthesize({ text, emotion });
@@ -511,6 +545,7 @@ export async function dispatchTTS(
       mimeType,
       userId,
     });
+    return audioId;
   } catch (err) {
     // Toda la cadena TTS falló. El cliente nunca recibe `tts:audio` ni
     // tendrá audio para este turno — emitimos `tts:audio-ended` directo
@@ -519,6 +554,7 @@ export async function dispatchTTS(
     // respuesta aunque no la escuche.
     logger.warn('TTS falló entero — emitiendo tts:audio-ended directo', { err });
     void bus.emit('tts:audio-ended', { userId });
+    return undefined;
   }
 }
 

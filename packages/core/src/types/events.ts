@@ -260,6 +260,12 @@ export interface EventMap {
    */
   'tts:cancel': { audioId: string; userId: string };
   /**
+   * El cliente empezó a reproducir el audio: la voz ya se oye. El core-host
+   * lo usa para registrar la latencia hasta el primer audio (P-16). Solo lo
+   * emite un cliente que reproduce: uno silenciado no lo manda.
+   */
+  'tts:audio-started': { audioId: string; userId: string };
+  /**
    * El cliente terminó de reproducir el audio. La UI quita subtítulos y
    * el avatar vuelve a idle. El cliente lo emite cuando el
    * `HTMLAudioElement` dispara `ended` (o tras `tts:cancel`).

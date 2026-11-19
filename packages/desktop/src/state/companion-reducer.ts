@@ -13,7 +13,7 @@
  * (sección Mapeo state ↔ EventBus).
  */
 
-import type { Emotion, MemoryEntry, TurnFailureReason } from '@proyecto-shiro/core';
+import type { Emotion, EventMap, MemoryEntry, TurnFailureReason } from '@proyecto-shiro/core';
 
 export type LLMTier = 'local' | 'cloud';
 
@@ -25,8 +25,16 @@ export interface CompanionMessage {
   /** Solo en mensajes de Shiro. */
   emotion?: Emotion;
   tier?: LLMTier;
+  /** ms hasta que llegó el texto de la respuesta. */
   latencyMs?: number;
+  /** ms hasta que la voz de la respuesta quedó lista (`turn:measured`). */
+  voiceReadyMs?: number;
+  /** ms por etapa del turno (`turn:measured`). */
+  stages?: TurnStages;
 }
+
+/** Lo que tardó cada etapa de un turno, como llega en `turn:measured`. */
+export type TurnStages = EventMap['turn:measured']['stages'];
 
 /** Un LLM que no pudo responder en el turno en curso (`llm:failed`). */
 export interface TurnFailure {
@@ -93,6 +101,7 @@ export type CompanionAction =
   | { type: 'USER_SAID'; text: string; userId: string }
   | { type: 'THINK_START'; tier: LLMTier }
   | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
+  | { type: 'TURN_MEASURED'; stages: TurnStages; totalMs: number }
   | { type: 'TURN_FAILED'; reason: TurnFailureReason; tier: LLMTier }
   | { type: 'SPEAK_END' }
   | { type: 'LISTEN_END' }
@@ -195,6 +204,18 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
           },
         ],
       };
+
+    case 'TURN_MEASURED': {
+      // Los tiempos son de la última respuesta de Shiro: `turn:measured`
+      // llega al final del turno, después de `llm:responded`.
+      let index = state.history.length - 1;
+      while (index >= 0 && state.history[index]?.role !== 'shiro') index -= 1;
+      const reply = state.history[index];
+      if (reply === undefined) return state;
+      const history = [...state.history];
+      history[index] = { ...reply, voiceReadyMs: action.totalMs, stages: action.stages };
+      return { ...state, history };
+    }
 
     case 'TURN_FAILED': {
       const failure: TurnFailure = { reason: action.reason, tier: action.tier };

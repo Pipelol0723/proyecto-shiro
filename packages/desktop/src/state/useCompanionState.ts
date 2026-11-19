@@ -93,6 +93,10 @@ export function useCompanionState(): [CompanionState, React.Dispatch<CompanionAc
     });
   });
 
+  useBusEvent('turn:measured', (p) => {
+    dispatch({ type: 'TURN_MEASURED', stages: p.stages, totalMs: p.totalMs });
+  });
+
   useBusEvent('llm:failed', (p) => {
     // El motivo viene del servidor; si no es de la lista cerrada (un servidor
     // más nuevo, o un frame raro), se muestra el aviso genérico.

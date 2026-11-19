@@ -210,6 +210,17 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
         });
       };
 
+      // La voz ya se oye: el core-host apunta la latencia hasta aquí (P-16).
+      // `playing` se repite tras cada pausa por falta de datos; cuenta la primera.
+      let started = false;
+      audio.addEventListener('playing', () => {
+        if (started) return;
+        started = true;
+        void bus.emit('tts:audio-started', {
+          audioId: payload.audioId,
+          userId: payload.userId,
+        });
+      });
       audio.addEventListener('ended', finish, { once: true });
       audio.addEventListener(
         'error',
