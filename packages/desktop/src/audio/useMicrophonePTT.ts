@@ -5,17 +5,28 @@
  * Ciclo de un turno:
  *
  *   keydown(activationKey)
- *     → getUserMedia, AudioContext({ sampleRate: 16000 }), worklet, WS abierto.
- *     → bus.emit('stt:listening')
- *     → chunks PCM Int16 LE → ws.send (binario)
+ *     → getUserMedia; con el micro concedido se empieza a abrir el WS y,
+ *       a la vez, AudioContext({ sampleRate: 16000 }) y worklet.
+ *     → bus.emit('stt:listening') en cuanto el micro captura
+ *     → chunks PCM Int16 LE → cliente de Whisper (binario)
  *     → partial JSON del server → bus.emit('stt:partial')
  *   keyup(activationKey)
- *     → ws.send({type:'stop'}); espera `transcribed`.
+ *     → se pide el final; espera `transcribed`.
  *     → bus.emit('stt:transcribed')
  *     → libera AudioContext, MediaStream, WS.
  *
  * Decisiones:
  *
+ * - **El micro no espera a Whisper** (R-143): se captura desde que el micro
+ *   está listo, aunque el WS siga abriendo. El cliente guarda esos primeros
+ *   trozos y los envía al abrir; si no, se perdía la primera sílaba.
+ * - **A Whisper se le llama con el micro ya concedido**: el servicio cierra
+ *   una sesión que pasa 15 s sin tráfico, y contestar al diálogo de permiso
+ *   (o un micro Bluetooth que despierta) puede tardar más que eso.
+ * - **Nada se queda colgado** (R-322): si Whisper no abre o no devuelve la
+ *   transcripción a tiempo, el cliente falla y aquí se suelta el micro.
+ *   Soltar la tecla antes de que el micro esté listo cancela el turno, y
+ *   desmontar la pantalla también: el micro que llegue después se suelta.
  * - **getUserMedia por turno**: pedir permiso una vez sí, pero
  *   liberar la `MediaStreamTrack` al soltar la tecla para que el browser
  *   apague el indicador de micro entre turnos. Cuesta ~100 ms al inicio
@@ -31,6 +42,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IEventBus, EventMap } from '@proyecto-shiro/core';
+import { describeMicError, describeSttFailure } from './mic-error-text.js';
 import { WhisperSttClient } from './whisper-stt-client.js';
 import workletUrl from './pcm-capture-processor.js?url';
 
@@ -55,7 +67,7 @@ export interface UseMicrophonePTTOptions {
 export interface UseMicrophonePTTResult {
   /** Estado actual de la captura. */
   state: MicrophonePTTState;
-  /** Mensaje legible si `state === 'error'`. */
+  /** Qué pasó y qué hacer, en español, si `state === 'error'`. */
   error: string | null;
   /**
    * Arranca un turno programáticamente (sin esperar el keydown). Útil
@@ -112,6 +124,11 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const clientRef = useRef<WhisperSttClient | null>(null);
+  /**
+   * El turno en curso. Cada `start()` crea uno; lo que llega tarde de un turno
+   * que ya se canceló o falló (el permiso del micro, el WS) lo mira y se retira.
+   */
+  const turnRef = useRef<{ over: boolean } | null>(null);
 
   const setStateAndRef = useCallback((next: MicrophonePTTState) => {
     stateRef.current = next;
@@ -124,6 +141,10 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
    * (éxito o error) — esto apaga el indicador del micro.
    */
   const teardown = useCallback(() => {
+    // El turno acaba aquí también para lo que aún no ha llegado (el permiso
+    // del micro, la carga del worklet): al llegar lo ve terminado y se suelta.
+    if (turnRef.current !== null) turnRef.current.over = true;
+
     workletNodeRef.current?.port.close();
     workletNodeRef.current?.disconnect();
     workletNodeRef.current = null;
@@ -141,6 +162,8 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     });
     audioContextRef.current = null;
 
+    // Cierra también el WS si el turno seguía vivo (desmontaje a mitad).
+    clientRef.current?.abort();
     clientRef.current = null;
   }, []);
 
@@ -150,13 +173,55 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     setError(null);
     setStateAndRef('requesting');
 
+    const turn = { over: false };
+    turnRef.current = turn;
+
+    /** El turno falló: se dice por qué y se suelta todo. Solo la primera vez. */
+    const fail = (message: string): void => {
+      if (turn.over) return;
+      turn.over = true;
+      setError(message);
+      setStateAndRef('error');
+      teardown();
+    };
+
     let mediaStream: MediaStream | null = null;
     let audioContext: AudioContext | null = null;
+    /** Suelta lo que este arranque llegó a abrir y aún no estaba en los refs. */
+    const releaseLocal = (): void => {
+      mediaStream?.getTracks().forEach((t) => {
+        t.stop();
+      });
+      audioContext?.close().catch(() => undefined);
+    };
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
-      mediaStreamRef.current = mediaStream;
+      // Mientras se pedía el micro, el turno se canceló o la pantalla se fue.
+      if (turn.over) {
+        releaseLocal();
+        return;
+      }
+
+      const client = new WhisperSttClient({
+        url: serviceUrl,
+        onPartial: (text) => {
+          void bus.emit('stt:partial', { text, userId });
+        },
+        onFinal: (text) => {
+          void bus.emit('stt:transcribed', { text, userId, isFinal: true });
+        },
+        onError: (_reason, code) => {
+          fail(describeSttFailure(code));
+        },
+      });
+      clientRef.current = client;
+      // El WS se abre mientras se prepara la captura; no se espera aquí. Lo
+      // que se diga antes de que abra lo guarda el cliente.
+      client.open().catch((err: unknown) => {
+        fail(describeMicError(err));
+      });
 
       // El browser podría rechazar el sampleRate solicitado y devolver otro;
       // el worklet leerá su `sampleRate` global real y decimará si hace falta.
@@ -167,9 +232,14 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
         throw new Error('AudioContext no disponible en este navegador');
       }
       audioContext = new ContextCtor({ sampleRate: TARGET_SAMPLE_RATE });
-      audioContextRef.current = audioContext;
-
       await audioContext.audioWorklet.addModule(workletUrl);
+      // Mientras cargaba el worklet, el turno se canceló o Whisper falló.
+      if (turn.over) {
+        releaseLocal();
+        return;
+      }
+      mediaStreamRef.current = mediaStream;
+      audioContextRef.current = audioContext;
 
       const source = audioContext.createMediaStreamSource(mediaStream);
       sourceNodeRef.current = source;
@@ -184,25 +254,8 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       });
       workletNodeRef.current = worklet;
 
-      // Cliente WS — se conecta antes de empezar a enviar chunks.
-      const client = new WhisperSttClient({
-        url: serviceUrl,
-        onPartial: (text) => {
-          void bus.emit('stt:partial', { text, userId });
-        },
-        onFinal: (text) => {
-          void bus.emit('stt:transcribed', { text, userId, isFinal: true });
-        },
-        onError: (reason) => {
-          setError(reason);
-          setStateAndRef('error');
-          teardown();
-        },
-      });
-      clientRef.current = client;
-      await client.open();
-
-      // Recibir chunks PCM Int16 LE del worklet y reenviarlos al WS.
+      // Chunks PCM Int16 LE del worklet al cliente, que los envía o, si el WS
+      // sigue abriendo, los guarda hasta que abra.
       worklet.port.onmessage = (event) => {
         if (!(event.data instanceof ArrayBuffer)) return;
         client.sendChunk(event.data);
@@ -214,41 +267,64 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
       void bus.emit('stt:listening', { userId });
       setStateAndRef('recording');
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      setError(reason);
-      setStateAndRef('error');
-      teardown();
+      if (turn.over) {
+        releaseLocal();
+        return;
+      }
+      // El stream puede no estar aún en los refs: se suelta aquí también.
+      releaseLocal();
+      fail(describeMicError(err));
     }
   }, [bus, serviceUrl, userId, setStateAndRef, teardown]);
 
+  /** Corta el turno en curso sin pedir transcripción y vuelve a reposo. */
+  const cancelTurn = useCallback((): void => {
+    const turn = turnRef.current;
+    if (turn !== null) turn.over = true;
+    sourceNodeRef.current?.disconnect();
+    // `teardown` aborta el cliente: cierra el WS sin emitir `onFinal`, así
+    // que nada llega al bus como transcripción.
+    teardown();
+    setStateAndRef('idle');
+  }, [setStateAndRef, teardown]);
+
   const stop = useCallback(async (): Promise<void> => {
+    // Se soltó antes de que el micro estuviera listo: no hay nada que transcribir.
+    if (stateRef.current === 'requesting') {
+      cancelTurn();
+      return;
+    }
     if (stateRef.current !== 'recording') return;
     setStateAndRef('finalizing');
+    const turn = turnRef.current;
     const client = clientRef.current;
     try {
       // Cortar la entrada de audio al worklet antes de pedir el final
       // — evita que sigan llegando chunks tras el stop.
       sourceNodeRef.current?.disconnect();
+      // Si el WS aún está abriendo, el cliente envía lo guardado y después el stop.
       await client?.stop();
-      setStateAndRef('idle');
+      if (turn !== null && !turn.over) {
+        turn.over = true;
+        setStateAndRef('idle');
+      }
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      setError(reason);
-      setStateAndRef('error');
+      // Si el fallo ya se contó (por `onError` o por el rechazo de `open`), no se repite.
+      if (turn !== null && !turn.over) {
+        turn.over = true;
+        setError(describeMicError(err));
+        setStateAndRef('error');
+      }
     } finally {
-      teardown();
+      // Solo lo de este turno: si ya hubiera otro en marcha, sus recursos no se tocan.
+      if (turnRef.current === turn) teardown();
     }
-  }, [setStateAndRef, teardown]);
+  }, [cancelTurn, setStateAndRef, teardown]);
 
   const cancel = useCallback((): void => {
-    if (stateRef.current !== 'recording') return;
-    // Cortar la entrada y abortar el cliente: `abort()` cierra el WS sin
-    // emitir `onFinal`, así que nada llega al bus como transcripción.
-    sourceNodeRef.current?.disconnect();
-    clientRef.current?.abort();
-    teardown();
-    setStateAndRef('idle');
-  }, [setStateAndRef, teardown]);
+    if (stateRef.current !== 'recording' && stateRef.current !== 'requesting') return;
+    cancelTurn();
+  }, [cancelTurn]);
 
   // Listeners de teclado: keydown/keyup de la tecla configurada. Ignora
   // si el foco está en un input/textarea (espacio sirve para escribir).
