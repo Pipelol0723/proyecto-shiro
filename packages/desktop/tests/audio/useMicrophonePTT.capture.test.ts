@@ -85,6 +85,8 @@ interface Capture {
   setTail: (...bytes: number[]) => void;
   /** Cuántas veces se le ha pedido al worklet lo pendiente. */
   flushRequests: () => number;
+  /** En qué orden se pidió lo pendiente al worklet y se cortó la entrada. */
+  order: () => string[];
 }
 
 /**
@@ -102,6 +104,7 @@ function stubCapture(
   let resolveWorklet: () => void = () => undefined;
   let tail: number[] = [];
   let flushRequests = 0;
+  const order: string[] = [];
   const ports: { onmessage: ((event: { data: unknown }) => void) | null }[] = [];
 
   Object.defineProperty(navigator, 'mediaDevices', {
@@ -130,7 +133,12 @@ function stubCapture(
             : Promise.resolve(),
         ),
       };
-      createMediaStreamSource = (): unknown => ({ connect: vi.fn(), disconnect: vi.fn() });
+      createMediaStreamSource = (): unknown => ({
+        connect: vi.fn(),
+        disconnect: () => {
+          order.push('disconnect');
+        },
+      });
       close = closeContext;
     },
   );
@@ -146,6 +154,7 @@ function stubCapture(
         postMessage: (message) => {
           if ((message as { type?: string }).type !== 'flush') return;
           flushRequests += 1;
+          order.push('flush');
           if (options.deafWorklet === true) return;
           queueMicrotask(() => {
             if (tail.length > 0) this.port.onmessage?.({ data: new Uint8Array(tail).buffer });
@@ -183,6 +192,7 @@ function stubCapture(
       tail = bytes;
     },
     flushRequests: () => flushRequests,
+    order: () => order,
   };
 }
 
@@ -542,5 +552,60 @@ describe('useMicrophonePTT — el final de la frase', () => {
 
     expect(capture.flushRequests()).toBe(0);
     expect(result.current.state).toBe('idle');
+  });
+});
+
+describe('useMicrophonePTT — el final de la frase (revisión)', () => {
+  it('pide lo pendiente con la entrada aún conectada, y la corta después', async () => {
+    const { capture, result } = setup(stubCapture());
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle();
+
+    // Cortando antes, lo último que entró al worklet podía quedarse fuera.
+    expect(capture.order()).toEqual(['flush', 'disconnect']);
+  });
+
+  it('si el worklet no entrega a tiempo, queda dicho: puede faltar el final', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { result } = setup(stubCapture({ deafWorklet: true }));
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle(FLUSH_TIMEOUT_MS);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('cuando el worklet entrega a tiempo no hay aviso', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { result } = setup(stubCapture());
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle(FLUSH_TIMEOUT_MS * 2);
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

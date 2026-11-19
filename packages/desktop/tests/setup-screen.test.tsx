@@ -254,6 +254,16 @@ describe('SetupScreen — guardar una clave', () => {
     expect(input.value).toBe('');
   });
 
+  it('lo que se escribe en el campo mientras se guarda no se borra al confirmarse', () => {
+    const { input, settle } = typeAndSave();
+    // El campo no se bloquea durante el guardado: se puede seguir escribiendo.
+    fireEvent.change(input, { target: { value: 'clave-corregida' } });
+
+    settle('saved');
+
+    expect(input.value).toBe('clave-corregida');
+  });
+
   it('si el guardado falla, lo escrito no se pierde', () => {
     const { input, settle } = typeAndSave();
     settle('error');
