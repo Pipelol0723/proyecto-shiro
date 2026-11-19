@@ -8,6 +8,11 @@ import {
   routeByHeuristic,
   requiresToolsByHeuristic,
 } from '../../../../src/modules/router/hybrid-router.js';
+import { OllamaLLMConfigSchema } from '../../../../src/modules/llm/ollama-llm.js';
+import {
+  DEFAULT_OLLAMA_KEEP_ALIVE,
+  DEFAULT_OLLAMA_NUM_CTX,
+} from '../../../../src/modules/llm/ollama-options.js';
 import type { ModuleDeps } from '../../../../src/core/module-loader.js';
 
 function makeDeps(): ModuleDeps {
@@ -261,5 +266,58 @@ describe('HybridRouter', () => {
     const router = new HybridRouter({}, makeDeps());
     // Heurística sobre 'hola' → 'local'.
     expect(await router.route({ text: 'hola' })).toBe('local');
+  });
+});
+
+// P-16, R-141 y R-142: el clasificador comparte modelo con la respuesta. Con
+// otro tamaño de contexto, Ollama recarga el modelo en cada cambio.
+describe('HybridRouter — opciones de Ollama (P-16)', () => {
+  let fetchSpy: ReturnType<typeof vi.fn<typeof fetch>>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  interface SentBody {
+    keep_alive?: unknown;
+    options: { temperature?: number; num_ctx?: number; num_predict?: number };
+  }
+
+  async function sentBody(config: Record<string, unknown>): Promise<SentBody> {
+    fetchSpy.mockResolvedValue(classifierResponse('local'));
+    await new HybridRouter(config, makeDeps()).route({ text: 'hola' });
+    const [, init] = fetchSpy.mock.calls[0]!;
+    return JSON.parse(init?.body as string) as SentBody;
+  }
+
+  it('mantiene el modelo cargado, usa el contexto de la respuesta y pide una salida corta', async () => {
+    const body = await sentBody({});
+
+    expect(body.keep_alive).toBe(DEFAULT_OLLAMA_KEEP_ALIVE);
+    expect(body.options.num_ctx).toBe(DEFAULT_OLLAMA_NUM_CTX);
+    expect(body.options.num_predict).toBeGreaterThan(0);
+    expect(body.options.num_predict).toBeLessThanOrEqual(64);
+    expect(body.options.temperature).toBe(0.1);
+  });
+
+  it('las tres se pueden cambiar por configuración', async () => {
+    const body = await sentBody({ keep_alive: '5m', num_ctx: 8192, num_predict: 32 });
+
+    expect(body.keep_alive).toBe('5m');
+    expect(body.options.num_ctx).toBe(8192);
+    expect(body.options.num_predict).toBe(32);
+  });
+
+  it('por defecto, el clasificador y la respuesta piden el mismo contexto', () => {
+    const router = HybridRouterConfigSchema.parse({});
+    const llm = OllamaLLMConfigSchema.parse({ model: 'm' });
+
+    expect(router.num_ctx).toBe(llm.numCtx);
+    expect(router.keep_alive).toBe(llm.keepAlive);
   });
 });
