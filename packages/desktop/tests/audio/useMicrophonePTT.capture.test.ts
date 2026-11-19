@@ -20,7 +20,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventBus, Logger } from '@proyecto-shiro/core';
 import type { EventMap } from '@proyecto-shiro/core';
-import { useMicrophonePTT } from '../../src/audio/useMicrophonePTT';
+import { FLUSH_TIMEOUT_MS, useMicrophonePTT } from '../../src/audio/useMicrophonePTT';
 import {
   DEFAULT_CONNECT_TIMEOUT_MS,
   DEFAULT_FINAL_TIMEOUT_MS,
@@ -81,19 +81,30 @@ interface Capture {
   denyMic: (name: string) => void;
   /** Termina de cargar el worklet, si se pidió «a mano». */
   loadWorklet: () => void;
+  /** Lo que el worklet tiene a medias y entregará cuando se le pida. */
+  setTail: (...bytes: number[]) => void;
+  /** Cuántas veces se le ha pedido al worklet lo pendiente. */
+  flushRequests: () => number;
+  /** En qué orden se pidió lo pendiente al worklet y se cortó la entrada. */
+  order: () => string[];
 }
 
 /**
  * Sustituye las API de captura. Con `manualMic`, el permiso lo da el test;
  * con `manualWorklet`, también el final de la carga del worklet.
  */
-function stubCapture(options: { manualMic?: boolean; manualWorklet?: boolean } = {}): Capture {
+function stubCapture(
+  options: { manualMic?: boolean; manualWorklet?: boolean; deafWorklet?: boolean } = {},
+): Capture {
   const track = { stop: vi.fn() };
   const closeContext = vi.fn(() => Promise.resolve());
   const stream = { getTracks: () => [track] };
   let resolveMic: (value: unknown) => void = () => undefined;
   let rejectMic: (err: unknown) => void = () => undefined;
   let resolveWorklet: () => void = () => undefined;
+  let tail: number[] = [];
+  let flushRequests = 0;
+  const order: string[] = [];
   const ports: { onmessage: ((event: { data: unknown }) => void) | null }[] = [];
 
   Object.defineProperty(navigator, 'mediaDevices', {
@@ -122,15 +133,35 @@ function stubCapture(options: { manualMic?: boolean; manualWorklet?: boolean } =
             : Promise.resolve(),
         ),
       };
-      createMediaStreamSource = (): unknown => ({ connect: vi.fn(), disconnect: vi.fn() });
+      createMediaStreamSource = (): unknown => ({
+        connect: vi.fn(),
+        disconnect: () => {
+          order.push('disconnect');
+        },
+      });
       close = closeContext;
     },
   );
   vi.stubGlobal(
     'AudioWorkletNode',
     class {
-      port: { close: () => void; onmessage: ((event: { data: unknown }) => void) | null } = {
+      port: {
+        close: () => void;
+        postMessage: (message: unknown) => void;
+        onmessage: ((event: { data: unknown }) => void) | null;
+      } = {
         close: vi.fn(),
+        postMessage: (message) => {
+          if ((message as { type?: string }).type !== 'flush') return;
+          flushRequests += 1;
+          order.push('flush');
+          if (options.deafWorklet === true) return;
+          queueMicrotask(() => {
+            if (tail.length > 0) this.port.onmessage?.({ data: new Uint8Array(tail).buffer });
+            tail = [];
+            this.port.onmessage?.({ data: { type: 'flushed' } });
+          });
+        },
         onmessage: null,
       };
       disconnect = vi.fn();
@@ -157,6 +188,11 @@ function stubCapture(options: { manualMic?: boolean; manualWorklet?: boolean } =
     loadWorklet: () => {
       resolveWorklet();
     },
+    setTail: (...bytes) => {
+      tail = bytes;
+    },
+    flushRequests: () => flushRequests,
+    order: () => order,
   };
 }
 
@@ -444,5 +480,132 @@ describe('useMicrophonePTT — el micro falla o se suelta antes de tiempo', () =
     unmount();
 
     expect(FakeWebSocket.last().closed).toBe(true);
+  });
+});
+
+// P-15b, R-078: el worklet junta 250 ms antes de entregar. Lo que tenía a
+// medias al soltar la tecla se perdía: el final de la última palabra.
+describe('useMicrophonePTT — el final de la frase', () => {
+  it('al soltar pide al worklet lo que le queda y lo envía antes de pedir la transcripción', async () => {
+    const { capture, result, transcribed } = setup(stubCapture());
+    await act(async () => {
+      await result.current.start();
+    });
+    const ws = FakeWebSocket.last();
+    ws.open();
+    await settle();
+    capture.speak(1);
+    capture.setTail(7, 8);
+
+    let stopping: Promise<void> = Promise.resolve();
+    act(() => {
+      stopping = result.current.stop();
+    });
+    await settle();
+
+    expect(capture.flushRequests()).toBe(1);
+    expect(ws.audio()).toEqual([[1], [7, 8]]);
+    // El audio pendiente va delante del «stop».
+    expect(ws.sent.at(-1)).toBe(JSON.stringify({ type: 'stop' }));
+    expect(ws.sent.at(-2)).toBeInstanceOf(ArrayBuffer);
+
+    ws.message({ type: 'transcribed', text: 'hola', isFinal: true });
+    await act(async () => {
+      await stopping;
+    });
+    expect(transcribed).toEqual(['hola']);
+    expect(result.current.state).toBe('idle');
+  });
+
+  it('si el worklet no contesta, no se queda esperando: pide la transcripción igualmente', async () => {
+    const { capture, result } = setup(stubCapture({ deafWorklet: true }));
+    await act(async () => {
+      await result.current.start();
+    });
+    const ws = FakeWebSocket.last();
+    ws.open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle();
+    expect(capture.flushRequests()).toBe(1);
+    expect(ws.texts()).toEqual([]);
+
+    await settle(FLUSH_TIMEOUT_MS);
+    expect(ws.texts()).toEqual([{ type: 'stop' }]);
+  });
+
+  it('cancelar no pide nada al worklet: ese audio no va a ninguna parte', async () => {
+    const { capture, result } = setup(stubCapture());
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      result.current.cancel();
+    });
+    await settle();
+
+    expect(capture.flushRequests()).toBe(0);
+    expect(result.current.state).toBe('idle');
+  });
+});
+
+describe('useMicrophonePTT — el final de la frase (revisión)', () => {
+  it('pide lo pendiente con la entrada aún conectada, y la corta después', async () => {
+    const { capture, result } = setup(stubCapture());
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle();
+
+    // Cortando antes, lo último que entró al worklet podía quedarse fuera.
+    expect(capture.order()).toEqual(['flush', 'disconnect']);
+  });
+
+  it('si el worklet no entrega a tiempo, queda dicho: puede faltar el final', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { result } = setup(stubCapture({ deafWorklet: true }));
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle(FLUSH_TIMEOUT_MS);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('cuando el worklet entrega a tiempo no hay aviso', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { result } = setup(stubCapture());
+    await act(async () => {
+      await result.current.start();
+    });
+    FakeWebSocket.last().open();
+    await settle();
+
+    act(() => {
+      void result.current.stop();
+    });
+    await settle(FLUSH_TIMEOUT_MS * 2);
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

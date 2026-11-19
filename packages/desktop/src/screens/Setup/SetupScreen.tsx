@@ -13,7 +13,7 @@
  * aplican al reiniciar (ADR 0024 §6).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ServiceStatus, SystemHealthReport } from '@proyecto-shiro/core';
 import { useBus } from '../../use-bus';
 import { useConnectionState } from '../../connection/use-connection';
@@ -22,11 +22,11 @@ import { useSystemHealth } from '../../health/useSystemHealth';
 import { useSecretsSave } from '../../health/useSecretsSave';
 import styles from './SetupScreen.module.css';
 
+/** Un campo del payload `secrets:save`. */
+type SecretField = 'anthropic' | 'elevenlabs' | 'gemini';
+
 /** Campos del payload `secrets:save`. Mapea cada secret a su campo. */
-const SECRET_FIELD: Record<
-  keyof SystemHealthReport['secrets'],
-  'anthropic' | 'elevenlabs' | 'gemini'
-> = {
+const SECRET_FIELD: Record<keyof SystemHealthReport['secrets'], SecretField> = {
   anthropic: 'anthropic',
   elevenlabs: 'elevenlabs',
   gemini: 'gemini',
@@ -151,11 +151,30 @@ export function SetupScreen(): JSX.Element {
 
   const serviceStatus = (s: ServiceStatus | undefined): boolean => s === 'ok';
 
-  const saveSecret = (field: 'anthropic' | 'elevenlabs' | 'gemini'): void => {
+  // La clave que se está guardando. Su borrador se vacía cuando el core-host
+  // confirma, no antes: si el guardado falla, lo escrito sigue en el campo y
+  // no hay que volver a pegarlo (R-307).
+  //
+  // Se recuerda también el valor enviado: el campo no se bloquea mientras se
+  // guarda, y lo que se escriba entre tanto tampoco se borra.
+  const [saving, setSaving] = useState<{ field: SecretField; value: string } | null>(null);
+
+  const saveSecret = (field: SecretField): void => {
     const value = drafts[field] ?? '';
     secrets.save({ [field]: value });
-    setDrafts((d) => ({ ...d, [field]: '' }));
+    setSaving({ field, value });
   };
+
+  const saveStatus = secrets.status;
+  useEffect(() => {
+    if (saving === null) return;
+    if (saveStatus === 'saved') {
+      setDrafts((d) => (d[saving.field] === saving.value ? { ...d, [saving.field]: '' } : d));
+      setSaving(null);
+    } else if (saveStatus === 'error') {
+      setSaving(null);
+    }
+  }, [saveStatus, saving]);
 
   return (
     <div className={styles.screen}>
