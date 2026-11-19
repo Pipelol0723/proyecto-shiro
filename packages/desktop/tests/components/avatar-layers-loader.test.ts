@@ -133,6 +133,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 // ── manifiesto ───────────────────────────────────────────────────────────────
@@ -558,10 +559,13 @@ describe('loadLayers — cancelación y carreras', () => {
       return Promise.resolve(item);
     };
 
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
     const err = await failure(loadLayers(MANIFEST_URL, signal(), { loadImage }));
 
     expect(err.reason).toBe('size');
     expect(instant.attempted).toHaveLength(instant.total);
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('release no lanza aunque una imagen no se deje soltar', async () => {
@@ -576,12 +580,14 @@ describe('loadLayers — cancelación y carreras', () => {
       };
       return Promise.resolve(item);
     };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const loaded = await loadLayers(MANIFEST_URL, signal(), { loadImage });
 
     expect(() => {
       loaded.release();
     }).not.toThrow();
     expect(instant.attempted).toHaveLength(instant.total);
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it('al terminar, bien o mal, deja de escuchar la señal', async () => {

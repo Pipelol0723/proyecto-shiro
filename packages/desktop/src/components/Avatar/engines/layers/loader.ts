@@ -16,6 +16,7 @@
  * No sabe de React ni dibuja nada: entrega lo que el reproductor necesita.
  */
 
+import { isSafeRelativePath } from '../manifest-header';
 import { parseSpriteLayersManifest, type SpriteLayersManifest } from './manifest';
 import type { LayerImage, LayerImages } from './player';
 
@@ -35,7 +36,8 @@ const KNOWN_LAYERS = ['outline', 'base', 'glow'] as const;
  * Por qué no se pudo cargar el modelo:
  *
  * - `not-found`: el manifiesto no está (no responde, no es 2xx o redirige).
- * - `not-json`: hay algo en esa URL, pero no es JSON.
+ * - `not-json`: hay algo en esa URL, pero no es JSON. Es también lo que se ve
+ *   cuando el archivo no existe y el servidor contesta con la página de la app.
  * - `invalid`: es JSON y no cumple el esquema.
  * - `too-big`: el manifiesto o las imágenes que declara pasan de los topes.
  * - `unsafe-path`: una ruta apunta fuera de la carpeta del modelo.
@@ -76,8 +78,6 @@ export interface LoadedLayers {
 export interface LoadLayersOptions {
   /** Cómo se trae cada imagen. Por defecto, `loadBitmap`. */
   loadImage?: ImageLoader;
-  /** Contra qué se resuelven las URL relativas. Por defecto, la del documento. */
-  baseUrl?: string;
 }
 
 const aborted = (): DOMException => new DOMException('carga del modelo cancelada', 'AbortError');
@@ -108,13 +108,15 @@ export async function fetchManifest(
     }
     const declared = Number(response.headers.get('content-length') ?? '0');
     if (declared > MAX_MANIFEST_BYTES) throw tooBigManifest();
-    text = await response.text();
+    // En bytes y no con `text()`: un carácter puede ocupar hasta cuatro.
+    const body = await response.arrayBuffer();
+    if (body.byteLength > MAX_MANIFEST_BYTES) throw tooBigManifest();
+    text = new TextDecoder().decode(body);
   } catch (err) {
     if (signal.aborted || isAbort(err)) throw aborted();
     if (err instanceof LayersLoadError) throw err;
     throw new LayersLoadError('not-found', `no se pudo pedir el manifiesto ${manifestUrl}`, err);
   }
-  if (text.length > MAX_MANIFEST_BYTES) throw tooBigManifest();
 
   let raw: unknown;
   try {
@@ -147,6 +149,10 @@ function tooBigManifest(): LayersLoadError {
  * que sigue dentro de la carpeta del manifiesto: mismo servidor, misma
  * carpeta o una de dentro, sin consulta ni fragmento.
  *
+ * Dos barreras: el filtro de rutas del esquema, por si alguien llama aquí con
+ * una ruta que no pasó por él (un «%2f» o una barra invertida que el servidor
+ * podría leer como «/»), y la comprobación sobre la URL ya resuelta.
+ *
  * @throws `LayersLoadError` (`unsafe-path`) si no es así.
  */
 export function resolveAssetUrl(
@@ -156,6 +162,8 @@ export function resolveAssetUrl(
 ): string {
   const unsafe = (): LayersLoadError =>
     new LayersLoadError('unsafe-path', `la ruta «${route}» no está en la carpeta del modelo`);
+
+  if (!isSafeRelativePath(route)) throw unsafe();
 
   let folder: URL;
   let resolved: URL;
@@ -185,6 +193,8 @@ export function resolveAssetUrl(
 export const loadBitmap: ImageLoader = async (url, signal) => {
   const response = await fetch(url, { signal });
   if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
+  // Igual que el manifiesto: una redirección podría traerla de otra carpeta.
+  if (response.redirected) throw new Error('la imagen llegó tras una redirección');
   const bitmap = await createImageBitmap(await response.blob());
   if (signal.aborted) {
     bitmap.close();
@@ -200,6 +210,18 @@ export const loadBitmap: ImageLoader = async (url, signal) => {
   };
 };
 
+/**
+ * Suelta una imagen sin dejar que su fallo corte la limpieza de las demás ni
+ * tape el motivo por el que se está limpiando.
+ */
+function releaseQuietly(item: LoadedImage): void {
+  try {
+    item.release();
+  } catch (err) {
+    console.warn('[Avatar] una imagen del modelo no se pudo soltar', err);
+  }
+}
+
 interface ImageJob {
   group: keyof LayerImages;
   name: string;
@@ -210,18 +232,14 @@ interface ImageJob {
 }
 
 /** Qué imágenes hay que traer, con la URL y el tamaño que debe tener cada una. */
-function planImages(
-  manifest: SpriteLayersManifest,
-  manifestUrl: string,
-  baseUrl: string | undefined,
-): ImageJob[] {
+function planImages(manifest: SpriteLayersManifest, manifestUrl: string): ImageJob[] {
   const [width, height] = manifest.size;
   const [, , faceWidth, faceHeight] = manifest.face.rect;
   const job = (group: keyof LayerImages, name: string, route: string): ImageJob => ({
     group,
     name,
     route,
-    url: resolveAssetUrl(manifestUrl, route, baseUrl),
+    url: resolveAssetUrl(manifestUrl, route),
     ...(group === 'layers' ? { width, height } : { width: faceWidth, height: faceHeight }),
   });
 
@@ -256,9 +274,9 @@ export async function loadLayers(
   signal: AbortSignal,
   options: LoadLayersOptions = {},
 ): Promise<LoadedLayers> {
-  const { loadImage = loadBitmap, baseUrl } = options;
+  const { loadImage = loadBitmap } = options;
   const manifest = await fetchManifest(manifestUrl, signal);
-  const jobs = planImages(manifest, manifestUrl, baseUrl);
+  const jobs = planImages(manifest, manifestUrl);
 
   // Señal propia: se corta al cancelar desde fuera y también al primer fallo,
   // para no seguir bajando un modelo que ya no vale.
@@ -269,7 +287,7 @@ export async function loadLayers(
   const closeAll = (): void => {
     closed = true;
     inner.abort();
-    for (const item of loaded.splice(0)) item.release();
+    for (const item of loaded.splice(0)) releaseQuietly(item);
   };
 
   // Cancelar desde fuera rechaza al momento, sin esperar a las imágenes en curso.
@@ -280,6 +298,7 @@ export async function loadLayers(
   // Si nadie llega a esperarla, que su rechazo no cuente como error sin atender.
   cancelled.catch(() => undefined);
   const onAbort = (): void => {
+    inner.abort(); // corta ya las peticiones en curso
     rejectCancelled(aborted());
   };
   signal.addEventListener('abort', onAbort);
@@ -297,7 +316,7 @@ export async function loadLayers(
       );
     }
     if (closed) {
-      item.release();
+      releaseQuietly(item);
       throw aborted();
     }
     loaded.push(item);
@@ -314,6 +333,9 @@ export async function loadLayers(
   try {
     if (signal.aborted) throw aborted();
     const results = await Promise.race([Promise.all(jobs.map(loadOne)), cancelled]);
+    // La cancelación pudo llegar con todas las imágenes ya aquí y la carrera
+    // ya decidida: sin esto se entregaría un modelo que nadie espera.
+    if (signal.aborted) throw aborted();
     const images = { layers: new Map<string, LayerImage>(), pieces: new Map<string, LayerImage>() };
     for (const [job, image] of results) images[job.group].set(job.name, image);
     return { manifest, images, release: closeAll };
