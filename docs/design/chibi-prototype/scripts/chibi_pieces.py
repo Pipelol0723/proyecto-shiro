@@ -26,6 +26,8 @@ MIRROR_X = 1996.0                        # eje de simetria de la cara
 BG = (0x0E, 0x11, 0x18)
 LINE = (1, 1, 1)
 SKIN = (0xF5, 0xE1, 0xD3)
+SKIN_SHADE = (0xE6, 0xC3, 0xAD)
+GAZE_MAX = (30, 14)                      # desplazamiento maximo del iris, en px del original
 HAIR_SHADE = (0x7F, 0xBE, 0xDC)
 IRIS_SHADE = (0x4F, 0x90, 0xC0)
 BLUSH = (0xF4, 0xA9, 0xB0)
@@ -43,7 +45,7 @@ def load_pose(path):
     g = globals()
     cfg = json.loads(Path(path).read_text(encoding="utf-8"))
     for key in ("FACE_BOX", "MIRROR_X", "LASH_OPEN", "LASH_CLOSED", "BROW", "MOUTH_C", "BLUSH_C",
-                "SCALE", "PAD", "MODEL_NAME", "CREDITS"):
+                "SCALE", "PAD", "MODEL_NAME", "CREDITS", "GAZE_MAX"):
         if key in cfg:
             g[key] = cfg[key]
     g["FX0"], g["FY0"], g["FX1"], g["FY1"] = g["FACE_BOX"]
@@ -169,27 +171,108 @@ def lash_curve(level, tilt):
     return bezier(p0, through(p0, ap, p2), p2)
 
 
-def eyes_piece(orig_face, eyes_mask, level, tilt=0.0):
-    """Ojos con el parpado bajado: se recorta el ojo original y se dibuja la pestana."""
+def disk(r):
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+
+
+def grow(mask, r):
+    return cv2.dilate(mask.astype(np.uint8), disk(r)) > 0
+
+
+def split_eyes(orig_face, eyes_mask):
+    """Separa cada ojo en sus partes para poder mover la mirada.
+
+    Devuelve (opening, sclera, iris), mascaras en la caja de la cara:
+      opening  hueco del ojo: todo lo que queda dentro del parpado
+      sclera   blanco del ojo tal como esta dibujado (con su sombra gris)
+      iris     iris completo, con sus brillos y su contorno fino
+    """
+    from scipy import ndimage
+
+    rgb = orig_face
+    mx, mn = rgb.max(axis=2), rgb.min(axis=2)
+    dark = mx < 80
+    skin_like = (np.linalg.norm(rgb - np.array(SKIN, np.float32), axis=2) < 30) | (
+        np.linalg.norm(rgb - np.array(SKIN_SHADE, np.float32), axis=2) < 30
+    )
+    # Azulado = iris, incluida la franja oscura que la pestana le sombrea
+    # arriba. La pestana es negro puro y no entra.
+    blue = eyes_mask & (mx >= 60) & (rgb[..., 2] - rgb[..., 0] > 12)
+    # El iris es la envolvente convexa de la mancha azulada mas grande de cada
+    # lado: asi entran los brillos, aunque toquen el borde y no sean un hueco.
+    iris = np.zeros_like(eyes_mask)
+    half = int(round(MIRROR_X - FX0))
+    for sl in (np.s_[:, :half], np.s_[:, half:]):
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(blue[sl].astype(np.uint8), connectivity=8)
+        if n > 1:
+            biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+            pts = cv2.findNonZero((labels == biggest).astype(np.uint8))
+            hull = np.zeros(labels.shape, np.uint8)
+            cv2.fillConvexPoly(hull, cv2.convexHull(pts), 1)
+            view = iris[sl]
+            view |= hull > 0
+    # Su contorno es un trazo oscuro fino pegado a el; la pestana es gruesa y no entra.
+    thin_dark = dark & ~grow(cv2.morphologyEx(dark.astype(np.uint8), cv2.MORPH_OPEN, disk(5)), 3)
+    iris = iris | (thin_dark & grow(iris, 5) & eyes_mask)
+
+    sclera = eyes_mask & ~dark & ~blue & ~skin_like & ~iris & (mx > 140) & (mx - mn < 40)
+    sclera = cv2.morphologyEx(sclera.astype(np.uint8), cv2.MORPH_OPEN, disk(2)) > 0
+
+    opening = cv2.morphologyEx((sclera | iris).astype(np.uint8), cv2.MORPH_CLOSE, disk(3)) > 0
+    opening = ndimage.binary_fill_holes(opening) & grow(eyes_mask, 2)
+    return opening, sclera, iris
+
+
+def iris_piece(orig_face, iris, extra=28):
+    """Iris como pieza suelta. Se alarga hacia arriba: esa parte la tapa la
+    pestana en el dibujo y solo se ve cuando la mirada baja."""
     piece = Piece()
-    alpha = eyes_mask.astype(np.float32)
+    rgb = orig_face.copy()
+    alpha = iris.astype(np.float32)
+    for x in np.unique(np.where(iris)[1]):
+        col = np.where(iris[:, x])[0]
+        top = col[0]
+        src = min(top + 10, col[-1])
+        y0 = max(0, top - extra)
+        rgb[y0:top, x] = orig_face[src, x]
+        alpha[y0:top, x] = 1.0
+    piece.paste(rgb, alpha)
+    return piece
+
+
+def eye_state(orig_face, eyes_mask, parts, level, tilt=0.0):
+    """Un estado de parpado, en dos piezas: el blanco del ojo y las lineas.
+
+    El iris va aparte y el reproductor lo dibuja entre las dos, recortado por
+    el blanco. level 0 = ojo abierto del borrador; 1 = cerrado.
+    """
+    opening, sclera, _ = parts
     xx = np.arange(FW, dtype=np.float32)[None, :] + FX0
     yy = np.arange(FH, dtype=np.float32)[:, None] + FY0
+    hide = np.zeros((FH, FW), bool)
     left = lash_curve(level, tilt)
-    for pts, side in ((left, xx < MIRROR_X), (mirror(left), xx >= MIRROR_X)):
-        order = np.argsort(pts[:, 0])
-        y_lid = np.interp(xx[0], pts[order, 0], pts[order, 1])[None, :]
-        hide = (yy < y_lid + 2) if level < 1 else np.ones((FH, FW), bool)
-        alpha = np.where(side & hide, 0.0, alpha)
-    piece.paste(orig_face, alpha)
-    w0 = 30 - 13 * level
-    t = np.linspace(0, 1, len(left))
-    widths = w0 * (0.42 + 0.58 * np.sin(np.pi * t) ** 0.8)
-    for pts, out_dir in ((left, -1.0), (mirror(left), 1.0)):
-        piece.paint(stroke_mask(pts, widths), LINE)
-        tip = pts[0] + (out_dir * 40, 12 + 6 * level)          # colita exterior
-        piece.paint(stroke_mask(np.array([pts[0], tip]), [widths[0] + 4, 2]), LINE)
-    return piece
+    if level > 0:
+        for pts, side in ((left, xx < MIRROR_X), (mirror(left), xx >= MIRROR_X)):
+            order = np.argsort(pts[:, 0])
+            y_lid = np.interp(xx[0], pts[order, 0], pts[order, 1])[None, :]
+            above = (yy < y_lid + 2) if level < 1 else np.ones((FH, FW), bool)
+            hide |= side & above
+
+    white = Piece()
+    white_rgb = np.where(sclera[..., None], orig_face, 255.0).astype(np.float32)
+    white.paste(white_rgb, (opening & ~hide).astype(np.float32))
+
+    lines = Piece()
+    lines.paste(orig_face, (eyes_mask & ~opening & ~hide).astype(np.float32))
+    if level > 0:
+        w0 = 30 - 13 * level
+        t = np.linspace(0, 1, len(left))
+        widths = w0 * (0.42 + 0.58 * np.sin(np.pi * t) ** 0.8)
+        for pts, out_dir in ((left, -1.0), (mirror(left), 1.0)):
+            lines.paint(stroke_mask(pts, widths), LINE)
+            tip = pts[0] + (out_dir * 40, 12 + 6 * level)      # colita exterior
+            lines.paint(stroke_mask(np.array([pts[0], tip]), [widths[0] + 4, 2]), LINE)
+    return white, lines
 
 
 # ---------- cejas ----------------------------------------------------------------
@@ -255,15 +338,23 @@ def main():
 
     pieces = {}
 
-    # Ojos: abiertos = borrador; el resto, parpado bajado sobre el borrador.
-    p = Piece()
-    p.paste(orig_face, m_eyes.astype(np.float32))
-    pieces["eyes_open"] = p
-    pieces["eyes_lid12"] = eyes_piece(orig_face, m_eyes, 0.12)
-    pieces["eyes_lid22"] = eyes_piece(orig_face, m_eyes, 0.22)
-    pieces["eyes_lid38t"] = eyes_piece(orig_face, m_eyes, 0.38, tilt=26)
-    pieces["eyes_half"] = eyes_piece(orig_face, m_eyes, 0.55)
-    pieces["eyes_closed"] = eyes_piece(orig_face, m_eyes, 1.0)
+    # Ojos. Cada estado de parpado son dos piezas (blanco y lineas); el iris
+    # es una pieza aparte que el reproductor mueve entre las dos. Abiertos =
+    # borrador; el resto, parpado bajado sobre el borrador.
+    parts = split_eyes(orig_face, m_eyes)
+    pieces["iris"] = iris_piece(orig_face, parts[2])
+    eye_states = {}
+    for state, (level, tilt) in {
+        "eyes_open": (0.0, 0), "eyes_lid12": (0.12, 0), "eyes_lid22": (0.22, 0),
+        "eyes_lid38t": (0.38, 26), "eyes_half": (0.55, 0), "eyes_closed": (1.0, 0),
+    }.items():
+        white, lines = eye_state(orig_face, m_eyes, parts, level, tilt)
+        pieces[f"{state}_lines"] = lines
+        eye_states[state] = {"white": None, "lines": f"{state}_lines"}
+        if level < 1:
+            pieces[f"{state}_white"] = white
+            eye_states[state]["white"] = f"{state}_white"
+    print(f"ojos: hueco={int(parts[0].sum())} px, blanco={int(parts[1].sum())} px, iris={int(parts[2].sum())} px")
 
     # Cejas: reposo = borrador; el resto, dibujadas.
     p = Piece()
@@ -302,6 +393,8 @@ def main():
     size = (int(round((bx1 - bx0) * SCALE)), int(round((by1 - by0) * SCALE)))
     face_rect = [int(round((FX0 - bx0) * SCALE)), int(round((FY0 - by0) * SCALE)), int(FW * SCALE), int(FH * SCALE)]
 
+    for stale in assets.glob("eyes_*.png"):   # piezas de ojos de versiones anteriores
+        stale.unlink()
     rt = {}
     for name in ("base", "glow", "outline"):
         l_rgb, l_a = read_rgba(layers / f"{name}.png")
@@ -311,17 +404,20 @@ def main():
         rt[name] = resize_rgba(piece.rgb, piece.a, (face_rect[2], face_rect[3]))
         save_rgba(assets / f"{name}.png", *rt[name])
 
+    # gaze: mirada de la expresion, de -1 a 1 (x positivo = derecha de la
+    # pantalla, y positivo = arriba). setLookAt la sustituye mientras este activa.
     expressions = {
-        "idle": dict(eyes="eyes_open", brows="brows_idle", mouth="mouth_idle", blush=0.0, glow=dict(level=1.0, pattern="fijo")),
-        "smirk": dict(eyes="eyes_lid22", brows="brows_smirk", mouth="mouth_smirk", blush=0.0, glow=dict(level=1.0, pattern="destello")),
-        "thinking": dict(eyes="eyes_lid12", brows="brows_thinking", mouth="mouth_thinking", blush=0.0, glow=dict(level=0.9, pattern="pulso")),
-        "annoyed": dict(eyes="eyes_lid38t", brows="brows_annoyed", mouth="mouth_annoyed", blush=0.0, glow=dict(level=0.7, pattern="fijo")),
-        "soft": dict(eyes="eyes_open", brows="brows_soft", mouth="mouth_soft", blush=0.45, glow=dict(level=0.6, pattern="fijo")),
+        "idle": dict(eyes="eyes_open", brows="brows_idle", mouth="mouth_idle", blush=0.0, gaze=[0, 0], glow=dict(level=1.0, pattern="steady")),
+        "smirk": dict(eyes="eyes_lid22", brows="brows_smirk", mouth="mouth_smirk", blush=0.0, gaze=[0, 0], glow=dict(level=1.0, pattern="flash")),
+        "thinking": dict(eyes="eyes_lid12", brows="brows_thinking", mouth="mouth_thinking", blush=0.0, gaze=[0.85, 0.35], glow=dict(level=0.9, pattern="pulse")),
+        "annoyed": dict(eyes="eyes_lid38t", brows="brows_annoyed", mouth="mouth_annoyed", blush=0.0, gaze=[0, 0], glow=dict(level=0.7, pattern="steady")),
+        "soft": dict(eyes="eyes_open", brows="brows_soft", mouth="mouth_soft", blush=0.45, gaze=[0, -0.4], glow=dict(level=0.6, pattern="steady")),
     }
+    gaze_max = [round(GAZE_MAX[0] * SCALE), round(GAZE_MAX[1] * SCALE)]
     manifest = {
         "kind": "sprite-layers",
         "name": MODEL_NAME,
-        "version": "0.1",
+        "version": "0.2",
         "provisional": True,
         "credits": CREDITS,
         "size": list(size),
@@ -329,14 +425,16 @@ def main():
         "face": {
             "rect": face_rect,
             "pieces": {name: f"assets/{name}.png" for name in pieces},
-            "blink": {"half": "eyes_half", "closed": "eyes_closed", "interval_s": [2.5, 6.0], "duration_ms": 130},
+            "eyes": eye_states,
+            "iris": "iris",
+            "gaze": {"max": gaze_max},
+            "blink": {"open": "eyes_open", "half": "eyes_half", "closed": "eyes_closed", "interval_s": [2.5, 6.0], "duration_ms": 130},
             "mouth_open": ["mouth_open_s", "mouth_open_m", "mouth_open_l"],
             "mouth_thresholds": [0.12, 0.34, 0.6],
             "blush": "blush",
         },
         "expressions": expressions,
         "emotions": {"neutral": "idle", "divertida": "smirk", "pensativa": "thinking", "molesta": "annoyed", "vulnerable": "soft"},
-        "draw_order": ["outline", "base", "eyes", "mouth", "blush", "brows", "glow"],
     }
     (out / "avatar.manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -344,7 +442,21 @@ def main():
     w, h = size
     fx, fy, fw, fh = face_rect
 
-    def figure(expr, mouth=None, eyes=None, bg=BG, outline=False):
+    def eyes_layers(state, gaze):
+        """Blanco, iris desplazado y recortado por el blanco, y lineas."""
+        st = eye_states[state]
+        out_layers = []
+        if st["white"]:
+            w_rgb, w_a = rt[st["white"]]
+            out_layers.append((w_rgb, w_a))
+            dx = int(round(gaze[0] * gaze_max[0]))
+            dy = int(round(-gaze[1] * gaze_max[1]))
+            i_rgb, i_a = (np.roll(arr, (dy, dx), axis=(0, 1)) for arr in rt["iris"])
+            out_layers.append((i_rgb, i_a * w_a))
+        out_layers.append(rt[st["lines"]])
+        return out_layers
+
+    def figure(expr, mouth=None, eyes=None, bg=BG, outline=False, gaze=None):
         e = expressions[expr]
         rgb_c = np.empty((h, w, 3), np.float32)
         rgb_c[:] = bg
@@ -353,7 +465,9 @@ def main():
             rgb_c, a_c = over(rgb_c, a_c, *rt["outline"])
         rgb_c, a_c = over(rgb_c, a_c, *rt["base"])
         sub_rgb, sub_a = rgb_c[fy:fy + fh, fx:fx + fw], a_c[fy:fy + fh, fx:fx + fw]
-        for name, opacity in ((eyes or e["eyes"], 1), (mouth or e["mouth"], 1), ("blush", e["blush"]), (e["brows"], 1)):
+        for p_rgb, p_a in eyes_layers(eyes or e["eyes"], gaze if gaze is not None else e["gaze"]):
+            sub_rgb, sub_a = over(sub_rgb, sub_a, p_rgb, p_a)
+        for name, opacity in ((mouth or e["mouth"], 1), ("blush", e["blush"]), (e["brows"], 1)):
             p_rgb, p_a = rt[name]
             sub_rgb, sub_a = over(sub_rgb, sub_a, p_rgb, p_a * opacity)
         rgb_c[fy:fy + fh, fx:fx + fw] = sub_rgb
@@ -387,6 +501,9 @@ def main():
             thumbs[40:40 + px, x:x + t_img.shape[1]] = t_img
             x += t_img.shape[1] + 16
     row4.append(label(thumbs, "miniaturas 128 y 64 px, oscuro y claro"))
+    row5 = [label(crop(figure("idle", gaze=g)), t) for g, t in
+            (([-1, 0], "mirada izquierda"), ([1, 0], "mirada derecha"), ([0, 1], "mirada arriba"),
+             ([0, -1], "mirada abajo"), ([1, 1], "arriba-derecha"))]
 
     def hstack(row, width):
         img = np.hstack(row)
@@ -397,7 +514,7 @@ def main():
         return img
 
     width = face_w * 5
-    sheet = np.vstack([hstack(r, width) for r in (row1, row2, row3, row4)])
+    sheet = np.vstack([hstack(r, width) for r in (row1, row2, row3, row4, row5)])
     save_rgb(out / "hoja-de-contacto.png", sheet)
 
     # ---- Comprobacion de paleta ---------------------------------------------------

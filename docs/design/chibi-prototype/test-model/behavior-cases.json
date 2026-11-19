@@ -1,0 +1,542 @@
+{
+  "about": "Casos de comportamiento del motor de capas, en datos, sobre avatar.manifest.json de esta carpeta. Los comprueba check-cases.mjs contra el prototipo; la tabla comentada está en ../expected-behaviors.md. Los valores \"NaN\" e \"Infinity\" van como texto porque JSON no los admite.",
+  "manifest": "avatar.manifest.json",
+  "tolerance": 0.001,
+
+  "mouth": [
+    { "expression": "idle", "mouthOpen": 0, "piece": "mouth_idle" },
+    { "expression": "idle", "mouthOpen": 0.1199, "piece": "mouth_idle" },
+    { "expression": "idle", "mouthOpen": 0.12, "piece": "mouth_open_s" },
+    { "expression": "idle", "mouthOpen": 0.3399, "piece": "mouth_open_s" },
+    { "expression": "idle", "mouthOpen": 0.34, "piece": "mouth_open_m" },
+    { "expression": "idle", "mouthOpen": 0.5999, "piece": "mouth_open_m" },
+    { "expression": "idle", "mouthOpen": 0.6, "piece": "mouth_open_l" },
+    { "expression": "idle", "mouthOpen": 1, "piece": "mouth_open_l" },
+    { "expression": "idle", "mouthOpen": 7, "piece": "mouth_open_l", "note": "se recorta a 1" },
+    { "expression": "idle", "mouthOpen": -3, "piece": "mouth_idle", "note": "se recorta a 0" },
+    {
+      "expression": "idle",
+      "mouthOpen": "NaN",
+      "piece": "mouth_idle",
+      "note": "no finito = boca cerrada"
+    },
+    {
+      "expression": "idle",
+      "mouthOpen": "Infinity",
+      "piece": "mouth_idle",
+      "note": "no finito = boca cerrada"
+    },
+    { "expression": "smirk", "mouthOpen": 0, "piece": "mouth_smirk" },
+    { "expression": "thinking", "mouthOpen": 0.05, "piece": "mouth_thinking" },
+    { "expression": "annoyed", "mouthOpen": 0, "piece": "mouth_annoyed" },
+    { "expression": "soft", "mouthOpen": 0.05, "piece": "mouth_soft" },
+    {
+      "expression": "smirk",
+      "mouthOpen": 0.5,
+      "piece": "mouth_open_m",
+      "note": "las bocas abiertas son comunes a todas las expresiones"
+    },
+    { "expression": "soft", "mouthOpen": 0.9, "piece": "mouth_open_l" }
+  ],
+
+  "eyes": [
+    { "expression": "idle", "blink": 0, "state": "eyes_open" },
+    {
+      "expression": "idle",
+      "blink": 0.3,
+      "state": "eyes_open",
+      "note": "0.3 justo aún no entorna"
+    },
+    { "expression": "idle", "blink": 0.31, "state": "eyes_half" },
+    { "expression": "idle", "blink": 0.7, "state": "eyes_half", "note": "0.7 justo aún no cierra" },
+    { "expression": "idle", "blink": 0.71, "state": "eyes_closed" },
+    { "expression": "idle", "blink": 1, "state": "eyes_closed" },
+    { "expression": "idle", "blink": 2, "state": "eyes_closed", "note": "se recorta a 1" },
+    { "expression": "idle", "blink": -1, "state": "eyes_open", "note": "se recorta a 0" },
+    {
+      "expression": "soft",
+      "blink": 0.5,
+      "state": "eyes_half",
+      "note": "soft también usa el ojo abierto"
+    },
+    {
+      "expression": "smirk",
+      "blink": 0.5,
+      "state": "eyes_lid22",
+      "note": "un ojo ya entornado no pasa por el fotograma medio"
+    },
+    { "expression": "smirk", "blink": 0.71, "state": "eyes_closed" },
+    { "expression": "thinking", "blink": 0.5, "state": "eyes_lid12" },
+    { "expression": "annoyed", "blink": 0.5, "state": "eyes_lid38t" },
+    { "expression": "annoyed", "blink": 1, "state": "eyes_closed" }
+  ],
+
+  "autoBlink": {
+    "about": "Parpadeo automático de 130 ms sobre la expresión idle. t es la fracción del parpadeo transcurrida; blink es el valor del triángulo.",
+    "expression": "idle",
+    "samples": [
+      { "t": 0, "blink": 0, "state": "eyes_open" },
+      { "t": 0.1, "blink": 0.2, "state": "eyes_open" },
+      { "t": 0.2, "blink": 0.4, "state": "eyes_half" },
+      { "t": 0.4, "blink": 0.8, "state": "eyes_closed" },
+      { "t": 0.5, "blink": 1, "state": "eyes_closed" },
+      { "t": 0.6, "blink": 0.8, "state": "eyes_closed" },
+      { "t": 0.8, "blink": 0.4, "state": "eyes_half" },
+      { "t": 0.9, "blink": 0.2, "state": "eyes_open" },
+      {
+        "t": 1,
+        "blink": 0,
+        "state": "eyes_open",
+        "note": "termina y sortea el siguiente intervalo"
+      }
+    ],
+    "nextIntervalMs": [2500, 6000]
+  },
+
+  "gaze": [
+    { "expression": "idle", "calls": [], "look": [0, 0], "irisOffset": [0, 0] },
+    { "expression": "idle", "calls": [[1, 0]], "look": [1, 0], "irisOffset": [5, 0] },
+    { "expression": "idle", "calls": [[-1, 0]], "look": [-1, 0], "irisOffset": [-5, 0] },
+    {
+      "expression": "idle",
+      "calls": [[0, 1]],
+      "look": [0, 1],
+      "irisOffset": [0, -3],
+      "note": "y positivo es arriba; en píxeles de pantalla, negativo"
+    },
+    { "expression": "idle", "calls": [[0, -1]], "look": [0, -1], "irisOffset": [0, 3] },
+    {
+      "expression": "idle",
+      "calls": [[2, -3]],
+      "look": [1, -1],
+      "irisOffset": [5, 3],
+      "note": "cada eje se recorta a -1..1 por separado"
+    },
+    {
+      "expression": "idle",
+      "calls": [[0.5]],
+      "look": [0.5, 0],
+      "irisOffset": [2.5, 0],
+      "note": "sin y, vale 0"
+    },
+    {
+      "expression": "thinking",
+      "calls": [],
+      "look": [0.85, 0.35],
+      "irisOffset": [4.25, -1.05],
+      "note": "mirada propia de la expresión"
+    },
+    { "expression": "soft", "calls": [], "look": [0, -0.4], "irisOffset": [0, 1.2] },
+    {
+      "expression": "thinking",
+      "calls": [[-1, 0]],
+      "look": [-1, 0],
+      "irisOffset": [-5, 0],
+      "note": "setLookAt manda sobre la mirada de la expresión"
+    },
+    {
+      "expression": "thinking",
+      "calls": [[-1, 0], [null]],
+      "look": [0.85, 0.35],
+      "irisOffset": [4.25, -1.05],
+      "note": "setLookAt(null) devuelve la mirada a la expresión"
+    },
+    {
+      "expression": "idle",
+      "calls": [
+        [1, 0],
+        ["NaN", 0]
+      ],
+      "look": [1, 0],
+      "irisOffset": [5, 0],
+      "note": "una coordenada no finita deja la mirada como estaba"
+    },
+    {
+      "expression": "idle",
+      "calls": [
+        [1, 0],
+        [0, "Infinity"]
+      ],
+      "look": [1, 0],
+      "irisOffset": [5, 0]
+    }
+  ],
+
+  "gazeSmoothing": {
+    "about": "Desde la mirada [0, 0] hacia setLookAt(1, 0). El suavizado es exponencial con constante de tiempo de 110 ms, así que no depende de los fotogramas por segundo.",
+    "cases": [
+      { "steps": [0], "lookX": 0 },
+      { "steps": [16], "lookX": 0.1354 },
+      { "steps": [110], "lookX": 0.6321 },
+      { "steps": [55, 55], "lookX": 0.6321, "note": "dos pasos de 55 ms = uno de 110 ms" },
+      { "steps": [220], "lookX": 0.8647 },
+      { "steps": [330], "lookX": 0.9502 },
+      { "steps": [100, 100, 100, 100, 100], "lookX": 0.9894 },
+      { "steps": [110, "NaN"], "lookX": 0.6321, "note": "un paso no finito se ignora" },
+      { "steps": ["NaN", 110], "lookX": 0.6321, "note": "…y no estropea los siguientes" },
+      { "steps": [110, "Infinity"], "lookX": 0.6321 },
+      { "steps": [110, -50], "lookX": 0.6321, "note": "un paso negativo se ignora" }
+    ]
+  },
+
+  "expression": {
+    "unknown": ["no-existe", "toString", "constructor", "__proto__", "hasOwnProperty"],
+    "unknownFallsBackTo": "idle",
+    "unknownNote": "solo cuentan las claves propias del mapa de expresiones, no las heredadas del objeto",
+    "fadeMs": 140,
+    "fade": [
+      { "from": "idle", "to": "smirk", "afterMs": 0, "fade": 0, "previous": "idle" },
+      { "from": "idle", "to": "smirk", "afterMs": 70, "fade": 0.5, "previous": "idle" },
+      { "from": "idle", "to": "smirk", "afterMs": 140, "fade": 1, "previous": null },
+      { "from": "idle", "to": "smirk", "afterMs": 500, "fade": 1, "previous": null }
+    ],
+    "emotions": [
+      { "emotion": "neutral", "expression": "idle" },
+      { "emotion": "divertida", "expression": "smirk" },
+      { "emotion": "pensativa", "expression": "thinking" },
+      { "emotion": "molesta", "expression": "annoyed" },
+      { "emotion": "vulnerable", "expression": "soft" },
+      { "emotion": "desconocida", "expression": "idle" },
+      { "emotion": "toString", "expression": "idle", "note": "clave heredada: no es una emoción" }
+    ]
+  },
+
+  "glow": [
+    { "expression": "idle", "timeMs": 0, "sinceEnterMs": 0, "level": 1 },
+    {
+      "expression": "idle",
+      "timeMs": 12345,
+      "sinceEnterMs": 999,
+      "level": 1,
+      "note": "steady no cambia"
+    },
+    { "expression": "annoyed", "timeMs": 0, "sinceEnterMs": 0, "level": 0.7 },
+    { "expression": "soft", "timeMs": 0, "sinceEnterMs": 0, "level": 0.6 },
+    { "expression": "thinking", "timeMs": 0, "sinceEnterMs": 0, "level": 0.9 },
+    {
+      "expression": "thinking",
+      "timeMs": 650,
+      "sinceEnterMs": 650,
+      "level": 1.08,
+      "note": "pico del pulso (+20 %)"
+    },
+    {
+      "expression": "thinking",
+      "timeMs": 1950,
+      "sinceEnterMs": 1950,
+      "level": 0.72,
+      "note": "valle (-20 %)"
+    },
+    {
+      "expression": "thinking",
+      "timeMs": 2600,
+      "sinceEnterMs": 2600,
+      "level": 0.9,
+      "note": "periodo de 2,6 s"
+    },
+    {
+      "expression": "thinking",
+      "timeMs": 650,
+      "sinceEnterMs": 0,
+      "level": 1.08,
+      "note": "el pulso va con el reloj total del motor: recién entrada la expresión ya está en el pico"
+    },
+    {
+      "expression": "thinking",
+      "timeMs": 5200,
+      "sinceEnterMs": 650,
+      "level": 0.9,
+      "note": "…y el tiempo desde que entró no cuenta"
+    },
+    {
+      "expression": "smirk",
+      "timeMs": 5000,
+      "sinceEnterMs": 0,
+      "level": 1.6,
+      "note": "el destello, al revés: solo cuenta el tiempo desde que entró"
+    },
+    {
+      "expression": "smirk",
+      "timeMs": 0,
+      "sinceEnterMs": 0,
+      "level": 1.6,
+      "note": "destello al entrar (+60 %)"
+    },
+    { "expression": "smirk", "timeMs": 260, "sinceEnterMs": 260, "level": 1.2207 },
+    { "expression": "smirk", "timeMs": 5000, "sinceEnterMs": 5000, "level": 1 },
+    {
+      "expression": "thinking",
+      "timeMs": 650,
+      "sinceEnterMs": 650,
+      "setGlow": 0.25,
+      "level": 0.25
+    },
+    {
+      "expression": "idle",
+      "timeMs": 0,
+      "sinceEnterMs": 0,
+      "setGlow": -1,
+      "level": 0,
+      "note": "se recorta a 0"
+    },
+    {
+      "expression": "idle",
+      "timeMs": 0,
+      "sinceEnterMs": 0,
+      "setGlow": 2.5,
+      "level": 2.5,
+      "note": "sin tope superior"
+    },
+    {
+      "expression": "soft",
+      "timeMs": 0,
+      "sinceEnterMs": 0,
+      "setGlow": "NaN",
+      "level": 0.6,
+      "note": "no finito: se ignora"
+    }
+  ],
+
+  "draw": {
+    "about": "Lo que se pinta, en orden, sobre el lienzo principal (main) y sobre el lienzo auxiliar de los ojos (eyes). <eyes> es ese lienzo auxiliar ya montado. Con el parpadeo fijado con setBlink y la animación asentada.",
+    "cases": [
+      {
+        "name": "idle con contorno",
+        "expression": "idle",
+        "blink": 0,
+        "mouthOpen": 0,
+        "outline": true,
+        "main": [
+          { "image": "outline", "at": [0, 0], "alpha": 1 },
+          { "image": "base", "at": [0, 0], "alpha": 1 },
+          { "image": "<eyes>", "at": [20, 30], "alpha": 1 },
+          { "image": "eyes_open_lines", "at": [20, 30], "alpha": 1 },
+          { "image": "mouth_idle", "at": [20, 30], "alpha": 1 },
+          { "image": "brows_idle", "at": [20, 30], "alpha": 1 },
+          { "image": "glow", "at": [0, 0], "alpha": 1 }
+        ],
+        "eyes": [
+          { "image": "eyes_open_white", "at": [0, 0], "op": "source-over" },
+          { "image": "iris", "at": [0, 0], "op": "source-atop" }
+        ]
+      },
+      {
+        "name": "soft hablando: rubor, mirada baja y brillo tenue",
+        "expression": "soft",
+        "blink": 0,
+        "mouthOpen": 0.4,
+        "outline": false,
+        "main": [
+          { "image": "base", "at": [0, 0], "alpha": 1 },
+          { "image": "<eyes>", "at": [20, 30], "alpha": 1 },
+          { "image": "eyes_open_lines", "at": [20, 30], "alpha": 1 },
+          { "image": "mouth_open_m", "at": [20, 30], "alpha": 1 },
+          { "image": "blush", "at": [20, 30], "alpha": 0.45 },
+          { "image": "brows_soft", "at": [20, 30], "alpha": 1 },
+          { "image": "glow", "at": [0, 0], "alpha": 0.6 }
+        ],
+        "eyes": [
+          { "image": "eyes_open_white", "at": [0, 0], "op": "source-over" },
+          { "image": "iris", "at": [0, 1.2], "op": "source-atop" }
+        ]
+      },
+      {
+        "name": "ojos cerrados: ni blanco ni iris",
+        "expression": "thinking",
+        "blink": 1,
+        "mouthOpen": 0,
+        "outline": false,
+        "main": [
+          { "image": "base", "at": [0, 0], "alpha": 1 },
+          { "image": "eyes_closed_lines", "at": [20, 30], "alpha": 1 },
+          { "image": "mouth_thinking", "at": [20, 30], "alpha": 1 },
+          { "image": "brows_thinking", "at": [20, 30], "alpha": 1 },
+          { "image": "glow", "at": [0, 0], "alpha": 0.9 }
+        ],
+        "eyes": []
+      },
+      {
+        "name": "brillo por encima de 1: segunda pasada sumada",
+        "expression": "idle",
+        "blink": 0,
+        "mouthOpen": 0,
+        "outline": false,
+        "setGlow": 1.5,
+        "main": [
+          { "image": "base", "at": [0, 0], "alpha": 1 },
+          { "image": "<eyes>", "at": [20, 30], "alpha": 1 },
+          { "image": "eyes_open_lines", "at": [20, 30], "alpha": 1 },
+          { "image": "mouth_idle", "at": [20, 30], "alpha": 1 },
+          { "image": "brows_idle", "at": [20, 30], "alpha": 1 },
+          { "image": "glow", "at": [0, 0], "alpha": 1 },
+          { "image": "glow", "at": [0, 0], "alpha": 0.5, "op": "lighter" }
+        ],
+        "eyes": [
+          { "image": "eyes_open_white", "at": [0, 0], "op": "source-over" },
+          { "image": "iris", "at": [0, 0], "op": "source-atop" }
+        ]
+      },
+      {
+        "name": "a mitad de la transición idle → annoyed",
+        "expression": "annoyed",
+        "from": "idle",
+        "fadeMs": 70,
+        "blink": 0,
+        "mouthOpen": 0,
+        "outline": false,
+        "main": [
+          { "image": "base", "at": [0, 0], "alpha": 1 },
+          { "image": "<eyes>", "at": [20, 30], "alpha": 1 },
+          { "image": "eyes_open_lines", "at": [20, 30], "alpha": 1 },
+          { "image": "mouth_idle", "at": [20, 30], "alpha": 1 },
+          { "image": "brows_idle", "at": [20, 30], "alpha": 1 },
+          { "image": "<eyes>", "at": [20, 30], "alpha": 0.5 },
+          { "image": "eyes_lid38t_lines", "at": [20, 30], "alpha": 0.5 },
+          { "image": "mouth_annoyed", "at": [20, 30], "alpha": 0.5 },
+          { "image": "brows_annoyed", "at": [20, 30], "alpha": 0.5 },
+          { "image": "glow", "at": [0, 0], "alpha": 0.7 }
+        ]
+      }
+    ]
+  },
+
+  "computeMouthOpen": [
+    { "freq": [], "open": 0 },
+    { "freq": [0, 0, 0, 0], "open": 0 },
+    { "freq": [255, 255, 255, 255], "open": 1, "note": "1,7 recortado a 1" },
+    { "freq": [75, 75, 75, 75], "open": 0.5 },
+    { "freq": [0, 150], "open": 0.7071 },
+    { "freq": [255, 255], "gain": 1, "open": 1 },
+    { "freq": [51, 51, 51], "gain": 1, "open": 0.2 }
+  ],
+
+  "minimalManifest": {
+    "about": "avatar.minimal.manifest.json solo trae los campos obligatorios. Sirve para probar los valores por defecto.",
+    "manifest": "avatar.minimal.manifest.json",
+    "expect": {
+      "glowLevel": 1,
+      "irisOffset": [0, 0],
+      "mouthAt1": "mouth_idle",
+      "eyesAtBlink05": "eyes_closed",
+      "emotionFallback": "idle",
+      "main": [
+        { "image": "base", "at": [0, 0], "alpha": 1 },
+        { "image": "<eyes>", "at": [20, 30], "alpha": 1 },
+        { "image": "eyes_open_lines", "at": [20, 30], "alpha": 1 },
+        { "image": "mouth_idle", "at": [20, 30], "alpha": 1 },
+        { "image": "brows_idle", "at": [20, 30], "alpha": 1 }
+      ],
+      "eyes": [{ "image": "eyes_open_white", "at": [0, 0], "op": "source-over" }]
+    }
+  },
+
+  "invalidManifests": {
+    "about": "Cambios sobre avatar.manifest.json que el esquema debe rechazar. El prototipo no valida; esto es para el esquema zod. set usa rutas con puntos; remove quita la clave.",
+    "cases": [
+      { "name": "sin kind", "remove": ["kind"] },
+      {
+        "name": "kind de otro motor",
+        "set": { "kind": "live2d" },
+        "note": "no es error del archivo: este motor no lo acepta"
+      },
+      { "name": "tamaño cero", "set": { "size": [0, 200] } },
+      { "name": "tamaño con decimales", "set": { "size": [120.5, 200] } },
+      { "name": "sin capa base", "remove": ["layers.base"] },
+      { "name": "cara fuera de la figura", "set": { "face.rect": [60, 30, 80, 60] } },
+      {
+        "name": "expresión con un estado de ojos que no existe",
+        "set": { "expressions.idle.eyes": "eyes_nope" }
+      },
+      {
+        "name": "expresión con una pieza de cejas que no existe",
+        "set": { "expressions.idle.brows": "brows_nope" }
+      },
+      {
+        "name": "expresión con una boca que no existe",
+        "set": { "expressions.smirk.mouth": "mouth_nope" }
+      },
+      { "name": "sin la expresión idle", "remove": ["expressions.idle"] },
+      { "name": "estado de ojos sin líneas", "remove": ["face.eyes.eyes_open.lines"] },
+      {
+        "name": "estado de ojos con un blanco que no existe",
+        "set": { "face.eyes.eyes_open.white": "nope" }
+      },
+      { "name": "iris que no existe", "set": { "face.iris": "nope" } },
+      { "name": "recorrido de la mirada negativo", "set": { "face.gaze.max": [-5, 3] } },
+      {
+        "name": "parpadeo con un estado que no existe",
+        "set": { "face.blink.closed": "eyes_nope" }
+      },
+      { "name": "intervalo de parpadeo al revés", "set": { "face.blink.interval_s": [6, 2.5] } },
+      { "name": "duración de parpadeo cero", "set": { "face.blink.duration_ms": 0 } },
+      {
+        "name": "bocas y umbrales de distinta longitud",
+        "set": { "face.mouth_thresholds": [0.12, 0.34] }
+      },
+      { "name": "umbrales desordenados", "set": { "face.mouth_thresholds": [0.34, 0.12, 0.6] } },
+      { "name": "umbral fuera de 0..1", "set": { "face.mouth_thresholds": [0.12, 0.34, 1.5] } },
+      {
+        "name": "boca abierta que no existe",
+        "set": { "face.mouth_open": ["mouth_open_s", "mouth_open_m", "nope"] }
+      },
+      { "name": "rubor que no existe", "set": { "face.blush": "nope" } },
+      { "name": "rubor de expresión fuera de 0..1", "set": { "expressions.soft.blush": 1.5 } },
+      {
+        "name": "mirada de expresión fuera de -1..1",
+        "set": { "expressions.thinking.gaze": [1.5, 0] }
+      },
+      {
+        "name": "patrón de brillo desconocido",
+        "set": { "expressions.idle.glow.pattern": "fijo" }
+      },
+      { "name": "nivel de brillo negativo", "set": { "expressions.idle.glow.level": -0.1 } },
+      {
+        "name": "emoción que apunta a una expresión que no existe",
+        "set": { "emotions.neutral": "nope" }
+      },
+      {
+        "name": "ruta que sale de la carpeta del modelo",
+        "set": { "layers.base": "../otro/base.png" }
+      },
+      {
+        "name": "ruta con esquema",
+        "set": { "face.pieces.iris": "https://example.com/iris.png" }
+      },
+      { "name": "ruta con barra inicial", "set": { "layers.base": "/assets/base.png" } },
+      { "name": "ruta con barra invertida", "set": { "layers.base": "assets\\base.png" } },
+      { "name": "ruta con letra de unidad", "set": { "layers.base": "C:/modelos/base.png" } },
+      { "name": "sin name", "remove": ["name"] },
+      { "name": "sin version", "remove": ["version"] },
+      { "name": "versión del formato desconocida", "set": { "version": "0.3" } },
+      { "name": "sin size", "remove": ["size"] },
+      { "name": "tamaño negativo", "set": { "size": [120, -200] } },
+      { "name": "sin face.rect", "remove": ["face.rect"] },
+      { "name": "cara de ancho cero", "set": { "face.rect": [20, 30, 0, 60] } },
+      { "name": "sin face.pieces", "remove": ["face.pieces"] },
+      { "name": "sin face.eyes", "remove": ["face.eyes"] },
+      { "name": "sin el fotograma medio del parpadeo", "remove": ["face.blink.half"] },
+      { "name": "sin el ojo cerrado del parpadeo", "remove": ["face.blink.closed"] },
+      {
+        "name": "ojo abierto del parpadeo que no existe",
+        "set": { "face.blink.open": "eyes_nope" }
+      },
+      {
+        "name": "intervalo de parpadeo con mínimo cero",
+        "set": { "face.blink.interval_s": [0, 6] }
+      },
+      { "name": "sin face.mouth_open", "remove": ["face.mouth_open"] },
+      { "name": "sin face.mouth_thresholds", "remove": ["face.mouth_thresholds"] },
+      { "name": "umbral cero", "set": { "face.mouth_thresholds": [0, 0.34, 0.6] } },
+      { "name": "sin expressions", "remove": ["expressions"] },
+      { "name": "expresión sin ojos", "remove": ["expressions.smirk.eyes"] },
+      { "name": "expresión sin cejas", "remove": ["expressions.smirk.brows"] },
+      { "name": "expresión sin boca", "remove": ["expressions.smirk.mouth"] },
+      {
+        "name": "clave desconocida en la raíz",
+        "set": { "gaze_max": [5, 3] },
+        "note": "una errata no debe pasar en silencio"
+      },
+      { "name": "clave desconocida en la cara", "set": { "face.gaze.maximum": [5, 3] } }
+    ]
+  }
+}

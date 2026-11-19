@@ -19,6 +19,7 @@
 
 import type { Emotion } from './emotions.js';
 import type { MemoryEntry } from '../interfaces/IMemoryModule.js';
+import type { TurnFailureReason } from './turn-failure.js';
 
 /*
  * EventMap es deliberadamente un interface con keys literales para que
@@ -62,8 +63,36 @@ export interface SystemHealthReport {
    * reutiliza. Puede faltar en los informes previos a que termine la consulta. Estado derivado: nunca lleva la clave.
    */
   geminiVoice?: GeminiVoiceStatus;
+  /**
+   * Lo que le falta a un servicio que **responde** para poder usarse. Ausente
+   * cuando todo lo vivo está listo, o cuando no se pudo averiguar.
+   */
+  readiness?: ServiceReadiness;
   /** ISO timestamp del momento del chequeo. */
   checkedAt: string;
+}
+
+/**
+ * Diferencia entre vivo y listo (R-280): un servicio puede contestar a su
+ * healthcheck y aun así no servir.
+ */
+export interface ServiceReadiness {
+  /** Modelos de la configuración que Ollama no tiene descargados. */
+  ollamaMissingModels?: string[];
+  /**
+   * Whisper transcribe en CPU (`cpu`: funciona, más lento) o responde pero
+   * todavía carga el modelo (`loading`: aún no transcribe). Hoy el servicio no
+   * abre el puerto hasta cargar el modelo, así que `loading` no llega: mientras
+   * carga, sale como caído. El valor queda previsto para cuando cargue en
+   * segundo plano.
+   */
+  whisper?: 'loading' | 'cpu';
+  /**
+   * La clave de la nube está, pero el último turno que la usó acabó con la
+   * nube rechazándola (`auth`) o sin cuota ni saldo (`quota`). Se borra cuando
+   * la nube vuelve a responder. No se comprueba con una petición de prueba.
+   */
+  cloud?: 'auth' | 'quota';
 }
 
 /**
@@ -175,6 +204,14 @@ export interface EventMap {
     /** ms desde user:message hasta esta emisión. */
     latencyMs: number;
   };
+
+  /**
+   * Un LLM no pudo responder. `reason` es una lista cerrada: el texto del
+   * error no sale del servidor. El turno puede seguir con el otro modelo; si
+   * después llega un `llm:responded` normal, solo falló ese `tier`. Ver la
+   * nota del 2026-11-14 en ADR 0016.
+   */
+  'llm:failed': { reason: TurnFailureReason; tier: 'local' | 'cloud'; userId: string };
 
   // ─── TTS (salida de voz) ────────────────────────────────────────────
   /**

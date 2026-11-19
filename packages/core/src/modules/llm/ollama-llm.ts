@@ -49,12 +49,16 @@ export type OllamaLLMConfig = z.infer<typeof OllamaLLMConfigSchema>;
 // ─── Errores ──────────────────────────────────────────────────────────
 
 export class OllamaLLMError extends Error {
-  constructor(message: string, cause?: unknown) {
+  /** Status HTTP cuando Ollama respondió con un error (404: falta el modelo). */
+  readonly status?: number;
+
+  constructor(message: string, cause?: unknown, status?: number) {
     // El segundo argumento del constructor de `Error` acepta `{ cause }`
     // desde ES2022 — eso pone la causa en `this.cause` sin necesidad
     // de declararlo como parámetro de clase.
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'OllamaLLMError';
+    if (status !== undefined) this.status = status;
   }
 }
 
@@ -146,7 +150,11 @@ export class OllamaLLM implements ILLMModule {
 
     if (!response.ok) {
       const text = await response.text().catch(() => '<sin cuerpo>');
-      throw new OllamaLLMError(`OllamaLLM: ${response.status} ${response.statusText} — ${text}`);
+      throw new OllamaLLMError(
+        `OllamaLLM: ${response.status} ${response.statusText} — ${text}`,
+        undefined,
+        response.status,
+      );
     }
 
     let raw: unknown;

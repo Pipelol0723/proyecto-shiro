@@ -1,0 +1,36 @@
+{
+  "kind": "sprite-layers",
+  "name": "Modelo sintético mínimo",
+  "version": "0.2",
+  "size": [120, 200],
+  "layers": {
+    "base": "assets/base.png"
+  },
+  "face": {
+    "rect": [20, 30, 80, 60],
+    "pieces": {
+      "eyes_open_lines": "assets/eyes_open_lines.png",
+      "eyes_open_white": "assets/eyes_open_white.png",
+      "eyes_closed_lines": "assets/eyes_closed_lines.png",
+      "brows_idle": "assets/brows_idle.png",
+      "mouth_idle": "assets/mouth_idle.png"
+    },
+    "eyes": {
+      "eyes_open": { "white": "eyes_open_white", "lines": "eyes_open_lines" },
+      "eyes_closed": { "white": null, "lines": "eyes_closed_lines" }
+    },
+    "blink": {
+      "half": "eyes_closed",
+      "closed": "eyes_closed"
+    },
+    "mouth_open": [],
+    "mouth_thresholds": []
+  },
+  "expressions": {
+    "idle": {
+      "eyes": "eyes_open",
+      "brows": "brows_idle",
+      "mouth": "mouth_idle"
+    }
+  }
+}

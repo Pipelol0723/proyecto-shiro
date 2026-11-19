@@ -58,6 +58,8 @@ interface LLMMockOptions {
   response?: LLMResponse;
   /** Si true, generate() rechaza. */
   fail?: boolean;
+  /** Si se da, generate() rechaza con este error. */
+  error?: Error;
 }
 
 function makeLLM(id: string, opts: LLMMockOptions = {}): ILLMModule & { calls: number } {
@@ -66,6 +68,7 @@ function makeLLM(id: string, opts: LLMMockOptions = {}): ILLMModule & { calls: n
     id,
     generate: async () => {
       calls += 1;
+      if (opts.error !== undefined) throw opts.error;
       if (opts.fail === true) throw new Error('LLM falló');
       await Promise.resolve();
       return opts.response ?? { text: `${id} responde`, emotion: 'neutral', tokensUsed: 5 };
@@ -425,6 +428,134 @@ describe('wireConversationFlow', () => {
   });
 
   // ─── Tests de la integración con memoria ───────────────────────────
+
+  describe('canal de error del turno (llm:failed)', () => {
+    /** Como el SDK de Anthropic visto desde fuera: envuelto, con el status en la causa. */
+    function cloudError(status: number): Error {
+      return new Error('AnthropicLLM: fallo al llamar a la API', {
+        cause: Object.assign(new Error(`respuesta ${String(status)}`), { status }),
+      });
+    }
+
+    /** Ollama apagado: fetch falla y el motivo queda dos niveles más abajo. */
+    function ollamaDown(): Error {
+      const socketError = Object.assign(new Error('connect ECONNREFUSED'), {
+        code: 'ECONNREFUSED',
+      });
+      return new Error('OllamaLLM: fallo al llamar a http://localhost:11434/api/chat', {
+        cause: new TypeError('fetch failed', { cause: socketError }),
+      });
+    }
+
+    function run(modules: LoadedModules): {
+      bus: EventBus<EventMap>;
+      order: string[];
+      failed: EventMap['llm:failed'][];
+      responded: EventMap['llm:responded'][];
+      dispose: () => void;
+    } {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const order: string[] = [];
+      const failed: EventMap['llm:failed'][] = [];
+      const responded: EventMap['llm:responded'][] = [];
+      bus.on('llm:failed', (p) => {
+        order.push('llm:failed');
+        failed.push(p);
+      });
+      bus.on('llm:responded', (p) => {
+        order.push('llm:responded');
+        responded.push(p);
+      });
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+      return { bus, order, failed, responded, dispose };
+    }
+
+    it.each([
+      [401, 'auth'],
+      [429, 'quota'],
+    ] as const)(
+      'un %i de la nube emite llm:failed con el motivo y el turno sigue en local',
+      async (status, reason) => {
+        const { bus, order, failed, responded, dispose } = run(
+          makeModules({
+            router: makeRouter({ tier: 'cloud' }),
+            llmCloud: makeLLM('llm:cloud-mock', { error: cloudError(status) }),
+          }),
+        );
+
+        await bus.emit('user:message', { text: 'hola', userId: 'u1' });
+        await flushPromises();
+
+        expect(failed).toEqual([{ reason, tier: 'cloud', userId: 'u1' }]);
+        expect(order).toEqual(['llm:failed', 'llm:responded']);
+        expect(responded[0]?.tier).toBe('local');
+        dispose();
+      },
+    );
+
+    it('si también falla el local, avisa de cada modelo antes del fallback', async () => {
+      const { bus, order, failed, responded, dispose } = run(
+        makeModules({
+          router: makeRouter({ tier: 'cloud' }),
+          llmCloud: makeLLM('llm:cloud-mock', { error: cloudError(401) }),
+          llmLocal: makeLLM('llm:local-mock', { error: ollamaDown() }),
+        }),
+      );
+
+      await bus.emit('user:message', { text: 'hola', userId: 'u1' });
+      await flushPromises();
+
+      expect(failed).toEqual([
+        { reason: 'auth', tier: 'cloud', userId: 'u1' },
+        { reason: 'unavailable', tier: 'local', userId: 'u1' },
+      ]);
+      expect(order).toEqual(['llm:failed', 'llm:failed', 'llm:responded']);
+      expect(responded[0]?.text).toMatch(/algo sali/i);
+      dispose();
+    });
+
+    it('el evento no lleva el texto del error, solo la lista cerrada', async () => {
+      const { bus, failed, dispose } = run(
+        makeModules({ llmLocal: makeLLM('llm:local-mock', { error: ollamaDown() }) }),
+      );
+
+      await bus.emit('user:message', { text: 'hola', userId: 'u1' });
+      await flushPromises();
+
+      expect(Object.keys(failed[0] ?? {}).sort()).toEqual(['reason', 'tier', 'userId']);
+      expect(JSON.stringify(failed)).not.toContain('localhost');
+      dispose();
+    });
+
+    it('si falla el router, avisa con el nivel local y motivo desconocido', async () => {
+      const { bus, failed, responded, dispose } = run(
+        makeModules({ router: makeRouter({ fail: true }) }),
+      );
+
+      await bus.emit('user:message', { text: 'hola', userId: 'u1' });
+      await flushPromises();
+
+      expect(failed).toEqual([{ reason: 'unknown', tier: 'local', userId: 'u1' }]);
+      expect(responded[0]?.text).toMatch(/algo sali/i);
+      dispose();
+    });
+
+    it('un turno sin fallos no emite llm:failed', async () => {
+      const { bus, failed, dispose } = run(makeModules());
+
+      await bus.emit('user:message', { text: 'hola', userId: 'u1' });
+      await flushPromises();
+
+      expect(failed).toEqual([]);
+      dispose();
+    });
+  });
 
   describe('integración con memoria', () => {
     it('persiste el user msg al recibir user:message', async () => {

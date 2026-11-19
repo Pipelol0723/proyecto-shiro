@@ -13,7 +13,7 @@
  * (sección Mapeo state ↔ EventBus).
  */
 
-import type { Emotion, MemoryEntry } from '@proyecto-shiro/core';
+import type { Emotion, MemoryEntry, TurnFailureReason } from '@proyecto-shiro/core';
 
 export type LLMTier = 'local' | 'cloud';
 
@@ -26,6 +26,12 @@ export interface CompanionMessage {
   emotion?: Emotion;
   tier?: LLMTier;
   latencyMs?: number;
+}
+
+/** Un LLM que no pudo responder en el turno en curso (`llm:failed`). */
+export interface TurnFailure {
+  reason: TurnFailureReason;
+  tier: LLMTier;
 }
 
 export interface CompanionState {
@@ -49,6 +55,19 @@ export interface CompanionState {
    * habla, o llega una respuesta nueva).
    */
   voiceCutByConnection: boolean;
+  /**
+   * Fallos de LLM del turno en curso, para explicar qué pasó. Se borran al
+   * empezar el turno siguiente o al perder la conexión. La respuesta de Shiro
+   * de ese turno no los borra, porque llega después del fallo; la siguiente
+   * respuesta sí (ver `turnFailuresAnswered`).
+   */
+  turnFailures: TurnFailure[];
+  /**
+   * Ya llegó la respuesta del turno de esos fallos. Otra respuesta sin turno
+   * nuevo por medio (un reporte de self-dev, el turno de otro cliente) ya no
+   * habla de ellos, así que los borra.
+   */
+  turnFailuresAnswered: boolean;
   /** Historial completo de conversación. */
   history: CompanionMessage[];
 }
@@ -62,6 +81,8 @@ export const INITIAL_STATE: CompanionState = {
   sttLive: '',
   subtitle: '',
   voiceCutByConnection: false,
+  turnFailures: [],
+  turnFailuresAnswered: false,
   history: [],
 };
 
@@ -72,6 +93,7 @@ export type CompanionAction =
   | { type: 'USER_SAID'; text: string; userId: string }
   | { type: 'THINK_START'; tier: LLMTier }
   | { type: 'SHIRO_REPLY'; text: string; emotion: Emotion; tier: LLMTier; latencyMs: number }
+  | { type: 'TURN_FAILED'; reason: TurnFailureReason; tier: LLMTier }
   | { type: 'SPEAK_END' }
   | { type: 'LISTEN_END' }
   | { type: 'CONNECTION_LOST' }
@@ -113,7 +135,15 @@ function entryToMessage(entry: MemoryEntry): CompanionMessage {
 export function companionReducer(state: CompanionState, action: CompanionAction): CompanionState {
   switch (action.type) {
     case 'LISTEN_START':
-      return { ...state, listening: true, sttLive: '', subtitle: '', voiceCutByConnection: false };
+      return {
+        ...state,
+        listening: true,
+        sttLive: '',
+        subtitle: '',
+        voiceCutByConnection: false,
+        turnFailures: [],
+        turnFailuresAnswered: false,
+      };
 
     case 'STT_PARTIAL':
       return { ...state, sttLive: action.text };
@@ -130,6 +160,8 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
       return {
         ...state,
         voiceCutByConnection: false,
+        turnFailures: [],
+        turnFailuresAnswered: false,
         history: [
           ...state.history,
           { role: 'user', text: action.text, timestamp: new Date().toISOString() },
@@ -145,6 +177,10 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         thinking: false,
         speaking: true,
         voiceCutByConnection: false,
+        // La primera respuesta tras un fallo es la de ese turno: el aviso se
+        // queda. La siguiente ya es de otra cosa: se borra.
+        turnFailures: state.turnFailuresAnswered ? [] : state.turnFailures,
+        turnFailuresAnswered: !state.turnFailuresAnswered && state.turnFailures.length > 0,
         emotion: action.emotion,
         subtitle: action.text,
         history: [
@@ -159,6 +195,20 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
           },
         ],
       };
+
+    case 'TURN_FAILED': {
+      const failure: TurnFailure = { reason: action.reason, tier: action.tier };
+      // Un fallo tras la respuesta es de un turno nuevo que este cliente no
+      // vio empezar: la lista vuelve a empezar.
+      if (state.turnFailuresAnswered) {
+        return { ...state, turnFailures: [failure], turnFailuresAnswered: false };
+      }
+      const repeated = state.turnFailures.some(
+        (f) => f.reason === failure.reason && f.tier === failure.tier,
+      );
+      if (repeated) return state;
+      return { ...state, turnFailures: [...state.turnFailures, failure] };
+    }
 
     case 'SPEAK_END':
       return { ...state, speaking: false, subtitle: '' };
@@ -178,6 +228,9 @@ export function companionReducer(state: CompanionState, action: CompanionAction)
         speaking: false,
         sttLive: '',
         subtitle: '',
+        // Al volver, el aviso sería el de un turno que ya no existe.
+        turnFailures: [],
+        turnFailuresAnswered: false,
       };
 
     case 'VOICE_CUT':

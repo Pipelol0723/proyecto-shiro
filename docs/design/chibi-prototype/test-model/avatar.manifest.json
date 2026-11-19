@@ -1,0 +1,113 @@
+{
+  "kind": "sprite-layers",
+  "name": "Modelo sintético de prueba",
+  "version": "0.2",
+  "provisional": false,
+  "credits": "Formas de color generadas por código. No contiene arte del personaje.",
+  "size": [120, 200],
+  "layers": {
+    "outline": "assets/outline.png",
+    "base": "assets/base.png",
+    "glow": "assets/glow.png"
+  },
+  "face": {
+    "rect": [20, 30, 80, 60],
+    "pieces": {
+      "iris": "assets/iris.png",
+      "eyes_open_lines": "assets/eyes_open_lines.png",
+      "eyes_open_white": "assets/eyes_open_white.png",
+      "eyes_lid12_lines": "assets/eyes_lid12_lines.png",
+      "eyes_lid12_white": "assets/eyes_lid12_white.png",
+      "eyes_lid22_lines": "assets/eyes_lid22_lines.png",
+      "eyes_lid22_white": "assets/eyes_lid22_white.png",
+      "eyes_lid38t_lines": "assets/eyes_lid38t_lines.png",
+      "eyes_lid38t_white": "assets/eyes_lid38t_white.png",
+      "eyes_half_lines": "assets/eyes_half_lines.png",
+      "eyes_half_white": "assets/eyes_half_white.png",
+      "eyes_closed_lines": "assets/eyes_closed_lines.png",
+      "brows_idle": "assets/brows_idle.png",
+      "brows_smirk": "assets/brows_smirk.png",
+      "brows_thinking": "assets/brows_thinking.png",
+      "brows_annoyed": "assets/brows_annoyed.png",
+      "brows_soft": "assets/brows_soft.png",
+      "mouth_idle": "assets/mouth_idle.png",
+      "mouth_smirk": "assets/mouth_smirk.png",
+      "mouth_thinking": "assets/mouth_thinking.png",
+      "mouth_annoyed": "assets/mouth_annoyed.png",
+      "mouth_soft": "assets/mouth_soft.png",
+      "mouth_open_s": "assets/mouth_open_s.png",
+      "mouth_open_m": "assets/mouth_open_m.png",
+      "mouth_open_l": "assets/mouth_open_l.png",
+      "blush": "assets/blush.png"
+    },
+    "eyes": {
+      "eyes_open": { "white": "eyes_open_white", "lines": "eyes_open_lines" },
+      "eyes_lid12": { "white": "eyes_lid12_white", "lines": "eyes_lid12_lines" },
+      "eyes_lid22": { "white": "eyes_lid22_white", "lines": "eyes_lid22_lines" },
+      "eyes_lid38t": { "white": "eyes_lid38t_white", "lines": "eyes_lid38t_lines" },
+      "eyes_half": { "white": "eyes_half_white", "lines": "eyes_half_lines" },
+      "eyes_closed": { "white": null, "lines": "eyes_closed_lines" }
+    },
+    "iris": "iris",
+    "gaze": { "max": [5, 3] },
+    "blink": {
+      "open": "eyes_open",
+      "half": "eyes_half",
+      "closed": "eyes_closed",
+      "interval_s": [2.5, 6.0],
+      "duration_ms": 130
+    },
+    "mouth_open": ["mouth_open_s", "mouth_open_m", "mouth_open_l"],
+    "mouth_thresholds": [0.12, 0.34, 0.6],
+    "blush": "blush"
+  },
+  "expressions": {
+    "idle": {
+      "eyes": "eyes_open",
+      "brows": "brows_idle",
+      "mouth": "mouth_idle",
+      "blush": 0.0,
+      "gaze": [0, 0],
+      "glow": { "level": 1.0, "pattern": "steady" }
+    },
+    "smirk": {
+      "eyes": "eyes_lid22",
+      "brows": "brows_smirk",
+      "mouth": "mouth_smirk",
+      "blush": 0.0,
+      "gaze": [0, 0],
+      "glow": { "level": 1.0, "pattern": "flash" }
+    },
+    "thinking": {
+      "eyes": "eyes_lid12",
+      "brows": "brows_thinking",
+      "mouth": "mouth_thinking",
+      "blush": 0.0,
+      "gaze": [0.85, 0.35],
+      "glow": { "level": 0.9, "pattern": "pulse" }
+    },
+    "annoyed": {
+      "eyes": "eyes_lid38t",
+      "brows": "brows_annoyed",
+      "mouth": "mouth_annoyed",
+      "blush": 0.0,
+      "gaze": [0, 0],
+      "glow": { "level": 0.7, "pattern": "steady" }
+    },
+    "soft": {
+      "eyes": "eyes_open",
+      "brows": "brows_soft",
+      "mouth": "mouth_soft",
+      "blush": 0.45,
+      "gaze": [0, -0.4],
+      "glow": { "level": 0.6, "pattern": "steady" }
+    }
+  },
+  "emotions": {
+    "neutral": "idle",
+    "divertida": "smirk",
+    "pensativa": "thinking",
+    "molesta": "annoyed",
+    "vulnerable": "soft"
+  }
+}
