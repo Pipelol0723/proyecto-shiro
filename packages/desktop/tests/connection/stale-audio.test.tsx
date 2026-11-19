@@ -103,7 +103,7 @@ describe('audio TTS que sobrevive a una pérdida de conexión', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',

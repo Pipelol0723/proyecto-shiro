@@ -13,6 +13,10 @@
  * demás deberían ponerlo manualmente (la lógica de "elegir dispositivo
  * activo" es ADR futuro para multi-device — ver ADR 0020).
  *
+ * El audio se pide al mismo core-host al que está conectado el bus
+ * (`hostUrl`): `tts:audio` trae solo la ruta. Lo que no sea un audio de ese
+ * servidor no se reproduce (ver `./audio-url.ts`).
+ *
  * Errores de fetch o reproducción no rompen la UI: se loguean y se
  * emite `tts:audio-ended` para desbloquear el estado `speaking` del
  * reducer.
@@ -20,6 +24,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EventMap, IEventBus } from '@proyecto-shiro/core';
+import { DEFAULT_HOST_URL, resolveAudioUrl } from './audio-url.js';
 
 const STORAGE_KEY = 'shiro:tts:muted';
 
@@ -32,6 +37,11 @@ export interface UseTtsPlaybackOptions {
    * leen los subtítulos.
    */
   muted?: boolean;
+  /**
+   * URL del bus del core-host al que está conectado este cliente. De ella
+   * sale el servidor al que se pide el audio. Por defecto, el bus local.
+   */
+  hostUrl?: string;
   /** Solo para tests — sustituye `new Audio()` por algo mockeable. */
   audioFactory?: () => HTMLAudioElement;
 }
@@ -82,7 +92,7 @@ function writeStoredMute(value: boolean): void {
 }
 
 export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackResult {
-  const { bus, audioFactory } = options;
+  const { bus, audioFactory, hostUrl = DEFAULT_HOST_URL } = options;
   const [muted, setMutedState] = useState<boolean>(() => options.muted ?? readStoredMute());
   // Elemento que suena ahora — expuesto para el lip-sync del avatar.
   // State (no ref) a propósito: el avatar es un consumidor React que
@@ -151,16 +161,30 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
         return;
       }
 
+      const src = resolveAudioUrl(payload.url, hostUrl);
+      if (src === null) {
+        // No es un audio del servidor al que estamos conectados: no se
+        // reproduce, y el turno no se queda «hablando».
+        console.warn(`[Audio] se descarta un audio que no es de este servidor: ${payload.url}`);
+        currentAudioIdRef.current = null;
+        void bus.emit('tts:audio-ended', {
+          userId: payload.userId,
+          audioId: payload.audioId,
+        });
+        return;
+      }
+
       const factory = audioFactoryRef.current;
       const audio = factory ? factory() : new Audio();
       audioRef.current = audio;
-      // CORS: el audio se sirve desde el core-host (otro origen/puerto)
-      // con `Access-Control-Allow-Origin: *` (ADR 0020). Sin
+      // CORS: el audio se sirve desde el core-host (otro origen/puerto), que
+      // devuelve `Access-Control-Allow-Origin` a los orígenes permitidos
+      // (ADR 0027, 2a). Sin
       // `crossOrigin='anonymous'` el `MediaElementAudioSourceNode` del
       // lip-sync queda "tainted" y el AnalyserNode devuelve solo ceros
       // → la boca no se movería. Debe fijarse ANTES de asignar `src`.
       audio.crossOrigin = 'anonymous';
-      audio.src = payload.url;
+      audio.src = src;
       // Expone el elemento para que el avatar arranque el lip-sync.
       setAudioElement(audio);
 
@@ -224,7 +248,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
         void bus.emit('tts:audio-ended', { userId: userId ?? '', audioId });
       }
     };
-  }, [bus, stopCurrent]);
+  }, [bus, hostUrl, stopCurrent]);
 
   const cancel = useCallback(() => {
     const audioId = currentAudioIdRef.current;

@@ -86,12 +86,6 @@ export interface WireConversationFlowOptions {
    * compatibilidad con tests existentes mientras se migra).
    */
   audioCache?: AudioCache;
-  /**
-   * Base URL absoluta del server HTTP que sirve `/audio/<id>.<ext>`
-   * (típicamente `http://localhost:9876`). Solo se usa cuando hay
-   * `audioCache`. Obligatorio en ese caso.
-   */
-  serverOrigin?: string;
 }
 
 const FALLBACK_RESPONSE = 'Algo salió mal procesando tu mensaje. ¿Lo intentas de nuevo?';
@@ -117,14 +111,8 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
     simulationSpeed = 1,
     memoryReads = DEFAULT_MEMORY_READS,
     audioCache,
-    serverOrigin,
   } = options;
   const child = logger.child({ module: 'ConversationFlow' });
-  if (audioCache !== undefined && serverOrigin === undefined) {
-    throw new Error(
-      'wireConversationFlow: `audioCache` requiere también `serverOrigin` para construir las URLs de tts:audio.',
-    );
-  }
   // Suscripción al `tts:cancel` del cliente: invalida el audioId en el
   // cache para que cualquier fetch en vuelo desde otro cliente reciba 410.
   // Esta lista se usa para limpiar al disposer.
@@ -270,7 +258,6 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         bus,
         modules.tts,
         audioCache,
-        serverOrigin,
         response.text,
         emotion,
         payload.userId,
@@ -298,7 +285,6 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         bus,
         modules.tts,
         audioCache,
-        serverOrigin,
         FALLBACK_RESPONSE,
         'neutral',
         payload.userId,
@@ -440,9 +426,12 @@ function formatContext(recent: readonly MemoryEntry[], semantic: readonly Memory
 
 /**
  * Sintetiza el texto con el módulo TTS, cachea el buffer y emite
- * `tts:audio`. El cliente hará fetch a la URL y emitirá `tts:audio-ended`
- * cuando termine la reproducción. Si la cadena de TTS falla por
- * completo, o si el `audioCache`/`serverOrigin` no están configurados
+ * `tts:audio` con la **ruta** del audio (`/audio/<id>.<ext>`), sin servidor
+ * ni puerto: el core-host no sabe con qué dirección llega cada cliente hasta
+ * él, así que cada uno la resuelve contra el origen de su conexión al bus
+ * (enmienda del 2026-11-19 del ADR 0020). El cliente la pide y emitirá
+ * `tts:audio-ended` cuando termine la reproducción. Si la cadena de TTS falla
+ * por completo, o si el `audioCache` no está configurado
  * (tests legacy), cae al simulador que emite `tts:audio-ended` con un
  * delay proporcional al texto — así el resto del estado del cliente
  * (Orbe que vuelve a idle, subtítulos) se desbloquea aunque no haya audio.
@@ -454,14 +443,13 @@ export async function dispatchTTS(
   bus: IEventBus<EventMap>,
   tts: ITTSModule,
   audioCache: AudioCache | undefined,
-  serverOrigin: string | undefined,
   text: string,
   emotion: EventMap['llm:responded']['emotion'],
   userId: string,
   simulationSpeed: number,
   logger: Logger,
 ): Promise<void> {
-  if (audioCache === undefined || serverOrigin === undefined) {
+  if (audioCache === undefined) {
     // Camino legacy: simula `tts:audio-ended` tras un delay. Permite
     // que tests existentes que no inyectan audioCache sigan funcionando.
     simulateTTSEnd(bus, text, userId, simulationSpeed);
@@ -471,7 +459,7 @@ export async function dispatchTTS(
     const { audio, mimeType } = await tts.synthesize({ text, emotion });
     const { audioId, relativeUrl } = audioCache.put(audio, mimeType);
     await bus.emit('tts:audio', {
-      url: `${serverOrigin}${relativeUrl}`,
+      url: relativeUrl,
       audioId,
       mimeType,
       userId,
