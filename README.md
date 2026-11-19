@@ -69,7 +69,7 @@ desde el 2026-11-13; las demás fases, pendientes de aprobación.
 
 ## Stack
 
-- **TypeScript** (ESM, strict) + **Node.js 20+**
+- **TypeScript** (ESM, strict) + **Node.js 22**
 - **npm workspaces** para el monorepo
 - **Vite + React 18** para `@proyecto-shiro/desktop` (cliente)
 - **Tauri 2.0** empaqueta el cliente como binario nativo Windows (sidecar `core-host`, tray, auto-updater firmado) — ver ADR 0024
@@ -83,7 +83,7 @@ desde el 2026-11-13; las demás fases, pendientes de aprobación.
 
 ## Requisitos
 
-- Node.js >= 20; se recomienda 22, que es la que usan el CI y el sidecar
+- Node.js 22, la versión de `.node-version`. Es la que usan el CI y el sidecar del binario; con otra, `build:sidecar` se niega a empaquetar
 - npm >= 10
 - **Rust 1.90+** (solo para `tauri:dev` y `tauri:build` — el modo dev de Vite no lo requiere). Instala desde [rustup.rs](https://rustup.rs/).
 - En Windows: **Microsoft C++ Build Tools** + **WebView2 Runtime** (preinstalado en Windows 11). Tauri lo verifica al primer `tauri:dev`.
@@ -513,22 +513,23 @@ cp -r docs/design/chibi-prototype/test-model/assets \
 
 ## Scripts disponibles (desde la raíz)
 
-| Comando                 | Descripción                                       |
-| ----------------------- | ------------------------------------------------- |
-| `npm run build`         | Compila todos los workspaces (`tsc` por paquete)  |
-| `npm run typecheck`     | Verifica tipos en todos los paquetes              |
-| `npm test`              | Ejecuta tests vía Vitest workspace                |
-| `npm run test:watch`    | Tests en modo watch                               |
-| `npm run test:coverage` | Tests con reporte de cobertura                    |
-| `npm run lint`          | Lintea todo el monorepo con ESLint                |
-| `npm run lint:fix`      | Lintea y arregla lo automatizable                 |
-| `npm run format`        | Formatea con Prettier (todos los paquetes)        |
-| `npm run format:check`  | Verifica formato sin escribir (lo que usa el CI)  |
-| `npm run verify`        | Todos los checks del CI, en orden                 |
-| `npm run test:scripts`  | Tests de los scripts de la raíz (`node --test`)   |
-| `npm run audit:prod`    | Audit de producción: falla con high o critical    |
-| `npm run agents:sync`   | Regenera AGENTS.md desde los bloques de CLAUDE.md |
-| `npm run agents:check`  | Falla si AGENTS.md no coincide con CLAUDE.md      |
+| Comando                                         | Descripción                                              |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `npm run build`                                 | Compila todos los workspaces (`tsc` por paquete)         |
+| `npm run typecheck`                             | Verifica tipos en todos los paquetes                     |
+| `npm test`                                      | Ejecuta tests vía Vitest workspace                       |
+| `npm run test:watch`                            | Tests en modo watch                                      |
+| `npm run test:coverage`                         | Tests con reporte de cobertura                           |
+| `npm run test:coverage -w @proyecto-shiro/core` | Cobertura de core con sus umbrales (lo que aplica el CI) |
+| `npm run lint`                                  | Lintea todo el monorepo con ESLint                       |
+| `npm run lint:fix`                              | Lintea y arregla lo automatizable                        |
+| `npm run format`                                | Formatea con Prettier (todos los paquetes)               |
+| `npm run format:check`                          | Verifica formato sin escribir (lo que usa el CI)         |
+| `npm run verify`                                | Todos los checks del CI, en orden                        |
+| `npm run test:scripts`                          | Tests de los scripts de la raíz (`node --test`)          |
+| `npm run audit:prod`                            | Audit de producción: falla con high o critical           |
+| `npm run agents:sync`                           | Regenera AGENTS.md desde los bloques de CLAUDE.md        |
+| `npm run agents:check`                          | Falla si AGENTS.md no coincide con CLAUDE.md             |
 
 Para ejecutar un script solo en un paquete:
 
@@ -572,7 +573,10 @@ npm run agents:check   # AGENTS.md coincide con lo que genera CLAUDE.md (si no: 
 El CI ejecuta además `npm run audit:prod`, que falla si una dependencia de
 producción tiene un aviso `high` o `critical` sin una excepción vigente en
 `scripts/audit-exceptions.json`. Necesita red, por eso no forma parte de
-`verify`.
+`verify`. También aplica la cobertura de core
+(`npm run test:coverage -w @proyecto-shiro/core`: falla por debajo de 80 % de
+líneas, funciones y sentencias, o de 75 % de ramas) y repite `verify` en
+Windows en el job `verify-windows`, que todavía no es obligatorio para fusionar.
 
 Atajo para arreglar formato y lint automáticamente antes de revisar:
 

@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '22'
+          node-version-file: '.node-version'
           cache: 'npm'
 
       - name: Install dependencies
@@ -48,11 +48,43 @@ jobs:
       - name: Verify (formato, lint, tipos, tests y build)
         run: npm run verify
 
+      # Cobertura de core con los umbrales de packages/core/vitest.config.ts
+      # (80/80/75/80): falla si baja de ahí. Va aparte de `verify` porque
+      # repite los tests de core con instrumentación.
+      - name: Cobertura de core (umbrales)
+        run: npm run test:coverage -w @proyecto-shiro/core
+
       # Falla con un aviso high o critical en dependencias de producción, o
       # con una excepción caducada (scripts/audit-exceptions.json). Sin
       # `continue-on-error`: si el registro no responde, se relanza el job.
       - name: Audit de producción (high y critical)
         run: npm run audit:prod
+
+  # Los mismos checks que `verify`, en Windows: es donde se desarrolla y donde
+  # corre el binario (rutas con `\`, finales de línea, addon nativo de SQLite).
+  # Todavía no es un check obligatorio de `develop`: pasa a serlo antes de
+  # empezar la Fase 3 del plan de mejora (P-28). No repite el audit ni la
+  # cobertura, que no dependen del sistema.
+  verify-windows:
+    name: verify-windows
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: '.node-version'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify (formato, lint, tipos, tests y build)
+        run: npm run verify
 
   # Tests mínimos del servicio Whisper (topes, Origin y host por defecto).
   # No instala faster-whisper: los tests usan un transcriber falso. Las
