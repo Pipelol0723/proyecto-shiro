@@ -154,23 +154,27 @@ export function SetupScreen(): JSX.Element {
   // La clave que se está guardando. Su borrador se vacía cuando el core-host
   // confirma, no antes: si el guardado falla, lo escrito sigue en el campo y
   // no hay que volver a pegarlo (R-307).
-  const [savingField, setSavingField] = useState<SecretField | null>(null);
+  //
+  // Se recuerda también el valor enviado: el campo no se bloquea mientras se
+  // guarda, y lo que se escriba entre tanto tampoco se borra.
+  const [saving, setSaving] = useState<{ field: SecretField; value: string } | null>(null);
 
   const saveSecret = (field: SecretField): void => {
-    secrets.save({ [field]: drafts[field] ?? '' });
-    setSavingField(field);
+    const value = drafts[field] ?? '';
+    secrets.save({ [field]: value });
+    setSaving({ field, value });
   };
 
   const saveStatus = secrets.status;
   useEffect(() => {
-    if (savingField === null) return;
+    if (saving === null) return;
     if (saveStatus === 'saved') {
-      setDrafts((d) => ({ ...d, [savingField]: '' }));
-      setSavingField(null);
+      setDrafts((d) => (d[saving.field] === saving.value ? { ...d, [saving.field]: '' } : d));
+      setSaving(null);
     } else if (saveStatus === 'error') {
-      setSavingField(null);
+      setSaving(null);
     }
-  }, [saveStatus, savingField]);
+  }, [saveStatus, saving]);
 
   return (
     <div className={styles.screen}>

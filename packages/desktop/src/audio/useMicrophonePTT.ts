@@ -314,7 +314,14 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
         flushWaiterRef.current = null;
         resolve();
       };
-      const timer = setTimeout(done, FLUSH_TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        // Lo que entregue después de esto llega con el final ya pedido y el
+        // cliente de Whisper lo descarta: que al menos quede dicho.
+        console.warn(
+          '[Micro] el worklet no entregó a tiempo lo que tenía pendiente; puede faltar el final de la frase',
+        );
+        done();
+      }, FLUSH_TIMEOUT_MS);
       flushWaiterRef.current = done;
       try {
         worklet.port.postMessage({ type: 'flush' });
@@ -347,12 +354,14 @@ export function useMicrophonePTT(options: UseMicrophonePTTOptions): UseMicrophon
     const turn = turnRef.current;
     const client = clientRef.current;
     try {
+      // El worklet junta 250 ms antes de entregar: lo que tiene a medias es
+      // el final de la frase, y tiene que salir antes que el «stop». Se pide
+      // con la entrada aún conectada: cortándola antes, lo último que entró
+      // podía quedarse fuera.
+      await flushWorklet();
       // Cortar la entrada de audio al worklet antes de pedir el final
       // — evita que sigan llegando chunks tras el stop.
       sourceNodeRef.current?.disconnect();
-      // El worklet junta 250 ms antes de entregar: lo que tenía a medias es
-      // el final de la frase, y tiene que salir antes que el «stop».
-      await flushWorklet();
       // Si el WS aún está abriendo, el cliente envía lo guardado y después el stop.
       await client?.stop();
       if (turn !== null && !turn.over) {
