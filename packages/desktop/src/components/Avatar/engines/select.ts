@@ -57,8 +57,11 @@ export async function selectEngine(
       const Component = await engine.load();
       if (signal.aborted) return null;
       return { candidate, Component, index };
-    } catch {
-      // El código del motor no cargó (falta el chunk, falla al evaluarse).
+    } catch (err) {
+      // El código del motor no cargó (falta el chunk, falla al evaluarse). Se
+      // sigue con el siguiente, pero queda dicho: si no, no hay por dónde
+      // empezar a mirar.
+      console.warn(`[Avatar] el motor «${engine.kind}» no se pudo cargar`, err);
     }
   }
   return null;
@@ -75,6 +78,9 @@ function probeWithTimeout(
   outer: AbortSignal,
   timeoutMs: number,
 ): Promise<boolean> {
+  // Una señal ya abortada no dispara «abort»: sin esto se esperaría el tiempo entero.
+  if (outer.aborted) return Promise.resolve(false);
+
   return new Promise<boolean>((resolve) => {
     const inner = new AbortController();
     let settled = false;
@@ -97,7 +103,7 @@ function probeWithTimeout(
     // `Promise.resolve().then` y no una llamada directa: si `probe` lanza al
     // llamarse, también cuenta como «no».
     void Promise.resolve()
-      .then(() => engine.probe(candidate, inner.signal))
+      .then(() => (inner.signal.aborted ? false : engine.probe(candidate, inner.signal)))
       .then(
         (available) => {
           finish(available);

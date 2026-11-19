@@ -19,7 +19,7 @@
  * no puede llevarse la app entera a blanco.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Orb } from '../Orb';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { AVATAR_CONFIG, type AvatarRuntimeConfig } from './config';
@@ -53,7 +53,20 @@ export function Avatar(props: AvatarComponentProps): JSX.Element {
   // Una lista distinta es otro avatar: se empieza de cero. La clave es el
   // contenido, no la identidad, para que una lista escrita en línea no
   // reinicie la selección en cada render.
-  return <AvatarStage key={JSON.stringify(candidates)} {...props} candidates={candidates} />;
+  //
+  // Provisional: desmontar y volver al Orbe es lo contrario de lo que pide el
+  // cambio en caliente (ADR 0035 §5: el modelo viejo sigue pintando mientras
+  // carga el nuevo). Esta `key` desaparece con AV-3.
+  return <AvatarStage key={candidatesKey(candidates)} {...props} candidates={candidates} />;
+}
+
+/** Los candidatos son datos planos; si alguno no se puede serializar, vale la lista entera. */
+function candidatesKey(candidates: readonly AvatarCandidate[]): string {
+  try {
+    return JSON.stringify(candidates);
+  } catch {
+    return `sin-clave-${String(candidates.length)}`;
+  }
 }
 
 interface SelectionState {
@@ -97,11 +110,23 @@ function AvatarStage(
   }, [engines, from]);
 
   // El motor montado falló: fuera, y a seguir por el siguiente candidato.
-  const handleEngineFailure = useCallback((): void => {
-    setState((current) =>
-      current.selection === null ? current : { selection: null, from: current.selection.index + 1 },
-    );
-  }, []);
+  //
+  // El aviso va ligado al candidato que lo recibe: si un motor ya desmontado
+  // avisa tarde, no tumba al que está montado ahora. Y es la misma función
+  // mientras dure la selección: Live2DCanvas la tiene entre las dependencias
+  // de su efecto, y una nueva en cada render reconstruiría el lienzo.
+  const mountedIndex = selection?.index;
+  const handleEngineFailure = useMemo(
+    () => (): void => {
+      if (mountedIndex === undefined) return;
+      setState((current) =>
+        current.selection?.index === mountedIndex
+          ? { selection: null, from: mountedIndex + 1 }
+          : current,
+      );
+    },
+    [mountedIndex],
+  );
 
   const orb = (
     <Orb

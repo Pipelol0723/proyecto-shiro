@@ -34,6 +34,13 @@ function isLive2DCandidate(candidate: AvatarCandidate): candidate is Live2DCandi
   return candidate.kind === LIVE2D_KIND && 'config' in candidate;
 }
 
+/**
+ * El componente del motor, una vez cargado. Se guarda para devolver siempre el
+ * mismo: si cambiara de identidad en cada carga, React desmontaría y volvería a
+ * montar el modelo.
+ */
+let cachedComponent: AvatarEngineComponent | null = null;
+
 export const live2dEngine: AvatarEngineDefinition = {
   kind: LIVE2D_KIND,
 
@@ -50,8 +57,9 @@ export const live2dEngine: AvatarEngineDefinition = {
     // Solo ahora se importa el lienzo: `pixi-live2d-display` lanza al
     // evaluarse si el Cubism Core no está, y con un import estático se
     // llevaría por delante también el orbe.
+    if (cachedComponent !== null) return cachedComponent;
     const { Live2DCanvas } = await import('../Live2DCanvas');
-    return function Live2DEngine(props: AvatarEngineProps): JSX.Element | null {
+    cachedComponent = function Live2DEngine(props: AvatarEngineProps): JSX.Element | null {
       if (!isLive2DCandidate(props.candidate)) return null;
       return (
         <Live2DCanvas
@@ -63,5 +71,6 @@ export const live2dEngine: AvatarEngineDefinition = {
         />
       );
     };
+    return cachedComponent;
   },
 };

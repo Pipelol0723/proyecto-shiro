@@ -56,6 +56,10 @@ export interface AvatarEngineDefinition {
 /**
  * Los cinco verbos de un motor (ADR 0028 §1). Son internos: el componente del
  * motor traduce sus props a estas llamadas.
+ *
+ * Todavía nada los conecta con el selector: el traspaso de estado y el fundido
+ * del cambio en caliente (ADR 0035 §5) llegan con AV-3, y pedirán una señal de
+ * «listo» y un manejador del motor. Son añadidos, no un rediseño.
  */
 export interface AvatarEngineVerbs {
   /** Ir hacia una expresión con nombre de Shiro (`idle`, `smirk`…). */

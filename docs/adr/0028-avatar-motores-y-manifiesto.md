@@ -201,9 +201,10 @@ Las capas de la chibi salen del borrador original del personaje y van en
 ## Nota 2026-11-18 — AV-2 en curso: contrato y selector
 
 - **Hecho** (paso AV-2 del plan): el selector por candidatos con tiempo límite
-  y el contrato de los motores. Live2D pasa a ser un candidato más, sin cambio
-  visible. El esquema del manifiesto va en su propio PR; falta el motor de
-  capas.
+  y el contrato de los motores. Live2D pasa a ser un candidato más y se ve
+  igual, con una salvedad: su comprobación tiene ahora los 4 s de límite del
+  §3, que antes no tenía. Si el modelo o el Cubism Core tardan más, sale el
+  orbe. El esquema del manifiesto va en su propio PR; falta el motor de capas.
 - **Dónde quedó cada cosa.** El contrato está en `engines/types.ts` y el
   selector en `engines/select.ts`. El esquema va en
   `engines/manifest-header.ts` (cabecera común) y `engines/layers/manifest.ts`,
@@ -214,7 +215,7 @@ Las capas de la chibi salen del borrador original del personaje y van en
   y la `y` es opcional. Lo usa el prototipo y lo necesita el traspaso de
   estado del ADR 0035.
 - **Hiyori sigue sin manifiesto.** Su candidato lleva la configuración de
-  siempre. El §2 preveía darle uno; se hará cuando haya un modelo Live2D de
+  siempre: es `{ kind, config }` y no `{ kind, manifestUrl }` como dice el §3. El §2 preveía darle uno; se hará cuando haya un modelo Live2D de
   Shiro: el de prueba lo descarga cada uno, y exigirle un archivo más rompería
   las instalaciones que ya funcionan.
 - **Si el motor montado falla**, el selector pasa al siguiente candidato; el
