@@ -1,6 +1,6 @@
 # ADR 0028: Avatar — motores intercambiables, manifiesto por modelo y motor de capas
 
-- **Status**: Accepted (en implementación: paso AV-2 del plan)
+- **Status**: Accepted (implementado en el paso AV-2 del plan)
 - **Fecha**: 2026-11-12
 - **Decidido por**: Pipelol
 
@@ -221,3 +221,36 @@ Las capas de la chibi salen del borrador original del personaje y van en
 - **Si el motor montado falla**, el selector pasa al siguiente candidato; el
   orbe solo sale cuando no queda ninguno. Antes, con un solo motor, caía
   directamente al orbe.
+
+## Nota 2026-11-18 — AV-2 completo: el motor de capas en la app
+
+- **Hecho**: el motor de capas del §4 y su alta en el selector. La lista por
+  defecto es Live2D y después la chibi (§3). Con la chibi instalada y sin el
+  modelo Live2D, sale la chibi; con los dos, sale Live2D. Elegir entre ellos
+  con la app en marcha es el paso AV-3 ([ADR 0035](0035-avatar-eleccion-de-modelo-en-caliente.md)).
+- **Dónde quedó cada cosa**, en `engines/layers/`: `manifest.ts` (esquema),
+  `loader.ts` (baja el manifiesto y las imágenes), `player.ts` (el
+  reproductor, port del prototipo), `LayersCanvas.tsx` (el lienzo y su bucle
+  de animación) y `engine.tsx` (el candidato y su comprobación).
+- **Dónde se busca la chibi**: en
+  `public/avatar/models/shiro-chibi/avatar.manifest.json` (§5: la carpeta no
+  se versiona). La URL es una constante del cliente, como la de Hiyori; pasará
+  a venir de una lista de modelos cuando se pueda elegir (AV-3).
+- **Lo que se aparta de las notas de implementación**:
+  - No hay `useBlink.ts`. El parpadeo va dentro del reproductor, que no tiene
+    reloj propio: avanza con el bucle del lienzo.
+  - La emoción se traduce a expresión con el mapa `emotions` del manifiesto.
+    `useAvatarExpression` sigue siendo solo de Live2D.
+  - La mirada la mueve la expresión (`gaze`). El verbo `setLookAt` está en el
+    reproductor, pero nada de la app lo llama todavía.
+- **Lo que el motor concreta del §4**:
+  - Un modelo es todo o nada: una imagen que falta, o que no mide lo que dice
+    el manifiesto, lo invalida entero y el selector pasa al siguiente.
+  - Ninguna petición sale de la carpeta del manifiesto.
+  - Las imágenes se traen con `fetch` y `createImageBitmap`: la carga se puede
+    cancelar y la memoria se suelta al desmontar.
+  - Pinta como mucho 30 veces por segundo, igual que Live2D (ADR 0021 §4).
+  - Con «reducir movimiento» no respira ni pulsa el brillo.
+- **Sigue pendiente**: el manifiesto de Hiyori (§2), mover los archivos de
+  Live2D a `engines/live2d/`, y conectar los verbos y el ciclo de vida con el
+  selector para el cambio en caliente (AV-3).

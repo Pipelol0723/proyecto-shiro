@@ -86,7 +86,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0025](0025-modelo-de-confianza-local-y-superficie-de-red.md)            | Modelo de confianza local y superficie de red                  | Superseded by 0027 (nunca implementado)          |
 | [0026](0026-estacion-holografica-pepper-ghost-cliente-ligero.md)         | Estación holográfica — lámina única + cliente ligero           | Accepted (sin implementar)                       |
 | [0027](0027-autenticacion-token-bus-stt-multicliente.md)                 | Autenticación por token compartido en el bus y el STT          | Accepted (2a implementado, 2b sin implementar)   |
-| [0028](0028-avatar-motores-y-manifiesto.md)                              | Avatar — motores intercambiables, manifiesto y motor de capas  | Accepted (en implementación: paso AV-2 del plan) |
+| [0028](0028-avatar-motores-y-manifiesto.md)                              | Avatar — motores intercambiables, manifiesto y motor de capas  | Accepted (implementado en el paso AV-2 del plan) |
 | [0029](0029-proceso-de-mantenimiento-de-una-persona.md)                  | Proceso de mantenimiento de una persona                        | Accepted                                         |
 | [0034](0034-tts-gemini-voz-disenada.md)                                  | TTS — voz diseñada de Gemini; ElevenLabs y SystemTTS detrás    | Accepted (implementado; sin activar)             |
 | [0035](0035-avatar-eleccion-de-modelo-en-caliente.md)                    | Avatar — elección del modelo en caliente; Shiro decide         | Accepted (sin implementar)                       |

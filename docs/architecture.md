@@ -427,20 +427,23 @@ graph LR
         AvMod[Live2DAvatar<br/>resuelve emoción→expresión]
     end
     subgraph "Cliente desktop"
-        AvComp[Avatar.tsx<br/>decide Live2D vs Orbe]
+        AvComp[Avatar.tsx<br/>prueba los candidatos en orden]
         Canvas[Live2DCanvas<br/>PIXI.Application + modelo]
+        Layers[LayersCanvas<br/>chibi por capas en canvas 2D]
         LipSync[useLipSync<br/>Web Audio → ParamMouthOpenY]
         Tts[useTtsPlayback<br/>HTMLAudioElement]
         Core[(live2dcubismcore.js<br/>Core 4.2.2 — manual, gitignored)]
         Model[(Hiyori .moc3 — manual)]
     end
 
-    AvComp -->|core + modelo OK| Canvas
-    AvComp -->|falla / sin assets| Orb[Orb SVG fallback]
+    AvComp -->|1º: core + modelo OK| Canvas
+    AvComp -->|2º: manifiesto válido| Layers
+    AvComp -->|ninguno disponible| Orb[Orb SVG fallback]
     Canvas --> Core
     Canvas --> Model
     Tts -->|audioElement| LipSync
     LipSync -->|setMouthOpen| Canvas
+    LipSync -->|setMouthOpen| Layers
 
     style Canvas fill:#4a9eff,stroke:#333,color:#fff
     style LipSync fill:#f4b400,stroke:#333,color:#fff
@@ -451,7 +454,8 @@ graph LR
 - **Lip-sync** (ADR 0021 §5): `useTtsPlayback` expone el `HTMLAudioElement` (con `crossOrigin="anonymous"`); `useLipSync` lo conecta a un `AnalyserNode` y mapea la amplitud RMS a `ParamMouthOpenY` cada frame vía un callback `setMouthOpen` que `Live2DCanvas` implementa sobre el modelo. Cero coste de red, sincronización exacta. En mute no hay análisis (boca cerrada).
 - **Idle off por default**: las motions idle de Hiyori tocan `ParamMouthOpenY` y compiten con el lip-sync. `autoUpdate` es siempre `true` (para aplicar el parámetro al mesh) y la idle se desactiva apuntando `idleMotionGroup` a un grupo inexistente. El modelo igual respira y parpadea.
 - **Expresiones por emoción** ✅: la cara interpola parámetros faciales Cubism (`ParamMouthForm`, cejas, mejillas, ojos sonrientes) hacia la emoción de `llm:responded` (`useAvatarExpression` + `expression-map.ts`). Hiyori no trae `.exp3.json`, así que se usan parámetros directos; el seam para `model.expression()` con un modelo que sí los traiga queda listo. La _precisión_ de la emoción la pone el LLM (Qwen 3b clasifica mal; Claude/un modelo mayor mejor) — el avatar refleja fielmente la que recibe.
-- **Formato definitivo**: [ADR 0028](adr/0028-avatar-motores-y-manifiesto.md) decide motores intercambiables con manifiesto por modelo y un motor de capas (chibi). Accepted y sin implementar; la integración en el cliente se aprobó el 2026-11-14 (paso AV-2 del [plan de mejora](plan-mejora-2026-11.md#vía-paralela-avatar-y-modelos)). Prototipo en [`design/chibi-prototype/`](design/chibi-prototype/README.md).
+- **Motores intercambiables** ([ADR 0028](adr/0028-avatar-motores-y-manifiesto.md), paso AV-2 del [plan de mejora](plan-mejora-2026-11.md#vía-paralela-avatar-y-modelos)): `<Avatar>` recibe una lista ordenada de candidatos y monta el primero disponible. Cada motor aporta su comprobación, con 4 s de límite, y su código se importa solo si se va a usar. Hoy la lista es Live2D y, después, la **chibi por capas**; el orbe es el último recurso. Si un motor falla ya montado, se pasa al siguiente.
+- **Motor de capas** (`engines/layers/`): un `avatar.manifest.json` validado con zod describe las imágenes y las expresiones; el cargador las trae todas o ninguna, sin salir de la carpeta del modelo; el reproductor las dibuja en un canvas 2D (expresiones con fundido, boca por umbrales con el mismo `useLipSync`, parpadeo, mirada y brillo) a 30 fps como mucho. Los recursos del modelo no se versionan. Prototipo en [`design/chibi-prototype/`](design/chibi-prototype/README.md).
 
 ## STT: microservicio Whisper + push-to-talk
 
