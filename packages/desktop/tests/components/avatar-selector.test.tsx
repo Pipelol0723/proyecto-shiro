@@ -26,11 +26,16 @@ function fakeEngine(
 ): AvatarEngineDefinition & {
   probe: ReturnType<typeof vi.fn<Probe>>;
   fail: (err: unknown) => void;
+  /** Llama al primer `onLoadError` que recibió, aunque el motor ya no esté montado. */
+  failWithFirstCallback: (err: unknown) => void;
+  lastCallback: () => ((err: unknown) => void) | undefined;
 } {
   let onLoadError: ((err: unknown) => void) | undefined;
+  let firstOnLoadError: ((err: unknown) => void) | undefined;
   function Fake(props: AvatarEngineProps): JSX.Element {
     if (options.throwsOnRender === true) throw new Error('boom');
     onLoadError = props.onLoadError;
+    firstOnLoadError ??= props.onLoadError;
     return <div data-testid={`engine-${kind}`} />;
   }
   return {
@@ -41,6 +46,10 @@ function fakeEngine(
     fail: (err) => {
       onLoadError?.(err);
     },
+    failWithFirstCallback: (err) => {
+      firstOnLoadError?.(err);
+    },
+    lastCallback: () => onLoadError,
   };
 }
 
@@ -51,6 +60,7 @@ const candidate = (kind: string): AvatarCandidate => ({ kind });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('selectEngine', () => {
@@ -74,6 +84,7 @@ describe('selectEngine', () => {
     ['la comprobación lanza', fakeEngine('a', () => Promise.reject(new Error('red')))],
     ['el motor no se puede cargar', fakeEngine('a', yes, { loadFails: true })],
   ])('pasa al siguiente si %s', async (_name, a) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const b = fakeEngine('b', yes);
     const result = await selectEngine([candidate('a'), candidate('b')], [a, b], {
       signal: signal(),
@@ -142,6 +153,26 @@ describe('selectEngine', () => {
     });
     expect(result?.candidate.kind).toBe('b');
     expect(a.probe).not.toHaveBeenCalled();
+  });
+
+  it('con la señal ya abortada no comprueba nada', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const a = fakeEngine('a', yes);
+
+    expect(await selectEngine([candidate('a')], [a], { signal: controller.signal })).toBeNull();
+    expect(a.probe).not.toHaveBeenCalled();
+  });
+
+  it('avisa por consola cuando el código de un motor no carga', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const a = fakeEngine('a', yes, { loadFails: true });
+
+    await selectEngine([candidate('a')], [a], { signal: signal() });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('«a»');
+    warn.mockRestore();
   });
 
   it('si se cancela a mitad, no elige nada ni sigue comprobando', async () => {
@@ -220,6 +251,55 @@ describe('<Avatar /> con candidatos', () => {
     });
     await waitFor(() => {
       expect(rendered(container)).toBe('orb');
+    });
+  });
+
+  it('el aviso tardío de un motor ya desmontado no tumba al que está montado', async () => {
+    const a = fakeEngine('a', yes);
+    const b = fakeEngine('b', yes);
+    const { container } = render(
+      <Avatar candidates={[candidate('a'), candidate('b')]} engines={[a, b]} />,
+    );
+    await waitFor(() => {
+      expect(rendered(container)).toBe('a');
+    });
+    const lateFailureOfA = a.fail;
+
+    act(() => {
+      lateFailureOfA(new Error('texturas 404'));
+    });
+    await waitFor(() => {
+      expect(rendered(container)).toBe('b');
+    });
+
+    // El motor A vuelve a avisar cuando ya no está: B no tiene la culpa.
+    act(() => {
+      a.failWithFirstCallback(new Error('otra vez'));
+    });
+    await Promise.resolve();
+    expect(rendered(container)).toBe('b');
+  });
+
+  it('el aviso de error que recibe el motor no cambia entre renders', async () => {
+    const a = fakeEngine('a', yes);
+    const { container, rerender } = render(
+      <Avatar candidates={[candidate('a')]} engines={[a]} emotion="neutral" />,
+    );
+    await waitFor(() => {
+      expect(rendered(container)).toBe('a');
+    });
+    const first = a.lastCallback();
+
+    rerender(<Avatar candidates={[candidate('a')]} engines={[a]} emotion="divertida" />);
+    expect(a.lastCallback()).toBe(first);
+  });
+
+  it('un candidato cuyo motor no conoce se salta también desde <Avatar>', async () => {
+    const { container } = render(
+      <Avatar candidates={[candidate('raro'), candidate('b')]} engines={[fakeEngine('b', yes)]} />,
+    );
+    await waitFor(() => {
+      expect(rendered(container)).toBe('b');
     });
   });
 
