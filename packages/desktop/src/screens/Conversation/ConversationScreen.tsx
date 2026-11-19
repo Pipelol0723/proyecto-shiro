@@ -212,7 +212,7 @@ export function ConversationScreen(): JSX.Element {
 
         {ptt.state === 'error' && ptt.error !== null && (
           <p className={styles.micError} role="alert">
-            Micro: {ptt.error}
+            {ptt.error}
           </p>
         )}
 

@@ -239,7 +239,9 @@ describe('WhisperSttClient — plazos y audio durante la apertura', () => {
       .filter((item) => item.kind === 'binary')
       .map((item) => [...new Uint8Array(item.data as ArrayBuffer)]);
   const texts = (ws: FakeWebSocket): unknown[] =>
-    ws.sent.filter((item) => item.kind === 'text').map((item) => JSON.parse(item.data as string));
+    ws.sent
+      .filter((item) => item.kind === 'text')
+      .map((item) => JSON.parse(item.data as string) as unknown);
 
   /** Recoge el rechazo sin dejar la promesa suelta mientras corre el reloj. */
   function settled(promise: Promise<void>): Promise<unknown> {
@@ -441,11 +443,13 @@ describe('WhisperSttClient — plazos y audio durante la apertura', () => {
     client.sendChunk(chunk(1));
 
     client.abort();
+    expect(ws.readyState).toBe(FakeWebSocket.CLOSED);
+
+    // Aunque el WS llegue a abrir después, o pase el plazo, ya no hace nada.
     ws.simulateOpen();
     await vi.advanceTimersByTimeAsync(DEFAULT_CONNECT_TIMEOUT_MS * 2);
 
     expect(client.state).toBe('closed');
-    expect(ws.readyState).toBe(FakeWebSocket.CLOSED);
     expect(ws.sent).toEqual([]);
     // Quien esperaba la apertura se entera de que ya no va a pasar.
     expect(await opening).toBeInstanceOf(Error);
