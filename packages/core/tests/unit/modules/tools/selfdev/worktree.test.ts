@@ -186,7 +186,13 @@ describe('WorktreeManager — integración con git real', () => {
 
   beforeEach(async () => {
     repo = await fs.realpath(await fs.mkdtemp(join(tmpdir(), 'shiro-repo-')));
-    wtPath = join(tmpdir(), `shiro-wt-${String(process.pid)}-${String(Date.now())}`);
+    // La carpeta temporal se resuelve antes de usarla, igual que la del repo:
+    // en el runner de Windows de GitHub viene con nombre corto (RUNNER~1) y
+    // git devuelve la ruta larga, así que sin esto no reconoce su worktree.
+    wtPath = join(
+      await fs.realpath(tmpdir()),
+      `shiro-wt-${String(process.pid)}-${String(Date.now())}`,
+    );
     await git(repo, ['init']);
     await git(repo, ['config', 'user.email', 't@t.test']);
     await git(repo, ['config', 'user.name', 'test']);
