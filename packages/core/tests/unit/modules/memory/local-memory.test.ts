@@ -4,7 +4,7 @@
  * Cada test crea su propia DB `:memory:` para aislamiento total.
  */
 
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -343,7 +343,7 @@ describe('LocalMemory', () => {
 
 /** Ejecuta `run` con la ruta de una DB en un directorio temporal, que se borra después. */
 function withTmpDb(run: (dbPath: string) => void): void {
-  const tmp = mkdtempSync(join(tmpdir(), 'shiro-schema-'));
+  const tmp = mkdtempSync(join(tmpdir(), 'shiro esquema ñ-'));
   try {
     run(join(tmp, 'memory.db'));
   } finally {
@@ -354,6 +354,7 @@ function withTmpDb(run: (dbPath: string) => void): void {
 /** Crea una DB como la dejaba el código anterior a P-10: sin `user_version`. */
 function createV0Db(dbPath: string, rows: [id: string, role: string, timestamp: string][]): void {
   const old = new Database(dbPath);
+  old.pragma('journal_mode = WAL');
   old.exec(`
     CREATE TABLE messages (
       id TEXT PRIMARY KEY,
@@ -365,6 +366,8 @@ function createV0Db(dbPath: string, rows: [id: string, role: string, timestamp: 
       synced_at TEXT
     );
     CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE INDEX idx_messages_pending ON messages(timestamp) WHERE synced_at IS NULL;
+    CREATE INDEX idx_messages_user_time ON messages(user_id, timestamp);
   `);
   const insert = old.prepare(
     `INSERT INTO messages (id, user_id, role, text, timestamp) VALUES (?, ?, ?, ?, ?)`,
@@ -538,10 +541,25 @@ describe('LocalMemory — historial reciente (P-10, R-072)', () => {
     expect(memory.getRecent('nadie', 5)).toEqual([]);
   });
 
-  it('a igual marca de tiempo, el orden no baila', () => {
+  it('a igual marca de tiempo, manda el orden en que se guardaron', () => {
     memory.save(makeEntry({ id: 'z2', timestamp: '2026-05-29T12:00:08.000Z' }));
     memory.save(makeEntry({ id: 'z1', timestamp: '2026-05-29T12:00:08.000Z' }));
-    expect(memory.getRecent(USER, 2).map((e) => e.id)).toEqual(['z1', 'z2']);
+    expect(memory.getRecent(USER, 2).map((e) => e.id)).toEqual(['z2', 'z1']);
+  });
+
+  it('un límite que no es un entero positivo no devuelve nada, y no lanza', () => {
+    for (const limit of [2.5, Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      expect(memory.getRecent(USER, limit)).toEqual([]);
+      expect(memory.getRecentAnyUser(limit)).toEqual([]);
+    }
+  });
+
+  it('sin separar por usuario, devuelve los últimos de toda la conversación', () => {
+    expect(memory.getRecentAnyUser(3).map((e) => e.id)).toEqual(['m4', 'm5', 'otro']);
+    expect(memory.getRecentAnyUser(2, { excludeId: 'otro' }).map((e) => e.id)).toEqual([
+      'm4',
+      'm5',
+    ]);
   });
 });
 
@@ -612,5 +630,105 @@ describe('LocalMemory — salida de herramientas acotada (P-10, R-175)', () => {
     const long = 'x'.repeat(MAX_TOOL_OUTPUT_CHARS + 10);
     memory.save(makeEntry({ id: 'u', metadata: { result: { ok: true, output: long } } }));
     expect(storedOutput()).toBe(long);
+  });
+});
+
+describe('LocalMemory — la copia previa a la migración (revisión de P-10)', () => {
+  const ROW: [string, string, string] = ['a', 'user', '2026-05-29T12:00:00.000Z'];
+
+  function countTurns(path: string): number {
+    const db = new Database(path, { readonly: true });
+    try {
+      return (db.prepare('SELECT COUNT(*) AS n FROM messages').get() as { n: number }).n;
+    } finally {
+      db.close();
+    }
+  }
+
+  function pragmaOf(path: string, name: string): unknown {
+    const db = new Database(path, { readonly: true });
+    try {
+      return db.pragma(name, { simple: true });
+    } finally {
+      db.close();
+    }
+  }
+
+  it('si la copia no se puede hacer, no migra ni deja una copia a medias; al poder, la hace', () => {
+    withTmpDb((dbPath) => {
+      createV0Db(dbPath, [ROW]);
+      // Un directorio donde iría la copia en curso: la copia falla.
+      mkdirSync(`${dbPath}.v0.bak.tmp`);
+
+      expect(() => new LocalMemory({ dbPath })).toThrow(/no se ha migrado/);
+      expect(pragmaOf(dbPath, 'user_version')).toBe(0);
+      expect(existsSync(`${dbPath}.v0.bak`)).toBe(false);
+
+      rmSync(`${dbPath}.v0.bak.tmp`, { recursive: true, force: true });
+      new LocalMemory({ dbPath }).close();
+
+      expect(pragmaOf(dbPath, 'user_version')).toBe(1);
+      expect(countTurns(`${dbPath}.v0.bak`)).toBe(1);
+    });
+  });
+
+  it('una copia en curso que quedó de un arranque cortado no se toma por buena', () => {
+    withTmpDb((dbPath) => {
+      createV0Db(dbPath, [ROW]);
+      writeFileSync(`${dbPath}.v0.bak.tmp`, 'a medias');
+
+      new LocalMemory({ dbPath }).close();
+
+      expect(existsSync(`${dbPath}.v0.bak.tmp`)).toBe(false);
+      expect(countTurns(`${dbPath}.v0.bak`)).toBe(1);
+    });
+  });
+
+  it('una base anterior al rol tool también deja su copia antes de reconstruir la tabla', () => {
+    withTmpDb((dbPath) => {
+      const old = new Database(dbPath);
+      old.exec(`
+        CREATE TABLE messages (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+          text TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          metadata TEXT,
+          synced_at TEXT
+        );
+      `);
+      old
+        .prepare(`INSERT INTO messages (id, user_id, role, text, timestamp) VALUES (?, ?, ?, ?, ?)`)
+        .run('viejo', USER, 'assistant', 'recuerdo viejo', '2026-05-29T12:00:00.000Z');
+      old.close();
+
+      const memory = new LocalMemory({ dbPath });
+      try {
+        expect(memory.schemaVersion()).toBe(1);
+        expect(memory.getRecent(USER, 5).map((e) => e.id)).toEqual(['viejo']);
+        expect(() =>
+          memory.save(makeEntry({ id: 't', role: 'tool', timestamp: '2026-05-29T12:01:00.000Z' })),
+        ).not.toThrow();
+      } finally {
+        memory.close();
+      }
+      expect(countTurns(`${dbPath}.v0.bak`)).toBe(1);
+    });
+  });
+
+  it('una base de una versión posterior no cambia ni de modo de diario', () => {
+    withTmpDb((dbPath) => {
+      const future = new Database(dbPath);
+      future.exec('CREATE TABLE cosa (x INTEGER)');
+      future.pragma('user_version = 2');
+      future.close();
+      expect(pragmaOf(dbPath, 'journal_mode')).toBe('delete');
+
+      expect(() => new LocalMemory({ dbPath })).toThrow(/versión 2/);
+
+      expect(pragmaOf(dbPath, 'journal_mode')).toBe('delete');
+      expect(pragmaOf(dbPath, 'user_version')).toBe(2);
+    });
   });
 });

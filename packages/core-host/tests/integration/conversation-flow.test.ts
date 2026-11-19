@@ -692,6 +692,50 @@ describe('wireConversationFlow', () => {
       dispose();
     });
 
+    it('un recuerdo parecido que ya está entre lo reciente no se repite, y el tope se respeta', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+        tokensUsed: 1,
+      });
+      const entry = (id: string): MemoryEntry => ({
+        id,
+        role: 'user',
+        text: `texto de ${id}`,
+        timestamp: '2026-05-29T12:00:00.000Z',
+        userId: 'me',
+      });
+      const memory = makeMemory({
+        recent: [entry('r1'), entry('r2')],
+        // r2 ya está entre lo reciente; de los otros tres solo caben dos.
+        semantic: [entry('r2'), entry('s1'), entry('s2'), entry('s3')],
+      });
+      const modules = makeModules({
+        memory,
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+        memoryReads: { recentLimit: 5, semanticLimit: 2, timeoutMs: 1_000 },
+      });
+
+      await bus.emit('user:message', { text: 'sigue', userId: 'me' });
+
+      const context = generateSpy.mock.calls[0]?.[0]?.context ?? '';
+      expect(context.split('texto de r2')).toHaveLength(2);
+      expect(context).toContain('texto de s1');
+      expect(context).toContain('texto de s2');
+      expect(context).not.toContain('texto de s3');
+
+      dispose();
+    });
+
     it('pasa el context formateado al LLM cuando hay entradas', async () => {
       const bus = new EventBus<EventMap>({ logger: makeLogger() });
       const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({

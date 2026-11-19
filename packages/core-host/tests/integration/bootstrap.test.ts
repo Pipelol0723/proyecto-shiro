@@ -243,6 +243,58 @@ describe('core-host bootstrap end-to-end', () => {
     },
   );
 
+  it(
+    'un cliente que conecta después recibe lo hablado, aunque Letta no esté',
+    { timeout: 30_000 },
+    async () => {
+      result = await bootstrap({
+        port: 0,
+        config: loadFixtureConfig(),
+        character: FIXTURE_CHARACTER,
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+      const url = `ws://localhost:${result.transport.port}/bus`;
+      const connect = (): { bus: EventBus<EventMap>; transport: WebSocketTransport } => {
+        const transport = new WebSocketTransport({
+          url,
+          logger: makeLogger(),
+          webSocketCtor: WebSocket as unknown as WebSocketCtor,
+        });
+        return {
+          bus: new EventBus<EventMap>({ logger: makeLogger(), transports: [transport] }),
+          transport,
+        };
+      };
+
+      // El cliente habla como «me»; la config del servidor dice «default».
+      const first = connect();
+      await waitFor(() => first.transport.getState() === 'open');
+      let turnFinished = false;
+      first.bus.on('tts:audio', () => {
+        turnFinished = true;
+      });
+      first.bus.on('tts:audio-ended', () => {
+        turnFinished = true;
+      });
+      await first.bus.emit('user:message', { text: 'recuerda esto', userId: 'me' });
+      await waitFor(() => turnFinished, { timeoutMs: 15_000 });
+
+      const second = connect();
+      const snapshots: EventMap['memory:snapshot'][] = [];
+      second.bus.on('memory:snapshot', (payload) => {
+        snapshots.push(payload);
+      });
+      await waitFor(() => snapshots.length > 0, { timeoutMs: 5_000 });
+
+      const texts = snapshots[0]?.entries.map((entry) => entry.text) ?? [];
+      expect(texts).toContain('recuerda esto');
+
+      await first.transport.close();
+      await second.transport.close();
+    },
+  );
+
   it('múltiples clientes reciben los mismos eventos del server', { timeout: 20_000 }, async () => {
     result = await bootstrap({
       port: 0,

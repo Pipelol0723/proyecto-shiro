@@ -203,6 +203,23 @@ describe('MemoryManager', () => {
       expect(recentSpy).not.toHaveBeenCalled();
     });
 
+    it('no separa por usuario: es la memoria de un solo dueño', async () => {
+      // El cliente habla como «me» y el servidor guarda lo suyo con el
+      // usuario de la config. Letta nunca los separó; SQLite tampoco debe.
+      await manager.save(
+        makeEntry({ id: 'cliente', userId: 'me', timestamp: '2026-05-29T12:00:01.000Z' }),
+      );
+      await manager.save(
+        makeEntry({ id: 'servidor', userId: 'default', timestamp: '2026-05-29T12:00:02.000Z' }),
+      );
+
+      expect((await manager.getRecent('default', 10)).map((e) => e.id)).toEqual([
+        'cliente',
+        'servidor',
+      ]);
+      expect((await manager.getRecent('me', 10)).map((e) => e.id)).toEqual(['cliente', 'servidor']);
+    });
+
     it('excluye el turno que se le indica', async () => {
       await seed();
       const recent = await manager.getRecent(USER, 2, { excludeId: 'm4' });
