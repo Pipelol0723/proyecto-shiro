@@ -19,3 +19,22 @@
   /* Evita scrollbars accidentales si el canvas ligero excede el wrap. */
   overflow: hidden;
 }
+
+/* Lienzo del motor de capas. Aparece con un fundido corto al pintar el primer
+   fotograma, para que no salte de golpe tras el orbe. */
+.layersCanvas {
+  display: block;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.layersCanvas[data-ready='true'] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layersCanvas {
+    transition: none;
+  }
+}

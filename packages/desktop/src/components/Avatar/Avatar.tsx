@@ -6,9 +6,11 @@
  * (`probe`), con un tiempo límite, y su componente se importa solo si se va a
  * usar. El Orbe (ADR 0009) es siempre el último recurso y nunca falla.
  *
- * Hoy la lista por defecto tiene un solo candidato, Live2D, con la misma
- * comprobación de siempre (ADR 0021 §3): el modelo responde a un HEAD y el
- * Cubism Core está cargado.
+ * La lista por defecto es Live2D y, después, la chibi por capas (el orden del
+ * ADR 0028 §3). Live2D conserva su comprobación de siempre (ADR 0021 §3): el
+ * modelo responde a un HEAD y el Cubism Core está cargado. La chibi comprueba
+ * que su manifiesto existe y es válido. Con la chibi instalada y sin el modelo
+ * Live2D, sale la chibi.
  *
  * **Mientras se comprueba, Orbe.** Así no hay parpadeo: si un candidato
  * resulta disponible se cambia al motor; si no, no pasa nada.
@@ -22,7 +24,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Orb } from '../Orb';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { AVATAR_CONFIG, type AvatarRuntimeConfig } from './config';
+import { AVATAR_CONFIG, CHIBI_MANIFEST_URL, type AvatarRuntimeConfig } from './config';
+import { layersCandidate, layersEngine } from './engines/layers/engine';
 import { live2dCandidate, live2dEngine } from './engines/live2d';
 import { selectEngine, type AvatarSelection } from './engines/select';
 import type { AvatarCandidate, AvatarEngineDefinition } from './engines/types';
@@ -30,7 +33,7 @@ import type { AvatarProps } from './types';
 import styles from './Avatar.module.css';
 
 /** Motores que conoce el cliente. Añadir uno es añadirlo aquí. */
-const DEFAULT_ENGINES: readonly AvatarEngineDefinition[] = [live2dEngine];
+const DEFAULT_ENGINES: readonly AvatarEngineDefinition[] = [live2dEngine, layersEngine];
 
 export interface AvatarComponentProps extends AvatarProps {
   /**
@@ -39,8 +42,9 @@ export interface AvatarComponentProps extends AvatarProps {
    */
   config?: AvatarRuntimeConfig;
   /**
-   * Modelos a probar, en orden. Por defecto, solo el Live2D de `config`. Se
-   * compara por contenido: pasar una lista nueva con lo mismo no reinicia nada.
+   * Modelos a probar, en orden. Por defecto, el Live2D de `config` y la chibi
+   * por capas. Se compara por contenido: pasar una lista nueva con lo mismo no
+   * reinicia nada.
    */
   candidates?: readonly AvatarCandidate[];
   /** Motores disponibles. Debe ser una lista estable; por defecto, los del cliente. */
@@ -49,7 +53,10 @@ export interface AvatarComponentProps extends AvatarProps {
 
 export function Avatar(props: AvatarComponentProps): JSX.Element {
   const { config = AVATAR_CONFIG, candidates: given } = props;
-  const candidates = useMemo(() => given ?? [live2dCandidate(config)], [given, config]);
+  const candidates = useMemo(
+    () => given ?? [live2dCandidate(config), layersCandidate(CHIBI_MANIFEST_URL)],
+    [given, config],
+  );
   // Una lista distinta es otro avatar: se empieza de cero. La clave es el
   // contenido, no la identidad, para que una lista escrita en línea no
   // reinicie la selección en cada render.

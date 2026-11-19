@@ -16,16 +16,15 @@ import { act, render, waitFor } from '@testing-library/react';
 import { Avatar } from '../../src/components/Avatar/Avatar';
 import { AVATAR_CONFIG, CHIBI_MANIFEST_URL } from '../../src/components/Avatar/config';
 import { LayersCanvas, MAX_FPS } from '../../src/components/Avatar/engines/layers/LayersCanvas';
-import {
-  LAYERS_KIND,
-  layersCandidate,
-  layersEngine,
-} from '../../src/components/Avatar/engines/layers/engine';
+import { layersCandidate, layersEngine } from '../../src/components/Avatar/engines/layers/engine';
 import {
   LayersLoadError,
   type LoadedLayers,
 } from '../../src/components/Avatar/engines/layers/loader';
-import { parseSpriteLayersManifest } from '../../src/components/Avatar/engines/layers/manifest';
+import {
+  SPRITE_LAYERS_KIND,
+  parseSpriteLayersManifest,
+} from '../../src/components/Avatar/engines/layers/manifest';
 import type { LayerImage } from '../../src/components/Avatar/engines/layers/player';
 import type { UseLipSyncOptions } from '../../src/components/Avatar/useLipSync';
 
@@ -377,14 +376,14 @@ describe('LayersCanvas — reducir el movimiento', () => {
 
   it('sin la preferencia, respira; al activarla con la app abierta, deja de hacerlo', async () => {
     const { canvas } = await mountLoaded();
-    let now = settle(0);
+    const now = settle(0);
     expect(stretches(canvas).some((ratio) => ratio !== 1)).toBe(true);
 
     act(() => {
       for (const listener of motionListeners) listener({ matches: true });
     });
     calls = [];
-    now = settle(now);
+    settle(now);
     expect(stretches(canvas).length).toBeGreaterThan(0);
     expect(stretches(canvas).every((ratio) => ratio === 1)).toBe(true);
   });
@@ -526,7 +525,8 @@ function response(body: Buffer | string, status = 200, name = ''): Response {
     status,
     redirected: false,
     headers: { get: () => null },
-    text: () => Promise.resolve(bytes.toString('utf8')),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
     blob: () => Promise.resolve({ bytes, name }),
   } as unknown as Response;
 }
@@ -573,7 +573,7 @@ describe('layersEngine', () => {
 
   it('el candidato lleva el tipo del manifiesto y su URL', () => {
     expect(candidate).toEqual({ kind: 'sprite-layers', manifestUrl: CHIBI_MANIFEST_URL });
-    expect(layersEngine.kind).toBe(LAYERS_KIND);
+    expect(layersEngine.kind).toBe(SPRITE_LAYERS_KIND);
   });
 
   it('con el modelo instalado, la comprobación dice que sí y solo pide el manifiesto', async () => {
@@ -601,7 +601,7 @@ describe('layersEngine', () => {
   it('un candidato que no es suyo no se pide', async () => {
     const { requests } = serveChibi();
     expect(await layersEngine.probe({ kind: 'live2d' }, signal())).toBe(false);
-    expect(await layersEngine.probe({ kind: LAYERS_KIND }, signal())).toBe(false);
+    expect(await layersEngine.probe({ kind: SPRITE_LAYERS_KIND }, signal())).toBe(false);
     expect(requests).toEqual([]);
   });
 
