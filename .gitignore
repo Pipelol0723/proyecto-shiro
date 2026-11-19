@@ -70,6 +70,9 @@ Thumbs.db
 **/CubismSdkForWeb-*/
 **/live2d/Core/
 **/live2d/models/
+# Modelos del avatar por capas (ADR 0028 §5): salen del arte del personaje y
+# no se versionan. Cada modelo va en su carpeta, con su avatar.manifest.json.
+packages/desktop/public/avatar/models/
 *.moc3
 *.cmo3
 *.model3.json
