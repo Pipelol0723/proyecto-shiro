@@ -335,6 +335,10 @@ export class LettaMemory implements IMemoryModule {
     });
   }
 
+  // Desde la enmienda del 2026-11-19 del ADR 0017 el `MemoryManager` ya no
+  // lo llama: el historial reciente sale de SQLite. Se mantiene porque lo pide
+  // `IMemoryModule`. Ojo si se vuelve a usar: no filtra por usuario y no
+  // atiende a `excludeId`.
   async getRecent(userId: string, limit: number): Promise<MemoryEntry[]> {
     const agentId = this.requireAgentId();
     const passages = await this.client.agents.passages.list(agentId, {

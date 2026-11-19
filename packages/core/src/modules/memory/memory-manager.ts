@@ -9,10 +9,15 @@
  *   se queda con `synced_at = NULL` y el drainer la reintentará cuando
  *   Letta vuelva.
  *
- * - **getRecent / searchSemantic**: delegan en Letta. Si Letta está
- *   caído según el último healthcheck, devuelven `[]` rápido (sin
- *   pagar el timeout) y se loguea. El pipeline procede sin contexto
- *   ese turno; el save sigue funcionando porque va al WAL.
+ * - **getRecent**: sale de SQLite (enmienda del 2026-11-19 del ADR 0017).
+ *   Es local e inmediato, ve también lo que aún no se ha sincronizado y
+ *   funciona con Letta apagado. No separa por usuario: la memoria es de un
+ *   solo dueño, como en Letta (un agente).
+ *
+ * - **searchSemantic**: delega en Letta. Si Letta está caído según el
+ *   último healthcheck, devuelve `[]` rápido (sin pagar el timeout) y se
+ *   loguea. El turno sigue con el historial reciente, sin los recuerdos
+ *   parecidos.
  *
  * - **clear**: borra en ambos backends.
  *
@@ -28,7 +33,7 @@
  */
 
 import { z } from 'zod';
-import type { IMemoryModule, MemoryEntry } from '../../interfaces/IMemoryModule.js';
+import type { IMemoryModule, MemoryEntry, RecentOptions } from '../../interfaces/IMemoryModule.js';
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
 import { LettaMemory, LettaMemoryConfigSchema } from './letta-memory.js';
@@ -159,6 +164,11 @@ export class MemoryManager implements IMemoryModule {
       this.logger.warn('start() llamado dos veces, ignorando segunda llamada');
       return;
     }
+    const { turns, bytes } = this.local.stats();
+    this.logger.info(
+      `memoria local: ${String(turns)} turnos, ${(bytes / 1_000_000).toFixed(1)} MB ` +
+        `(esquema v${String(this.local.schemaVersion())})`,
+    );
     await this.checkLetta();
     if (!this.lettaUp) {
       const pending = this.local.pendingCount();
@@ -212,18 +222,21 @@ export class MemoryManager implements IMemoryModule {
     }
   }
 
-  async getRecent(userId: string, limit: number): Promise<MemoryEntry[]> {
-    if (!this.lettaUp) {
-      this.logger.debug('getRecent: Letta down, devolviendo []');
-      return [];
-    }
+  getRecent(_userId: string, limit: number, options?: RecentOptions): Promise<MemoryEntry[]> {
+    // De SQLite, no de Letta: está siempre disponible y ve los turnos que aún
+    // no se han sincronizado. Antes, con Letta apagado, Shiro no recordaba ni
+    // lo dicho un minuto antes (R-072).
+    //
+    // El `userId` no filtra. La memoria es de un solo dueño: el cliente habla
+    // como «me», el servidor guarda lo suyo (y pide el historial al conectar)
+    // con el `user_id` de la config, y todo es la misma conversación. Letta
+    // tampoco los separaba (`LettaMemory.getRecent` lista el agente entero).
+    // Separar por cliente llegará con el `clientId` del ADR 0026.
     try {
-      return await this.letta.getRecent(userId, limit);
+      return Promise.resolve(this.local.getRecentAnyUser(limit, options));
     } catch (err) {
-      // El estado up/down lo decide el ping, no un read fallido (evita que un
-      // hipo puntual deje a Shiro "ciego" varios turnos).
-      this.logger.warn(`getRecent: Letta falló — devolviendo []. ${String(err)}`);
-      return [];
+      this.logger.warn(`getRecent: la memoria local falló — devolviendo []. ${String(err)}`);
+      return Promise.resolve([]);
     }
   }
 
@@ -241,8 +254,11 @@ export class MemoryManager implements IMemoryModule {
   }
 
   async clear(userId: string): Promise<void> {
-    // Borra en local siempre (síncrono).
-    this.local.clear(userId);
+    // Borra en local siempre (síncrono). Toda la conversación: la memoria es
+    // de un solo dueño y no separa por usuario (ver `getRecent`). Borrando
+    // solo los turnos de `userId` se quedaría lo que dijo el cliente, que
+    // guarda con otro id. Es la pieza base de la opción de borrar del dueño.
+    this.local.clearAll();
     // Borra en Letta solo si está arriba — si está down, el archival
     // queda sin tocar y el usuario lo verá tras la siguiente conexión.
     // Documentado como limitación en el ADR 0017.

@@ -76,6 +76,17 @@ export interface SelfDevTurnMetadata {
   summary?: string;
 }
 
+/** Opciones de {@link IMemoryModule.getRecent}. */
+export interface RecentOptions {
+  /**
+   * Id de una entrada que no debe aparecer en el resultado. El pipeline pasa
+   * el del mensaje que está contestando: ya está guardado cuando se lee el
+   * historial, y va aparte como texto de la petición. No gasta hueco del
+   * `limit`.
+   */
+  excludeId?: string;
+}
+
 /**
  * Contrato de un módulo de memoria persistente.
  *
@@ -98,7 +109,7 @@ export interface IMemoryModule {
    * ordenados de más antiguo a más reciente (apto para incluir
    * directo en el contexto del LLM).
    */
-  getRecent(userId: string, limit: number): Promise<MemoryEntry[]>;
+  getRecent(userId: string, limit: number, options?: RecentOptions): Promise<MemoryEntry[]>;
 
   /**
    * Búsqueda semántica por similitud (embeddings). Opcional —

@@ -634,7 +634,104 @@ describe('wireConversationFlow', () => {
       await bus.emit('user:message', { text: 'algo', userId: 'me' });
 
       expect(memory.getRecentCalls).toEqual([{ userId: 'me', limit: 7 }]);
-      expect(memory.searchCalls).toEqual([{ query: 'algo', userId: 'me', limit: 2 }]);
+      // Uno de más en la búsqueda: el propio mensaje puede salir y se descarta.
+      expect(memory.searchCalls).toEqual([{ query: 'algo', userId: 'me', limit: 3 }]);
+
+      dispose();
+    });
+
+    it('el mensaje actual no entra en su propio contexto, ni como reciente ni como parecido', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+        tokensUsed: 1,
+      });
+      // Como la memoria de verdad: lo guardado ya se puede leer en el mismo
+      // turno, y la búsqueda por parecido encuentra primero el propio mensaje.
+      const stored: MemoryEntry[] = [
+        {
+          id: 'previo',
+          role: 'assistant',
+          text: 'lo de antes',
+          timestamp: '2026-05-29T12:00:00.000Z',
+          userId: 'me',
+        },
+      ];
+      const memory: IMemoryModule = {
+        id: 'memory:eco',
+        save: (entry) => {
+          stored.push(entry);
+          return Promise.resolve();
+        },
+        getRecent: (_userId, limit, options) =>
+          Promise.resolve(stored.filter((e) => e.id !== options?.excludeId).slice(-limit)),
+        searchSemantic: () => Promise.resolve([...stored].reverse()),
+        clear: () => Promise.resolve(),
+      };
+      const modules = makeModules({
+        memory,
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'mensaje de ahora', userId: 'me' });
+
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.text).toBe('mensaje de ahora');
+      expect(req?.context).toContain('lo de antes');
+      expect(req?.context).not.toContain('mensaje de ahora');
+
+      dispose();
+    });
+
+    it('un recuerdo parecido que ya está entre lo reciente no se repite, y el tope se respeta', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+        tokensUsed: 1,
+      });
+      const entry = (id: string): MemoryEntry => ({
+        id,
+        role: 'user',
+        text: `texto de ${id}`,
+        timestamp: '2026-05-29T12:00:00.000Z',
+        userId: 'me',
+      });
+      const memory = makeMemory({
+        recent: [entry('r1'), entry('r2')],
+        // r2 ya está entre lo reciente; de los otros tres solo caben dos.
+        semantic: [entry('r2'), entry('s1'), entry('s2'), entry('s3')],
+      });
+      const modules = makeModules({
+        memory,
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+        memoryReads: { recentLimit: 5, semanticLimit: 2, timeoutMs: 1_000 },
+      });
+
+      await bus.emit('user:message', { text: 'sigue', userId: 'me' });
+
+      const context = generateSpy.mock.calls[0]?.[0]?.context ?? '';
+      expect(context.split('texto de r2')).toHaveLength(2);
+      expect(context).toContain('texto de s1');
+      expect(context).toContain('texto de s2');
+      expect(context).not.toContain('texto de s3');
 
       dispose();
     });
