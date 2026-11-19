@@ -20,6 +20,7 @@ import {
   LayersPlayer,
   type EyeCanvas,
   type LayerImage,
+  type LayerImages,
 } from '../../src/components/Avatar/engines/layers/player';
 import { computeMouthOpen } from '../../src/components/Avatar/useLipSync';
 
@@ -41,9 +42,16 @@ class FakeContext {
   globalCompositeOperation = 'source-over';
   imageSmoothingQuality = 'low';
   readonly scales: [number, number][] = [];
+  /** Nombre de la imagen que «se rompe» al pintarla. */
+  failOn: string | null = null;
   private readonly stack: [number, string][] = [];
 
   constructor(readonly log: Draw[]) {}
+
+  /** Cuántos `save` siguen sin su `restore`. */
+  get depth(): number {
+    return this.stack.length;
+  }
 
   save(): void {
     this.stack.push([this.globalAlpha, this.globalCompositeOperation]);
@@ -62,6 +70,7 @@ class FakeContext {
     // El registro de dibujos no se borra: cada caso lee los suyos.
   }
   drawImage(image: { name: string }, x: number, y: number): void {
+    if (image.name === this.failOn) throw new Error(`no se pudo pintar ${image.name}`);
     this.log.push({
       image: image.name,
       at: [x, y],
@@ -74,11 +83,37 @@ class FakeContext {
 const asContext = (fake: FakeContext): CanvasRenderingContext2D =>
   fake as unknown as CanvasRenderingContext2D;
 
-function loadManifest(name: string): SpriteLayersManifest {
-  const result = parseSpriteLayersManifest(readJson(name));
+function parseManifest(raw: unknown): SpriteLayersManifest {
+  const result = parseSpriteLayersManifest(raw);
   if (!result.ok) throw new Error(JSON.stringify(result.issues));
   return result.manifest;
 }
+
+const loadManifest = (name: string): SpriteLayersManifest => parseManifest(readJson(name));
+
+const fakeImage = (name: string): LayerImage => ({ name }) as unknown as LayerImage;
+
+/** Una imagen falsa por cada capa y por cada pieza del manifiesto, con su nombre. */
+function fakeImages(source: SpriteLayersManifest): LayerImages {
+  const layers = Object.entries(source.layers)
+    .filter(([, route]) => route !== undefined)
+    .map(([name]) => name);
+  return {
+    layers: new Map(layers.map((name) => [name, fakeImage(name)])),
+    pieces: new Map(Object.keys(source.face.pieces).map((name) => [name, fakeImage(name)])),
+  };
+}
+
+/** Lienzo de los ojos falso: sus dibujos van a `log` con el nombre `<eyes>`. */
+const fakeEyeCanvas =
+  (log: Draw[]) =>
+  (width: number, height: number): EyeCanvas =>
+    ({
+      name: '<eyes>',
+      width,
+      height,
+      getContext: () => asContext(new FakeContext(log)),
+    }) as unknown as EyeCanvas;
 
 interface Rig {
   player: LayersPlayer;
@@ -88,24 +123,14 @@ interface Rig {
 /** Reproductor con imágenes falsas y sin parpadeo automático, salvo que el caso lo pida. */
 function makePlayer(
   manifest: SpriteLayersManifest,
-  options: { reducedMotion?: boolean } = {},
+  options: { reducedMotion?: boolean; random?: () => number; images?: LayerImages } = {},
 ): Rig {
-  const names = [
-    ...Object.entries(manifest.layers)
-      .filter(([, file]) => file !== undefined)
-      .map(([name]) => name),
-    ...Object.keys(manifest.face.pieces),
-  ];
-  const images = new Map(names.map((name) => [name, { name } as unknown as LayerImage]));
+  const { images = fakeImages(manifest), ...rest } = options;
   const eyesLog: Draw[] = [];
-  const createCanvas = (width: number, height: number): EyeCanvas =>
-    ({
-      name: '<eyes>',
-      width,
-      height,
-      getContext: () => asContext(new FakeContext(eyesLog)),
-    }) as unknown as EyeCanvas;
-  const player = new LayersPlayer(manifest, images, { createCanvas, ...options });
+  const player = new LayersPlayer(manifest, images, {
+    createCanvas: fakeEyeCanvas(eyesLog),
+    ...rest,
+  });
   player.setBlink(0);
   return { player, eyesLog };
 }
@@ -116,13 +141,14 @@ function settle(player: LayersPlayer, expression: string): void {
   for (let i = 0; i < 200; i += 1) player.update(16);
 }
 
-function paint({ player, eyesLog }: Rig): { main: Draw[]; eyes: Draw[]; context: FakeContext } {
-  const main: Draw[] = [];
+function paint(
+  { player, eyesLog }: Rig,
+  context = new FakeContext([]),
+): { main: Draw[]; eyes: Draw[]; context: FakeContext } {
   eyesLog.length = 0;
   player.setClocks({ time: 0 }); // sin respiración ni fase del pulso
-  const context = new FakeContext(main);
   player.draw(asContext(context), 0, 0, player.width, player.height);
-  return { main, eyes: [...eyesLog], context };
+  return { main: context.log, eyes: [...eyesLog], context };
 }
 
 // ── casos ────────────────────────────────────────────────────────────────────
@@ -403,30 +429,122 @@ describe('LayersPlayer — manifiesto mínimo y ciclo de vida', () => {
   });
 
   it('si el lienzo de los ojos no se puede crear, lo dice al construirse', () => {
-    const images = new Map<string, LayerImage>();
     const createCanvas = (): EyeCanvas =>
       ({ width: 0, height: 0, getContext: () => null }) as unknown as EyeCanvas;
-    expect(() => new LayersPlayer(manifest, images, { createCanvas })).toThrow(/lienzo/);
+    expect(() => new LayersPlayer(manifest, fakeImages(manifest), { createCanvas })).toThrow(
+      /lienzo/,
+    );
   });
 
-  it('si falta una imagen, esa pieza no se pinta y lo demás sí', () => {
-    const images = new Map<string, LayerImage>([
-      ['base', { name: 'base' } as unknown as LayerImage],
+  it('si faltan imágenes, esas piezas no se pintan y lo demás sí', () => {
+    const images: LayerImages = {
+      layers: new Map([['base', fakeImage('base')]]),
+      pieces: new Map([['mouth_idle', fakeImage('mouth_idle')]]),
+    };
+    const got = paint(makePlayer(manifest, { images }));
+
+    expect(got.main.map((d) => d.image)).toEqual(['base', 'mouth_idle']);
+    // Sin el blanco del ojo no hay nada que recortar: el lienzo de los ojos ni se toca.
+    expect(got.eyes).toEqual([]);
+  });
+
+  it('una pieza de cara que se llama como una capa no la suplanta', () => {
+    const raw = readJson('avatar.manifest.json') as {
+      face: { pieces: Record<string, string> };
+      expressions: { idle: { brows: string } };
+    };
+    raw.face.pieces.base = 'assets/brows_idle.png';
+    raw.face.pieces.glow = 'assets/mouth_idle.png';
+    raw.expressions.idle.brows = 'base';
+    const clashing = parseManifest(raw);
+    const images: LayerImages = {
+      layers: new Map([
+        ['base', fakeImage('capa:base')],
+        ['glow', fakeImage('capa:glow')],
+      ]),
+      pieces: new Map([
+        ['base', fakeImage('pieza:base')],
+        ['glow', fakeImage('pieza:glow')],
+      ]),
+    };
+    const [faceX, faceY] = clashing.face.rect;
+
+    const got = paint(makePlayer(clashing, { images }));
+
+    expect(got.main.map((d) => [d.image, d.at])).toEqual([
+      ['capa:base', [0, 0]],
+      ['pieza:base', [faceX, faceY]],
+      ['capa:glow', [0, 0]],
     ]);
-    const eyesLog: Draw[] = [];
-    const createCanvas = (width: number, height: number): EyeCanvas =>
-      ({
-        name: '<eyes>',
-        width,
-        height,
-        getContext: () => asContext(new FakeContext(eyesLog)),
-      }) as unknown as EyeCanvas;
-    const player = new LayersPlayer(manifest, images, { createCanvas });
-    const main: Draw[] = [];
+  });
+});
+
+describe('LayersPlayer — el lienzo de quien lo usa', () => {
+  it('pinta con opacidad y mezcla propias, y deja el lienzo como lo encontró', () => {
+    const rig = makePlayer(manifest);
+    rig.player.setGlow(2.5); // por encima de 1 el brillo cambia la mezcla a «lighter»
+    const context = new FakeContext([]);
+    context.globalAlpha = 0.4;
+    context.globalCompositeOperation = 'multiply';
+
+    const got = paint(rig, context);
+
+    expect(got.main[0]).toMatchObject({ image: 'base', alpha: 1, op: 'source-over' });
+    expect(got.main.at(-1)).toMatchObject({ image: 'glow', op: 'lighter' });
+    expect(context.depth).toBe(0);
+    expect(context.globalAlpha).toBe(0.4);
+    expect(context.globalCompositeOperation).toBe('multiply');
+  });
+
+  it('si una imagen falla al pintarse, el error sale y el lienzo queda equilibrado', () => {
+    const rig = makePlayer(manifest);
+    const context = new FakeContext([]);
+    context.failOn = 'glow';
+
     expect(() => {
-      player.draw(asContext(new FakeContext(main)), 0, 0, player.width, player.height);
-    }).not.toThrow();
-    expect(main.map((d) => d.image)).toContain('base');
+      paint(rig, context);
+    }).toThrow(/glow/);
+    expect(context.depth).toBe(0);
+    expect(context.globalAlpha).toBe(1);
+  });
+});
+
+describe('LayersPlayer — relojes y azar', () => {
+  it.each([
+    [0, 0],
+    [0.5, 0.5],
+    [1, 1],
+  ])('con un azar de %d, la espera del parpadeo cae en esa parte del intervalo', (value, at) => {
+    const [min, max] = manifest.face.blink.interval_s;
+    const { player } = makePlayer(manifest, { random: () => value });
+    near(player.clocks.nextBlink, (min + at * (max - min)) * 1000);
+  });
+
+  it.each([NaN, Infinity, -3, 7])('un azar de %d no deja el parpadeo sin fecha', (value) => {
+    const [min, max] = manifest.face.blink.interval_s;
+    const { player } = makePlayer(manifest, { random: () => value });
+    expect(player.clocks.nextBlink).toBeGreaterThanOrEqual(min * 1000);
+    expect(player.clocks.nextBlink).toBeLessThanOrEqual(max * 1000);
+  });
+
+  it.each([NaN, Infinity, -1])('setClocks ignora %d', (value) => {
+    const { player } = makePlayer(manifest);
+    player.setClocks({ time: 500, sinceEnter: 400, blinkClock: 300, nextBlink: 2000 });
+    player.setClocks({ time: value, sinceEnter: value, blinkClock: value, nextBlink: value });
+    expect(player.clocks).toEqual({ time: 500, sinceEnter: 400, blinkClock: 300, nextBlink: 2000 });
+  });
+
+  it('lo que se lee es una copia: no cambia cuando el reproductor avanza', () => {
+    const { player } = makePlayer(manifest);
+    const look = player.look;
+    const clocks = player.clocks;
+    player.setLookAt(1, 1);
+    player.update(500);
+
+    expect(look).toEqual([0, 0]);
+    expect(clocks.time).toBe(0);
+    expect(player.look[0]).toBeGreaterThan(0.9);
+    expect(player.clocks.time).toBe(500);
   });
 });
 
@@ -452,5 +570,29 @@ describe('LayersPlayer — reducir el movimiento', () => {
     rig.player.draw(asContext(context), 0, 0, rig.player.width, rig.player.height);
     const [x, y] = context.scales[0] ?? [NaN, NaN];
     expect(y).toBe(x);
+  });
+
+  it('el destello al cambiar de expresión se mantiene: es una señal, no un adorno', () => {
+    const { player } = makePlayer(manifest, { reducedMotion: true });
+    player.setExpression('smirk'); // su brillo entra con un destello
+    const steady = manifest.expressions.smirk?.glow.level ?? NaN;
+    expect(player.glowLevel()).toBeGreaterThan(steady * 1.5);
+  });
+
+  it('la preferencia se puede cambiar con el reproductor en marcha', () => {
+    const rig = makePlayer(manifest);
+    const stretch = (): number => {
+      rig.player.setClocks({ time: 1050 });
+      const context = new FakeContext([]);
+      rig.player.draw(asContext(context), 0, 0, rig.player.width, rig.player.height);
+      const [x, y] = context.scales[0] ?? [NaN, NaN];
+      return y / x;
+    };
+
+    expect(stretch()).toBeGreaterThan(1);
+    rig.player.setReducedMotion(true);
+    expect(stretch()).toBe(1);
+    rig.player.setReducedMotion(false);
+    expect(stretch()).toBeGreaterThan(1);
   });
 });
