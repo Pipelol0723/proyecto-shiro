@@ -13,7 +13,7 @@
  * aplican al reiniciar (ADR 0024 §6).
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ServiceStatus, SystemHealthReport } from '@proyecto-shiro/core';
 import { useBus } from '../../use-bus';
 import { useConnectionState } from '../../connection/use-connection';
@@ -22,11 +22,11 @@ import { useSystemHealth } from '../../health/useSystemHealth';
 import { useSecretsSave } from '../../health/useSecretsSave';
 import styles from './SetupScreen.module.css';
 
+/** Un campo del payload `secrets:save`. */
+type SecretField = 'anthropic' | 'elevenlabs' | 'gemini';
+
 /** Campos del payload `secrets:save`. Mapea cada secret a su campo. */
-const SECRET_FIELD: Record<
-  keyof SystemHealthReport['secrets'],
-  'anthropic' | 'elevenlabs' | 'gemini'
-> = {
+const SECRET_FIELD: Record<keyof SystemHealthReport['secrets'], SecretField> = {
   anthropic: 'anthropic',
   elevenlabs: 'elevenlabs',
   gemini: 'gemini',
@@ -151,11 +151,26 @@ export function SetupScreen(): JSX.Element {
 
   const serviceStatus = (s: ServiceStatus | undefined): boolean => s === 'ok';
 
-  const saveSecret = (field: 'anthropic' | 'elevenlabs' | 'gemini'): void => {
-    const value = drafts[field] ?? '';
-    secrets.save({ [field]: value });
-    setDrafts((d) => ({ ...d, [field]: '' }));
+  // La clave que se está guardando. Su borrador se vacía cuando el core-host
+  // confirma, no antes: si el guardado falla, lo escrito sigue en el campo y
+  // no hay que volver a pegarlo (R-307).
+  const [savingField, setSavingField] = useState<SecretField | null>(null);
+
+  const saveSecret = (field: SecretField): void => {
+    secrets.save({ [field]: drafts[field] ?? '' });
+    setSavingField(field);
   };
+
+  const saveStatus = secrets.status;
+  useEffect(() => {
+    if (savingField === null) return;
+    if (saveStatus === 'saved') {
+      setDrafts((d) => ({ ...d, [savingField]: '' }));
+      setSavingField(null);
+    } else if (saveStatus === 'error') {
+      setSavingField(null);
+    }
+  }, [saveStatus, savingField]);
 
   return (
     <div className={styles.screen}>
