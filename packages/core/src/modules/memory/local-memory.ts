@@ -131,6 +131,7 @@ export class LocalMemory {
   private readonly stmtGetRecentAnyUser: Statement;
   private readonly stmtMarkSynced: Statement;
   private readonly stmtClear: Statement;
+  private readonly stmtClearAll: Statement;
   private readonly stmtPendingCount: Statement;
   private readonly stmtGetMeta: Statement;
   private readonly stmtSetMeta: Statement;
@@ -212,6 +213,7 @@ export class LocalMemory {
     );
     this.stmtMarkSynced = this.db.prepare(`UPDATE messages SET synced_at = ? WHERE id = ?`);
     this.stmtClear = this.db.prepare(`DELETE FROM messages WHERE user_id = ?`);
+    this.stmtClearAll = this.db.prepare(`DELETE FROM messages`);
     this.stmtPendingCount = this.db.prepare(
       `SELECT COUNT(*) AS n FROM messages WHERE synced_at IS NULL`,
     );
@@ -291,6 +293,15 @@ export class LocalMemory {
   clear(userId: string): void {
     const result = this.stmtClear.run(userId);
     this.logger?.debug(`clear(${userId}): ${result.changes} filas borradas`);
+  }
+
+  /**
+   * Borra toda la conversación, la guardara quien la guardara. La tabla
+   * `meta` no se toca (ahí vive el agente de Letta). Síncrono.
+   */
+  clearAll(): void {
+    const result = this.stmtClearAll.run();
+    this.logger?.debug(`clearAll: ${String(result.changes)} filas borradas`);
   }
 
   /** Conteo de pendientes. Útil para diagnostics del drainer. */

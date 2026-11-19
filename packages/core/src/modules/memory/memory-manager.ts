@@ -254,8 +254,11 @@ export class MemoryManager implements IMemoryModule {
   }
 
   async clear(userId: string): Promise<void> {
-    // Borra en local siempre (síncrono).
-    this.local.clear(userId);
+    // Borra en local siempre (síncrono). Toda la conversación: la memoria es
+    // de un solo dueño y no separa por usuario (ver `getRecent`). Borrando
+    // solo los turnos de `userId` se quedaría lo que dijo el cliente, que
+    // guarda con otro id. Es la pieza base de la opción de borrar del dueño.
+    this.local.clearAll();
     // Borra en Letta solo si está arriba — si está down, el archival
     // queda sin tocar y el usuario lo verá tras la siguiente conexión.
     // Documentado como limitación en el ADR 0017.
