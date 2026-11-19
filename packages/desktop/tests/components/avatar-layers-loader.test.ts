@@ -53,6 +53,8 @@ function fakeResponse(body: Buffer | string, init: ResponseInit = {}): Response 
         name.toLowerCase() === 'content-length' ? (init.contentLength ?? null) : null,
     },
     text: () => Promise.resolve(bytes.toString('utf8')),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
     blob: () => Promise.resolve({ bytes }),
   } as unknown as Response;
 }
@@ -131,6 +133,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 // ── manifiesto ───────────────────────────────────────────────────────────────
@@ -172,6 +175,12 @@ describe('fetchManifest', () => {
       (): Response => fakeResponse(`{"relleno":"${'x'.repeat(MAX_MANIFEST_BYTES)}"}`),
       'too-big',
     ],
+    [
+      'pesa demasiado aunque tenga pocos caracteres',
+      // «€» ocupa tres bytes: la mitad de caracteres del tope ya lo pasa.
+      (): Response => fakeResponse(`{"relleno":"${'€'.repeat(MAX_MANIFEST_BYTES / 2)}"}`),
+      'too-big',
+    ],
   ])('si el manifiesto %s, falla con su motivo', async (_name, respond, reason) => {
     serveModel({ 'avatar.manifest.json': respond });
     const err = await failure(fetchManifest(MANIFEST_URL, signal()));
@@ -183,6 +192,15 @@ describe('fetchManifest', () => {
     serveModel({ 'avatar.manifest.json': () => fakeResponse(JSON.stringify(broken)) });
     const err = await failure(fetchManifest(MANIFEST_URL, signal()));
     expect(err.message).toContain('size');
+  });
+
+  it('un tamaño declarado que no es un número no impide cargarlo', async () => {
+    serveModel({
+      'avatar.manifest.json': () =>
+        fakeResponse(readModelFile('avatar.manifest.json'), { contentLength: 'mucho' }),
+    });
+    const manifest = await fetchManifest(MANIFEST_URL, signal());
+    expect(manifest.kind).toBe('sprite-layers');
   });
 
   it('si la red falla, falla como «no está»', async () => {
@@ -229,9 +247,11 @@ describe('resolveAssetUrl', () => {
     );
   });
 
-  // El esquema ya rechaza estas rutas; el cargador no se fía y lo vuelve a mirar
-  // sobre la URL resuelta, que es la que se va a pedir.
-  it.each([
+  // El esquema ya rechaza estas rutas; el cargador no se fía: pasa el mismo
+  // filtro y además lo vuelve a mirar sobre la URL resuelta, que es la que se
+  // va a pedir. Se prueba contra todas las direcciones desde las que se sirve
+  // la app, porque cada tipo de dirección se analiza de una forma.
+  const UNSAFE_ROUTES = [
     '../otro/base.png',
     'assets/../../base.png',
     '/base.png',
@@ -239,12 +259,27 @@ describe('resolveAssetUrl', () => {
     'http://otro.invalid/base.png',
     'https://localhost:5173/avatar/models/prueba/base.png',
     '\\\\otro.invalid\\base.png',
+    'a\\..\\..\\base.png',
+    '..%2fbase.png',
+    'a%2f..%2f..%2fbase.png',
+    '%2e%2e/base.png',
+    '.\t./base.png',
+    'base.png\n',
+    'C:/base.png',
+    'C|/base.png',
     'base.png?x=1',
     'base.png#x',
     '',
-  ])('«%s» no se pide: sale de la carpeta del modelo o no es un archivo de ella', (route) => {
-    expect(() => resolveAssetUrl(MANIFEST_URL, route, BASE)).toThrow(LayersLoadError);
-  });
+  ];
+  const BASES = [BASE, 'http://tauri.localhost/', 'tauri://localhost/', 'file:///C:/app/'];
+
+  it.each(BASES.flatMap((base) => UNSAFE_ROUTES.map((route) => [JSON.stringify(route), base])))(
+    'la ruta %s con la app en %s no se pide',
+    (quoted, base) => {
+      const route = JSON.parse(quoted) as string;
+      expect(() => resolveAssetUrl(MANIFEST_URL, route, base)).toThrow(LayersLoadError);
+    },
+  );
 
   it('una carpeta vecina que empieza igual no cuenta como la del modelo', () => {
     // «/avatar/models/prueba-otra/» empieza como «/avatar/models/prueba», pero es otra carpeta.
@@ -442,11 +477,135 @@ describe('loadLayers — cancelación y carreras', () => {
     loader.pending.get('base')?.resolve();
     await settle();
     controller.abort();
+    expect(loader.signals.every((s) => s.aborted)).toBe(true);
     for (const entry of loader.pending.values()) entry.resolve();
 
     await expect(result).rejects.toMatchObject({ name: 'AbortError' });
     await settle();
     expect(loader.released).toHaveLength(loader.pending.size);
+  });
+
+  /** Cargador que entrega cada imagen al momento, con su tamaño correcto. */
+  function instantLoader(): {
+    loadImage: ImageLoader;
+    make: (url: string) => LoadedImage;
+    attempted: string[];
+    total: number;
+  } {
+    const raw = readManifest() as { face: { pieces: Record<string, string> } };
+    const attempted: string[] = [];
+    const make = (url: string): LoadedImage => {
+      const name = url.slice(url.lastIndexOf('/') + 1).replace('.png', '');
+      const isLayer = ['base', 'glow', 'outline'].includes(name);
+      return {
+        image: { name } as unknown as LayerImage,
+        width: isLayer ? 120 : 80,
+        height: isLayer ? 200 : 60,
+        release: () => attempted.push(name),
+      };
+    };
+    return {
+      loadImage: (url) => Promise.resolve(make(url)),
+      make,
+      attempted,
+      total: 3 + Object.keys(raw.face.pieces).length,
+    };
+  }
+
+  it('si se cancela justo al llegar la última imagen, no entrega un modelo ya cancelado', async () => {
+    serveModel();
+    const controller = new AbortController();
+    const instant = instantLoader();
+    let asked = 0;
+    const loadImage: ImageLoader = (url) => {
+      asked += 1;
+      if (asked < instant.total) return Promise.resolve(instant.make(url));
+      // La última llega un instante después, y la cancelación entra cuando ya
+      // están todas pero el cargador aún no ha vuelto a mirar.
+      const last = new Promise<LoadedImage>((resolve) => {
+        setTimeout(() => {
+          resolve(instant.make(url));
+        }, 0);
+      });
+      queueMicrotask(() => {
+        void last
+          .then(() => undefined)
+          .then(() => {
+            controller.abort();
+          });
+      });
+      return last;
+    };
+
+    await expect(loadLayers(MANIFEST_URL, controller.signal, { loadImage })).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(instant.attempted).toHaveLength(instant.total);
+  });
+
+  it('si soltar una imagen falla, las demás se sueltan y el motivo del fallo no se pierde', async () => {
+    serveModel();
+    const instant = instantLoader();
+    const loadImage: ImageLoader = (url) => {
+      const item = instant.make(url);
+      const release = item.release.bind(item);
+      if (url.endsWith('/base.png')) {
+        item.release = () => {
+          release();
+          throw new Error('no se deja soltar');
+        };
+      }
+      if (url.endsWith('/iris.png')) item.width = 1;
+      return Promise.resolve(item);
+    };
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const err = await failure(loadLayers(MANIFEST_URL, signal(), { loadImage }));
+
+    expect(err.reason).toBe('size');
+    expect(instant.attempted).toHaveLength(instant.total);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('release no lanza aunque una imagen no se deje soltar', async () => {
+    serveModel();
+    const instant = instantLoader();
+    const loadImage: ImageLoader = (url) => {
+      const item = instant.make(url);
+      const release = item.release.bind(item);
+      item.release = () => {
+        release();
+        if (url.endsWith('/base.png')) throw new Error('no se deja soltar');
+      };
+      return Promise.resolve(item);
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const loaded = await loadLayers(MANIFEST_URL, signal(), { loadImage });
+
+    expect(() => {
+      loaded.release();
+    }).not.toThrow();
+    expect(instant.attempted).toHaveLength(instant.total);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('al terminar, bien o mal, deja de escuchar la señal', async () => {
+    serveModel();
+    const instant = instantLoader();
+    const controller = new AbortController();
+    const add = vi.spyOn(controller.signal, 'addEventListener');
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+
+    await loadLayers(MANIFEST_URL, controller.signal, { loadImage: instant.loadImage });
+    await failure(
+      loadLayers(MANIFEST_URL, controller.signal, {
+        loadImage: () => Promise.reject(new Error('roto')),
+      }),
+    );
+
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(remove.mock.calls).toEqual(add.mock.calls.map(([type, listener]) => [type, listener]));
   });
 
   it('con la señal ya cancelada no pide nada', async () => {
@@ -481,6 +640,14 @@ describe('loadBitmap', () => {
   it('una respuesta que no es 2xx no se intenta descodificar', async () => {
     serveModel({ 'assets/base.png': notFound });
     await expect(loadBitmap(url, signal())).rejects.toThrow(/404/);
+    expect(bitmaps).toEqual([]);
+  });
+
+  it('una imagen que llega tras una redirección tampoco: podría venir de otra carpeta', async () => {
+    serveModel({
+      'assets/base.png': () => fakeResponse(readModelFile('assets/base.png'), { redirected: true }),
+    });
+    await expect(loadBitmap(url, signal())).rejects.toThrow(/redirec/);
     expect(bitmaps).toEqual([]);
   });
 
