@@ -30,6 +30,11 @@ import type { ILLMModule, LLMRequest, LLMResponse } from '../../interfaces/ILLMM
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
 import { type Emotion, EMOTIONS, isEmotion } from '../../types/emotions.js';
+import {
+  DEFAULT_OLLAMA_KEEP_ALIVE,
+  DEFAULT_OLLAMA_NUM_CTX,
+  salvageTruncatedText,
+} from './ollama-options.js';
 
 // ─── Schema de config ─────────────────────────────────────────────────
 
@@ -42,6 +47,19 @@ export const OllamaLLMConfigSchema = z.object({
   temperature: z.number().min(0).max(2).default(0.7),
   /** Timeout de la request en ms. Default 60s (modelos chicos responden <10s). */
   timeoutMs: z.number().int().positive().default(60_000),
+  /** Cuánto mantiene Ollama el modelo cargado tras la llamada (`30m`, `1h`). */
+  keepAlive: z.string().min(1).default(DEFAULT_OLLAMA_KEEP_ALIVE),
+  /**
+   * Ventana de contexto en tokens. Tiene que ser la misma que la del
+   * clasificador (`router.config.num_ctx`) si comparten modelo: con otra,
+   * Ollama recarga el modelo en cada cambio.
+   */
+  numCtx: z.number().int().positive().default(DEFAULT_OLLAMA_NUM_CTX),
+  /**
+   * Tope de tokens de la respuesta. Acota una respuesta que se alarga sin
+   * fin. Si se alcanza, se entrega el texto que llegó (ver `generate`).
+   */
+  numPredict: z.number().int().positive().default(1024),
 });
 
 export type OllamaLLMConfig = z.infer<typeof OllamaLLMConfigSchema>;
@@ -70,6 +88,8 @@ const OllamaChatResponseSchema = z.object({
     content: z.string(),
   }),
   done: z.boolean(),
+  /** `length` cuando la respuesta se cortó al llegar a `num_predict`. */
+  done_reason: z.string().optional(),
   eval_count: z.number().optional(),
   prompt_eval_count: z.number().optional(),
 });
@@ -123,8 +143,11 @@ export class OllamaLLM implements ILLMModule {
       messages,
       stream: false,
       format: buildOutputSchema(),
+      keep_alive: this.config.keepAlive,
       options: {
         temperature: this.config.temperature,
+        num_ctx: this.config.numCtx,
+        num_predict: this.config.numPredict,
       },
     };
 
@@ -172,13 +195,42 @@ export class OllamaLLM implements ILLMModule {
     }
 
     const content = parsed.data.message.content;
-    const { text, emotion } = this.parseContent(content);
+    const { text, emotion } =
+      parsed.data.done_reason === 'length'
+        ? this.parseTruncated(content)
+        : this.parseContent(content);
 
     return {
       text,
       emotion,
       tokensUsed: parsed.data.eval_count,
     };
+  }
+
+  /**
+   * La respuesta se cortó al llegar a `num_predict`, así que el JSON suele
+   * venir a medias. Se entrega el texto que llegó, con puntos suspensivos; sin
+   * esto, lo que se decía y se mostraba era el JSON crudo. Si no llegó texto,
+   * el turno falla con su motivo.
+   */
+  private parseTruncated(content: string): { text: string; emotion: Emotion } {
+    try {
+      JSON.parse(content);
+      // Se cortó justo al terminar: el JSON está entero.
+      return this.parseContent(content);
+    } catch {
+      // Lo normal: JSON a medias.
+    }
+    const text = salvageTruncatedText(content);
+    if (text === null) {
+      throw new OllamaLLMError(
+        `OllamaLLM: la respuesta llegó cortada al alcanzar num_predict (${String(this.config.numPredict)}) antes de tener texto`,
+      );
+    }
+    this.logger.warn(
+      `respuesta cortada al alcanzar num_predict (${String(this.config.numPredict)}): se entrega el texto que llegó`,
+    );
+    return { text: `${text.trimEnd()}…`, emotion: 'neutral' };
   }
 
   /**
