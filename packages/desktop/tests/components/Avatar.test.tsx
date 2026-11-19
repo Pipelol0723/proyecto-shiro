@@ -66,11 +66,12 @@ beforeEach(() => {
   // instalada en estos tests: su manifiesto responde 404. Así «cae al Orbe»
   // quiere decir de verdad que no quedaba otro modelo, y no que el doble de
   // `fetch` de Live2D le sirvió algo que no supo leer.
-  vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit): unknown =>
-    String(input) === CHIBI_MANIFEST_URL
-      ? Promise.resolve({ ok: false, status: 404, redirected: false })
-      : fetchMock(input, init),
-  );
+  vi.stubGlobal('fetch', (input: string | URL, init?: RequestInit): unknown => {
+    if (input.toString() === CHIBI_MANIFEST_URL) {
+      return Promise.resolve({ ok: false, status: 404, redirected: false });
+    }
+    return fetchMock(input, init) as unknown;
+  });
 });
 
 afterEach(() => {

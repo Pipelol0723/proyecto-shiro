@@ -254,3 +254,7 @@ Las capas de la chibi salen del borrador original del personaje y van en
 - **Sigue pendiente**: el manifiesto de Hiyori (§2), mover los archivos de
   Live2D a `engines/live2d/`, y conectar los verbos y el ciclo de vida con el
   selector para el cambio en caliente (AV-3).
+- **Un hueco conocido**: el orbe se retira cuando el motor se monta, no cuando
+  pinta. Mientras cargan las imágenes de la chibi (unas décimas de segundo) no
+  se ve nada. A Live2D le pasa lo mismo desde antes, y durante más tiempo. Lo
+  cierra la señal de «listo» del motor que pide el ADR 0035 §5.

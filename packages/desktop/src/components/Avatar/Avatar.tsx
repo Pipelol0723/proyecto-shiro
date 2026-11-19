@@ -12,8 +12,11 @@
  * que su manifiesto existe y es válido. Con la chibi instalada y sin el modelo
  * Live2D, sale la chibi.
  *
- * **Mientras se comprueba, Orbe.** Así no hay parpadeo: si un candidato
- * resulta disponible se cambia al motor; si no, no pasa nada.
+ * **Mientras se comprueba, Orbe.** Si un candidato resulta disponible se
+ * cambia al motor; si no, no pasa nada. Entre que el motor se monta y pinta
+ * su primer fotograma (lo que tarde en cargar el modelo) no se ve ni el Orbe
+ * ni el avatar: ese hueco lo cierra AV-3 con la señal de «listo» del motor
+ * (ADR 0035 §5).
  *
  * **Si el motor falla después de montado** (avisa por `onLoadError`, o lanza
  * al pintar y lo recoge el `ErrorBoundary`), se desmonta y se sigue por el

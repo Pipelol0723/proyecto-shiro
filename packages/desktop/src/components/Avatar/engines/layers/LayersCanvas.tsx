@@ -59,11 +59,28 @@ export interface LayersCanvasProps {
   load?: (manifestUrl: string, signal: AbortSignal) => Promise<LoadedLayers>;
 }
 
+/**
+ * Lo que se usa de `matchMedia`. Escuchar los cambios es opcional: los WebKit
+ * anteriores a 14 no tienen `addEventListener` ahí, y entonces la preferencia
+ * se lee una vez y ya.
+ */
+interface MotionPreference {
+  matches: boolean;
+  addEventListener?: (type: 'change', listener: (event: { matches: boolean }) => void) => void;
+  removeEventListener?: (type: 'change', listener: (event: { matches: boolean }) => void) => void;
+}
+
+function readMotionPreference(): MotionPreference | null {
+  if (typeof window.matchMedia !== 'function') return null;
+  return window.matchMedia(REDUCED_MOTION_QUERY);
+}
+
 /** Ajusta el lienzo interno al tamaño pedido y a la densidad de la pantalla. */
 function fitCanvas(canvas: HTMLCanvasElement, size: number): void {
   const density = window.devicePixelRatio;
   const ratio = Number.isFinite(density) ? Math.min(Math.max(density, 1), MAX_PIXEL_RATIO) : 1;
-  const side = Math.max(1, Math.round(size * ratio));
+  // Un tamaño que no es un número, o no es positivo, deja el lienzo mínimo.
+  const side = Number.isFinite(size) ? Math.max(1, Math.round(size * ratio)) : 1;
   // Asignar el tamaño borra el lienzo: solo cuando de verdad cambia.
   if (canvas.width !== side) canvas.width = side;
   if (canvas.height !== side) canvas.height = side;
@@ -96,8 +113,7 @@ export function LayersCanvas({
     if (canvas === null) return;
 
     const controller = new AbortController();
-    const media =
-      typeof window.matchMedia === 'function' ? window.matchMedia(REDUCED_MOTION_QUERY) : null;
+    const media = readMotionPreference();
     let model: LoadedLayers | null = null;
     let player: LayersPlayer | null = null;
     let frame = 0;
@@ -111,7 +127,7 @@ export function LayersCanvas({
     const stop = (): void => {
       stopped = true;
       cancelAnimationFrame(frame);
-      media?.removeEventListener('change', onMotionChange);
+      media?.removeEventListener?.('change', onMotionChange);
       playerRef.current = null;
       player?.dispose();
       player = null;
@@ -143,7 +159,7 @@ export function LayersCanvas({
           player = current;
           playerRef.current = current;
           current.setEmotion(emotionRef.current);
-          media?.addEventListener('change', onMotionChange);
+          media?.addEventListener?.('change', onMotionChange);
 
           const frameMs = 1000 / MAX_FPS;
           let last: number | null = null;
