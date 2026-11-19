@@ -369,8 +369,11 @@ async function fetchContext(
       : Promise.resolve([]);
 
   const [recent, similar] = await Promise.all([recentPromise, semanticPromise]);
+  // De los parecidos se quitan el propio mensaje y los que ya están entre lo
+  // reciente: repetirlos gasta un hueco sin aportar nada.
+  const recentIds = new Set(recent.map((entry) => entry.id));
   const semantic = similar
-    .filter((entry) => entry.id !== currentEntryId)
+    .filter((entry) => entry.id !== currentEntryId && !recentIds.has(entry.id))
     .slice(0, config.semanticLimit);
   if (recent.length === 0 && semantic.length === 0) return undefined;
   logger.info(

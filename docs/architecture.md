@@ -527,8 +527,8 @@ La memoria (ver [ADR 0017](adr/0017-memoria-persistente-local-y-letta.md) y
 ```mermaid
 graph LR
     Pipe[conversation-flow] -->|save / getRecent / searchSemantic| MM[MemoryManager]
-    MM -->|1 . save síncrono sub-ms| WAL[(LocalMemory<br/>SQLite WAL)]
-    MM -->|2 . push inmediato + reads| Letta[LettaMemory<br/>SDK oficial]
+    MM -->|1 . save síncrono sub-ms + getRecent| WAL[(LocalMemory<br/>SQLite, registro local)]
+    MM -->|2 . push inmediato + searchSemantic| Letta[LettaMemory<br/>SDK oficial]
     Letta -->|HTTP| Server[(Letta server<br/>Docker)]
     Server -->|embeddings| Ollama[Ollama<br/>mxbai-embed-large]
     WAL -.entradas pendientes.-> Drainer[drainer<br/>setInterval]

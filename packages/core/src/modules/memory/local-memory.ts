@@ -19,7 +19,7 @@
  * paquete `memory` con métodos específicos del rol WAL.
  */
 
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database, { type Database as DatabaseInstance, type Statement } from 'better-sqlite3';
 import type { MemoryEntry, RecentOptions } from '../../interfaces/IMemoryModule.js';
@@ -30,7 +30,8 @@ import type { Logger } from '../../core/logger.js';
  *
  * - 0: bases creadas antes de versionar (sin marca).
  * - 1: tablas `messages` (rol `user`, `assistant` o `tool`) y `meta`, con sus
- *   índices. Es el esquema que ya había al introducir la versión.
+ *   índices. Es el esquema que ya había al introducir la versión, más el
+ *   índice por tiempo que usa el historial reciente.
  *
  * Para cambiar el esquema: sube este número y añade el paso en `migrate`.
  */
@@ -127,6 +128,7 @@ export class LocalMemory {
   private readonly stmtGetPending: Statement;
   private readonly stmtGetPendingLimited: Statement;
   private readonly stmtGetRecent: Statement;
+  private readonly stmtGetRecentAnyUser: Statement;
   private readonly stmtMarkSynced: Statement;
   private readonly stmtClear: Statement;
   private readonly stmtPendingCount: Statement;
@@ -154,13 +156,23 @@ export class LocalMemory {
     );
     this.logger = options.logger?.child({ module: 'LocalMemory' });
 
-    // WAL mode de SQLite: mejor concurrencia entre reads y writes.
-    // No aplica a DBs en memoria (`:memory:`) — silenciamos esa diferencia.
-    if (options.dbPath !== ':memory:') {
-      this.db.pragma('journal_mode = WAL');
-    }
+    try {
+      // La versión se mira antes que nada: una base de un programa más nuevo
+      // no se modifica, ni siquiera su modo de diario.
+      this.assertSupportedVersion(options.dbPath);
 
-    this.migrate(options.dbPath);
+      // WAL mode de SQLite: mejor concurrencia entre reads y writes.
+      // No aplica a DBs en memoria (`:memory:`) — silenciamos esa diferencia.
+      if (options.dbPath !== ':memory:') {
+        this.db.pragma('journal_mode = WAL');
+      }
+
+      this.migrate(options.dbPath);
+    } catch (err) {
+      // Sin esto el archivo quedaba abierto (y en Windows, bloqueado).
+      this.db.close();
+      throw err;
+    }
 
     this.stmtInsert = this.db.prepare(
       `INSERT INTO messages (id, user_id, role, text, timestamp, metadata)
@@ -180,13 +192,22 @@ export class LocalMemory {
        LIMIT ?`,
     );
     // Los últimos del usuario, del más reciente al más antiguo; quien llama
-    // les da la vuelta. Usa el índice `idx_messages_user_time`.
+    // les da la vuelta. Usa el índice `idx_messages_user_time`. A igual marca
+    // de tiempo manda el orden en que se guardaron (`rowid`).
     this.stmtGetRecent = this.db.prepare(
       `SELECT id, user_id, role, text, timestamp, metadata, synced_at
        FROM messages
        WHERE user_id = @user_id
          AND (@exclude_id IS NULL OR id <> @exclude_id)
-       ORDER BY timestamp DESC, id DESC
+       ORDER BY timestamp DESC, rowid DESC
+       LIMIT @limit`,
+    );
+    // Lo mismo sin separar por usuario. Usa `idx_messages_time`.
+    this.stmtGetRecentAnyUser = this.db.prepare(
+      `SELECT id, user_id, role, text, timestamp, metadata, synced_at
+       FROM messages
+       WHERE (@exclude_id IS NULL OR id <> @exclude_id)
+       ORDER BY timestamp DESC, rowid DESC
        LIMIT @limit`,
     );
     this.stmtMarkSynced = this.db.prepare(`UPDATE messages SET synced_at = ? WHERE id = ?`);
@@ -223,9 +244,23 @@ export class LocalMemory {
    * local, inmediata y disponible con Letta apagado.
    */
   getRecent(userId: string, limit: number, options: RecentOptions = {}): MemoryEntry[] {
-    if (limit <= 0) return [];
+    if (!isUsableLimit(limit)) return [];
     const rows = this.stmtGetRecent.all({
       user_id: userId,
+      exclude_id: options.excludeId ?? null,
+      limit,
+    }) as MessageRow[];
+    return rows.reverse().map(rowToEntry);
+  }
+
+  /**
+   * Como `getRecent`, pero de toda la conversación, hable quien hable. Es lo
+   * que usa el `MemoryManager`: la memoria es de un solo dueño y el `user_id`
+   * de cada turno dice quién lo guardó, no separa memorias.
+   */
+  getRecentAnyUser(limit: number, options: RecentOptions = {}): MemoryEntry[] {
+    if (!isUsableLimit(limit)) return [];
+    const rows = this.stmtGetRecentAnyUser.all({
       exclude_id: options.excludeId ?? null,
       limit,
     }) as MessageRow[];
@@ -298,22 +333,28 @@ export class LocalMemory {
   }
 
   /**
+   * Una base de una versión posterior no se abre: la creó un programa más
+   * nuevo y este no sabe qué hay dentro. Se comprueba antes de cualquier
+   * escritura, para no tocarla.
+   */
+  private assertSupportedVersion(dbPath: string): void {
+    const current = this.schemaVersion();
+    if (current <= SCHEMA_VERSION) return;
+    throw new Error(
+      `LocalMemory: ${dbPath} tiene el esquema en la versión ${String(current)} y este programa ` +
+        `entiende hasta la ${String(SCHEMA_VERSION)}. La creó una versión más nueva de Shiro: ` +
+        'actualiza el programa o apunta a otra base de datos. No se ha tocado.',
+    );
+  }
+
+  /**
    * Lleva la base a `SCHEMA_VERSION`. Una base nueva o anterior a la versión
    * (v0) pasa a v1 con los pasos de siempre, que no hacen nada si ya están
-   * aplicados. Una base de una versión posterior no se toca: la creó un
-   * programa más nuevo y este no sabe qué hay dentro.
+   * aplicados.
    */
   private migrate(dbPath: string): void {
     const current = this.schemaVersion();
     if (current === SCHEMA_VERSION) return;
-    if (current > SCHEMA_VERSION) {
-      this.db.close();
-      throw new Error(
-        `LocalMemory: ${dbPath} tiene el esquema en la versión ${String(current)} y este programa ` +
-          `entiende hasta la ${String(SCHEMA_VERSION)}. La creó una versión más nueva de Shiro: ` +
-          'actualiza el programa o apunta a otra base de datos. No se ha tocado.',
-      );
-    }
     this.backupBeforeMigration(dbPath, current);
     // v0 → v1.
     this.initSchema();
@@ -325,6 +366,9 @@ export class LocalMemory {
    * estaba en `<archivo>.v<versión>.bak`. Si esa copia ya existe no se pisa:
    * es de un intento anterior y es la buena. Si no se puede copiar, no se
    * migra.
+   *
+   * La copia se escribe en un `.tmp` y se renombra al terminar: así un `.bak`
+   * que existe está siempre entero, aunque un arranque se cortara a mitad.
    */
   private backupBeforeMigration(dbPath: string, fromVersion: number): void {
     if (dbPath === ':memory:' || !this.hasTurns()) return;
@@ -333,13 +377,22 @@ export class LocalMemory {
       this.logger?.info(`ya hay una copia previa a la migración en ${backupPath}; no se pisa`);
       return;
     }
+    const tmpPath = `${backupPath}.tmp`;
     try {
-      this.db.prepare('VACUUM INTO ?').run(backupPath);
+      // Resto de un arranque que se cortó a mitad de copia.
+      rmSync(tmpPath, { force: true });
+      this.db.prepare('VACUUM INTO ?').run(tmpPath);
+      renameSync(tmpPath, backupPath);
     } catch (err) {
-      this.db.close();
+      try {
+        rmSync(tmpPath, { force: true });
+      } catch {
+        // No se puede quitar (no es un archivo, o lo tiene otro proceso): se queda.
+      }
       throw new Error(
         `LocalMemory: no se pudo copiar ${dbPath} a ${backupPath} antes de migrar el esquema; ` +
-          'no se ha migrado.',
+          'no se ha migrado. La copia ocupa lo mismo que la base: comprueba que hay espacio y ' +
+          'permiso de escritura en esa carpeta y vuelve a arrancar.',
         { cause: err },
       );
     }
@@ -381,6 +434,9 @@ export class LocalMemory {
 
       CREATE INDEX IF NOT EXISTS idx_messages_user_time
         ON messages(user_id, timestamp);
+
+      CREATE INDEX IF NOT EXISTS idx_messages_time
+        ON messages(timestamp);
     `);
   }
 
@@ -430,6 +486,11 @@ function capToolOutput(
       output: `${output.slice(0, MAX_TOOL_OUTPUT_CHARS)}\n…[recortado: faltan ${String(missing)} caracteres]`,
     },
   };
+}
+
+/** Un `LIMIT` que SQLite acepta y que pide algo: entero y positivo. */
+function isUsableLimit(limit: number): boolean {
+  return Number.isSafeInteger(limit) && limit > 0;
 }
 
 function rowToEntry(row: MessageRow): MemoryEntry {

@@ -11,7 +11,8 @@
  *
  * - **getRecent**: sale de SQLite (enmienda del 2026-11-19 del ADR 0017).
  *   Es local e inmediato, ve también lo que aún no se ha sincronizado y
- *   funciona con Letta apagado.
+ *   funciona con Letta apagado. No separa por usuario: la memoria es de un
+ *   solo dueño, como en Letta (un agente).
  *
  * - **searchSemantic**: delega en Letta. Si Letta está caído según el
  *   último healthcheck, devuelve `[]` rápido (sin pagar el timeout) y se
@@ -221,12 +222,18 @@ export class MemoryManager implements IMemoryModule {
     }
   }
 
-  getRecent(userId: string, limit: number, options?: RecentOptions): Promise<MemoryEntry[]> {
+  getRecent(_userId: string, limit: number, options?: RecentOptions): Promise<MemoryEntry[]> {
     // De SQLite, no de Letta: está siempre disponible y ve los turnos que aún
     // no se han sincronizado. Antes, con Letta apagado, Shiro no recordaba ni
     // lo dicho un minuto antes (R-072).
+    //
+    // El `userId` no filtra. La memoria es de un solo dueño: el cliente habla
+    // como «me», el servidor guarda lo suyo (y pide el historial al conectar)
+    // con el `user_id` de la config, y todo es la misma conversación. Letta
+    // tampoco los separaba (`LettaMemory.getRecent` lista el agente entero).
+    // Separar por cliente llegará con el `clientId` del ADR 0026.
     try {
-      return Promise.resolve(this.local.getRecent(userId, limit, options));
+      return Promise.resolve(this.local.getRecentAnyUser(limit, options));
     } catch (err) {
       this.logger.warn(`getRecent: la memoria local falló — devolviendo []. ${String(err)}`);
       return Promise.resolve([]);
