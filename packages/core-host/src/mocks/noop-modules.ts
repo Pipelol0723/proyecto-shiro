@@ -18,6 +18,7 @@ import type {
   LLMRequest,
   LLMResponse,
   MemoryEntry,
+  RecentOptions,
   STTRequest,
   STTResult,
   TTSRequest,
@@ -65,9 +66,9 @@ export class NoopMemory implements IMemoryModule {
     return Promise.resolve();
   }
 
-  getRecent(userId: string, limit: number): Promise<MemoryEntry[]> {
-    const filtered = this.store.filter((e) => e.userId === userId);
-    return Promise.resolve(filtered.slice(-limit));
+  getRecent(userId: string, limit: number, options?: RecentOptions): Promise<MemoryEntry[]> {
+    const filtered = this.store.filter((e) => e.userId === userId && e.id !== options?.excludeId);
+    return Promise.resolve(limit > 0 ? filtered.slice(-limit) : []);
   }
 
   clear(userId: string): Promise<void> {

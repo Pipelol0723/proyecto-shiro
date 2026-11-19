@@ -145,12 +145,12 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
     //    el drainer lo recupera. Esto le ahorra al usuario los ~100-300ms
     //    del push a Letta en el hot path.
     //
-    //    El user msg NO se incluye en `getRecent` del turno actual de
-    //    todas formas (el contexto es lo previo; el mensaje actual va
-    //    como `request.text`), así que la carrera no introduce
-    //    inconsistencias.
+    //    El mensaje actual no entra en su propio contexto: el contexto
+    //    es lo previo y el mensaje va aparte, como `request.text`. Como
+    //    al leer ya está guardado, se excluye por su id.
+    const userEntryId = randomUUID();
     void persistEntry(modules.memory, child, {
-      id: randomUUID(),
+      id: userEntryId,
       role: 'user',
       text: payload.text,
       timestamp: new Date(startTime).toISOString(),
@@ -171,6 +171,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         modules.memory,
         payload.text,
         payload.userId,
+        userEntryId,
         memoryReads,
         child,
       );
@@ -326,11 +327,16 @@ async function persistEntry(
  *
  * Devuelve `undefined` solo cuando **ambas** lecturas aportan 0 entradas
  * (por vacío, timeout individual o error — todo se degrada a `[]`).
+ *
+ * `currentEntryId` es el mensaje que se está contestando: no entra en su
+ * propio contexto, ni como reciente ni como parecido (era el primer resultado
+ * de su propia búsqueda cuando ya había llegado a Letta).
  */
 async function fetchContext(
   memory: IMemoryModule,
   query: string,
   userId: string,
+  currentEntryId: string,
   config: MemoryReadsConfig,
   logger: Logger,
 ): Promise<string | undefined> {
@@ -341,15 +347,19 @@ async function fetchContext(
   // o falla, contribuye [] sin tumbar a la otra.
   const recentPromise: Promise<MemoryEntry[]> =
     config.recentLimit > 0
-      ? withDeadline(memory.getRecent(userId, config.recentLimit), config.timeoutMs, () =>
-          logger.warn(`memory.getRecent superó ${String(config.timeoutMs)}ms — sin recent`),
+      ? withDeadline(
+          memory.getRecent(userId, config.recentLimit, { excludeId: currentEntryId }),
+          config.timeoutMs,
+          () => logger.warn(`memory.getRecent superó ${String(config.timeoutMs)}ms — sin recent`),
         )
       : Promise.resolve([]);
 
   const semanticPromise: Promise<MemoryEntry[]> =
     config.semanticLimit > 0 && typeof memory.searchSemantic === 'function'
       ? withDeadline(
-          memory.searchSemantic(query, userId, config.semanticLimit),
+          // Uno de más: si el propio mensaje sale entre los parecidos, se
+          // quita abajo y no se pierde su hueco.
+          memory.searchSemantic(query, userId, config.semanticLimit + 1),
           config.timeoutMs,
           () =>
             logger.warn(
@@ -358,7 +368,13 @@ async function fetchContext(
         )
       : Promise.resolve([]);
 
-  const [recent, semantic] = await Promise.all([recentPromise, semanticPromise]);
+  const [recent, similar] = await Promise.all([recentPromise, semanticPromise]);
+  // De los parecidos se quitan el propio mensaje y los que ya están entre lo
+  // reciente: repetirlos gasta un hueco sin aportar nada.
+  const recentIds = new Set(recent.map((entry) => entry.id));
+  const semantic = similar
+    .filter((entry) => entry.id !== currentEntryId && !recentIds.has(entry.id))
+    .slice(0, config.semanticLimit);
   if (recent.length === 0 && semantic.length === 0) return undefined;
   logger.info(
     `contexto recuperado: ${String(recent.length)} recientes + ${String(semantic.length)} semánticos`,

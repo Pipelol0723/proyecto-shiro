@@ -300,3 +300,26 @@ No los planeamos hoy: hacerlo sin tener las superficies reales = adivinar abstra
 - Interfaz: [`packages/core/src/interfaces/IMemoryModule.ts`](../../packages/core/src/interfaces/IMemoryModule.ts).
 - Letta: <https://docs.letta.com/> — servicio de memoria canónico.
 - `better-sqlite3`: <https://github.com/WiseLibs/better-sqlite3>.
+
+## Nota 2026-11-19
+
+Enmienda (P-10 del plan de mejora; cierra R-072, R-095, R-096, R-175 y R-176), implementada en el mismo PR. Cambia dos cosas de la decisión y fija una que estaba abierta.
+
+**1. El historial reciente sale de SQLite, no de Letta.** `MemoryManager.getRecent` lee de `LocalMemory`. Es local e inmediato, ve los turnos que aún no se han sincronizado y funciona con Letta apagado. Sustituye lo que dice «Sobre el comportamiento si Letta no responde» para `getRecent`: antes devolvía `[]`, y Shiro no recordaba ni lo dicho un minuto antes; el chat tampoco recuperaba su historial al reconectar (`memory:snapshot` usa la misma lectura). Vale también para todas las frases del cuerpo que mandan `getRecent` o el snapshot a Letta, o que dicen que `LocalMemory` no se lee en el camino normal o que solo sirve para `save` y `clear`: se dejan como se escribieron y manda esta nota. `searchSemantic` no cambia: sigue en Letta y devuelve `[]` si Letta no está.
+
+- Reparto resultante: SQLite da la continuidad (lo reciente) y Letta el recuerdo por parecido (lo lejano).
+- El mensaje que se está contestando no entra en su propio contexto. `getRecent` acepta `excludeId` y el pipeline pasa el id del mensaje actual; de los resultados de `searchSemantic` se quita también, pidiendo uno de más para no perder su hueco. Un recuerdo parecido que ya está entre lo reciente tampoco se repite.
+- **El historial no separa por usuario.** La memoria es de un solo dueño. El cliente habla como `me` y el servidor guarda lo suyo, y pide el historial al conectar, con el `user_id` de la configuración; todo es la misma conversación. Letta tampoco los separaba (un agente, una memoria), y al pasar a SQLite se mantiene así a propósito: filtrando por usuario, el chat volvía vacío al reconectar. Separar por cliente llegará con el `clientId` del [ADR 0026](0026-estacion-holografica-pepper-ghost-cliente-ligero.md).
+- A igual marca de tiempo, el orden es el de guardado.
+- En el `memory:snapshot`, los turnos `tool` viajan sin metadata. El chat no los enseña, y ahora que el historial sale de SQLite esa metadata (argumentos y salida de la herramienta) habría empezado a salir del servidor.
+
+**2. SQLite es el registro local de la conversación, no un WAL que se vacía.** Este ADR lo llama «WAL de continuidad» y no decía qué pasa con las filas ya sincronizadas. Queda decidido:
+
+- **Decidido por el dueño el 2026-11-19: se guarda todo, y borrar es una opción suya.** Nada se borra de forma automática, ni por antigüedad ni por tamaño. Borrar es siempre una acción explícita del dueño.
+- **Los turnos de conversación no se borran solos.** Sincronizados o no, se quedan. Son la única fuente para reindexar Letta si se pierde o se cambia de modelo de embeddings, y es lo que se copia al homelab (P-11a).
+- **Lo que se acota es el tamaño de cada fila.** La salida de una tool se guarda recortada a 4000 caracteres en la metadata del turno `tool`; el resumen legible sigue entero en `text`, que es lo que va a Letta y al contexto. Los argumentos de la tool no se recortan.
+- **El tamaño se vigila, no se limita.** Al arrancar se registran el número de turnos y lo que ocupa el archivo.
+- **La opción de borrar aún no está en la app.** La pieza base existe: `clear` borra la conversación entera en SQLite y, si Letta está arriba, también allí. Faltan el modo de pedirlo desde la app, decidir si se podrá borrar por partes (un periodo, un turno) y que un borrado hecho con Letta apagado llegue a Letta cuando vuelva. Es trabajo de P-11b, que deja de ser una retención automática.
+- En el código y en los documentos sigue apareciendo «WAL» como nombre de `LocalMemory`: léase «registro local».
+
+**3. El esquema lleva versión.** `PRAGMA user_version` vale 1, que es el esquema que ya había. Al abrir una base anterior (v0) con turnos, se deja antes una copia junto al archivo (`memory.db.v0.bak`) y después se migra; si la copia no se puede hacer, no se migra. La copia se escribe aparte y se renombra al terminar, así que un `.bak` que existe está siempre entero. Una base de una versión posterior no se abre ni se toca: la versión se comprueba antes de cualquier escritura. El próximo cambio de esquema sube el número y añade su paso.

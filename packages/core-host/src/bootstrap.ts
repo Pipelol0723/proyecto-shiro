@@ -53,6 +53,7 @@ import {
 } from '@proyecto-shiro/core/node';
 import { WebSocketServerTransport } from './transports/websocket-server-transport.js';
 import { dispatchTTS, wireConversationFlow } from './pipeline/conversation-flow.js';
+import { toSnapshotEntries } from './pipeline/memory-snapshot.js';
 import { createApprovalGate } from './pipeline/approval-gate.js';
 import { wireSelfDev } from './selfdev/wire-selfdev.js';
 import { buildSelfDevAnnounceTurn, buildSelfDevToolTurn } from './selfdev/selfdev-memory.js';
@@ -229,7 +230,10 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   const snapshotUserId = typeof userId === 'string' && userId.length > 0 ? userId : 'default';
 
   // 4c. Snapshot del historial al conectar — cuando un cliente nuevo entra,
-  //     pedimos los últimos N turnos a Letta y los empujamos vía `memory:snapshot`.
+  //     pedimos los últimos N turnos a la memoria (salen de SQLite, así que
+  //     también con Letta apagado) y los empujamos vía `memory:snapshot`.
+  //     La memoria no separa por usuario: lo que el cliente dijo como «me»
+  //     entra aunque aquí se pida con el `user_id` de la config.
   //     El cliente decide aplicarlos solo si su historial está vacío
   //     (idempotencia en el reducer). Ver ADR 0017 sección "Sync con cliente".
   transport.onConnection(() => {
@@ -237,7 +241,10 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
       try {
         const entries = await memoryManager.getRecent(snapshotUserId, memoryReads.snapshotLimit);
         if (entries.length === 0) return; // sin historial, nada que hidratar
-        await bus.emit('memory:snapshot', { entries, userId: snapshotUserId });
+        await bus.emit('memory:snapshot', {
+          entries: toSnapshotEntries(entries),
+          userId: snapshotUserId,
+        });
       } catch (err) {
         child.warn('memory:snapshot al conectar falló', { err });
       }
