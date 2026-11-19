@@ -20,6 +20,7 @@ import type {
   LLMResponse,
   LLMTier,
   MemoryEntry,
+  RecentOptions,
   STTRequest,
   STTResult,
   TTSRequest,
@@ -93,9 +94,11 @@ export class MockMemory implements IMemoryModule {
     return Promise.resolve();
   }
 
-  getRecent(userId: string, limit: number): Promise<MemoryEntry[]> {
-    const userEntries = this.entries.filter((e) => e.userId === userId);
-    return Promise.resolve(userEntries.slice(-limit));
+  getRecent(userId: string, limit: number, options?: RecentOptions): Promise<MemoryEntry[]> {
+    const userEntries = this.entries.filter(
+      (e) => e.userId === userId && e.id !== options?.excludeId,
+    );
+    return Promise.resolve(limit > 0 ? userEntries.slice(-limit) : []);
   }
 
   clear(userId: string): Promise<void> {

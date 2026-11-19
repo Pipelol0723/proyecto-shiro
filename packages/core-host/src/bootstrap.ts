@@ -229,7 +229,8 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   const snapshotUserId = typeof userId === 'string' && userId.length > 0 ? userId : 'default';
 
   // 4c. Snapshot del historial al conectar — cuando un cliente nuevo entra,
-  //     pedimos los últimos N turnos a Letta y los empujamos vía `memory:snapshot`.
+  //     pedimos los últimos N turnos a la memoria (salen de SQLite, así que
+  //     también con Letta apagado) y los empujamos vía `memory:snapshot`.
   //     El cliente decide aplicarlos solo si su historial está vacío
   //     (idempotencia en el reducer). Ver ADR 0017 sección "Sync con cliente".
   transport.onConnection(() => {

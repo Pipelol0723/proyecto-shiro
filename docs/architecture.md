@@ -539,9 +539,14 @@ graph LR
   síncrono) y **luego** se empuja a Letta. Si Letta está caído, la entrada
   queda pendiente y el **drainer** la reenvía cuando vuelve. Cero turnos
   perdidos aunque Letta tartamudee.
-- **Lectura** (`getRecent` cronológico + `searchSemantic` semántico): van a
-  Letta, que es la verdad. Si Letta no está usable, devuelven `[]` rápido y
-  el turno procede sin contexto (Shiro responde "ciego" ese turno).
+- **Lectura**: el historial reciente (`getRecent`) sale de SQLite, que
+  tiene todos los turnos, sincronizados o no, y funciona con Letta apagado. El
+  recuerdo por parecido (`searchSemantic`) va a Letta; si Letta no está
+  usable devuelve `[]` rápido y el turno sigue solo con lo reciente. El
+  mensaje que se está contestando no entra en su propio contexto.
+- **SQLite es el registro completo**, no un WAL que se vacía: los turnos no
+  se borran solos. Su esquema lleva versión (`PRAGMA user_version`) y se deja
+  una copia antes de migrar. Ver la nota del 2026-11-19 del ADR 0017.
 - **Letta** se usa como _archival store_ semántico (no invocamos su flujo de
   agente; el LLM es nuestro). Los embeddings son **locales vía Ollama**.
 - **Auto-provisión**: si no hay `agent_id` configurado, el manager crea el

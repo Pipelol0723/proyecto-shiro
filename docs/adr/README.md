@@ -75,7 +75,7 @@ estructura de un test). Sí hace falta para cambios estructurales.
 | [0014](0014-llm-structured-output-text-emotion.md)                       | Salida estructurada del LLM — `{ text, emotion }`              | Accepted                                         |
 | [0015](0015-hybrid-router-classifier-llm-based.md)                       | HybridRouter — clasificador LLM con fallback heurístico        | Accepted                                         |
 | [0016](0016-pipeline-conversational-wiring.md)                           | Wiring del pipeline conversacional en `core-host`              | Accepted                                         |
-| [0017](0017-memoria-persistente-local-y-letta.md)                        | Memoria persistente — LocalMemory + LettaMemory                | Accepted                                         |
+| [0017](0017-memoria-persistente-local-y-letta.md)                        | Memoria persistente — LocalMemory + LettaMemory                | Accepted (enmendado el 2026-11-19)               |
 | [0018](0018-letta-sdk-oficial-embeddings-ollama.md)                      | Integración Letta — SDK oficial + embeddings Ollama            | Accepted                                         |
 | [0019](0019-stt-faster-whisper-microservicio-python.md)                  | STT — microservicio Python con faster-whisper                  | Accepted                                         |
 | [0020](0020-tts-elevenlabs-systemtts-fallback-y-multidevice-diferido.md) | TTS — ElevenLabs + SystemTTS fallback, in-process en core-host | Accepted                                         |

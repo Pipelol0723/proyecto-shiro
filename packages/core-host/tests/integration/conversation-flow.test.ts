@@ -634,7 +634,8 @@ describe('wireConversationFlow', () => {
       await bus.emit('user:message', { text: 'algo', userId: 'me' });
 
       expect(memory.getRecentCalls).toEqual([{ userId: 'me', limit: 7 }]);
-      expect(memory.searchCalls).toEqual([{ query: 'algo', userId: 'me', limit: 2 }]);
+      // Uno de más en la búsqueda: el propio mensaje puede salir y se descarta.
+      expect(memory.searchCalls).toEqual([{ query: 'algo', userId: 'me', limit: 3 }]);
 
       dispose();
     });

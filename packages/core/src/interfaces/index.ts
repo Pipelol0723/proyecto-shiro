@@ -25,6 +25,7 @@ export type { ISTTModule, STTRequest, STTResult } from './ISTTModule.js';
 export type {
   IMemoryModule,
   MemoryEntry,
+  RecentOptions,
   ToolTurnMetadata,
   SelfDevTurnMetadata,
 } from './IMemoryModule.js';

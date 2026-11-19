@@ -300,3 +300,21 @@ No los planeamos hoy: hacerlo sin tener las superficies reales = adivinar abstra
 - Interfaz: [`packages/core/src/interfaces/IMemoryModule.ts`](../../packages/core/src/interfaces/IMemoryModule.ts).
 - Letta: <https://docs.letta.com/> — servicio de memoria canónico.
 - `better-sqlite3`: <https://github.com/WiseLibs/better-sqlite3>.
+
+## Nota 2026-11-19
+
+Enmienda (P-10 del plan de mejora; cierra R-072, R-095, R-096, R-175 y R-176), implementada en el mismo PR. Cambia dos cosas de la decisión y fija una que estaba abierta.
+
+**1. El historial reciente sale de SQLite, no de Letta.** `MemoryManager.getRecent` lee de `LocalMemory`. Es local e inmediato, ve los turnos que aún no se han sincronizado y funciona con Letta apagado. Sustituye lo que dice «Sobre el comportamiento si Letta no responde» para `getRecent`: antes devolvía `[]`, y Shiro no recordaba ni lo dicho un minuto antes; el chat tampoco recuperaba su historial al reconectar (`memory:snapshot` usa la misma lectura). `searchSemantic` no cambia: sigue en Letta y devuelve `[]` si Letta no está.
+
+- Reparto resultante: SQLite da la continuidad (lo reciente) y Letta el recuerdo por parecido (lo lejano).
+- El mensaje que se está contestando no entra en su propio contexto. `getRecent` acepta `excludeId` y el pipeline pasa el id del mensaje actual; de los resultados de `searchSemantic` se quita también, pidiendo uno de más para no perder su hueco.
+
+**2. SQLite es el registro local de la conversación, no un WAL que se vacía.** Este ADR lo llama «WAL de continuidad» y no decía qué pasa con las filas ya sincronizadas. Queda decidido:
+
+- **Los turnos de conversación no se borran solos.** Sincronizados o no, se quedan. Son la única fuente para reindexar Letta si se pierde o se cambia de modelo de embeddings, y es lo que se copia al homelab (P-11a).
+- **Lo que se acota es el tamaño de cada fila.** La salida de una tool se guarda recortada a 4000 caracteres en la metadata del turno `tool`; el resumen legible sigue entero en `text`, que es lo que va a Letta y al contexto. Los argumentos de la tool no se recortan.
+- **El tamaño se vigila, no se limita.** Al arrancar se registran el número de turnos y lo que ocupa el archivo. Si algún día pesa, lo que se compacta son los turnos `tool` antiguos (P-11b), nunca la conversación sin una orden del dueño.
+- En el código y en los documentos sigue apareciendo «WAL» como nombre de `LocalMemory`: léase «registro local».
+
+**3. El esquema lleva versión.** `PRAGMA user_version` vale 1, que es el esquema que ya había. Al abrir una base anterior (v0) con turnos, se deja antes una copia junto al archivo (`memory.db.v0.bak`) y después se migra; si la copia no se puede hacer, no se migra. Una base de una versión posterior no se abre ni se toca. El próximo cambio de esquema sube el número y añade su paso.
