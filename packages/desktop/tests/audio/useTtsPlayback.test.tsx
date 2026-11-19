@@ -126,6 +126,43 @@ describe('useTtsPlayback — de qué servidor sale el audio (P-14)', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
+
+  /** Emite un audio y, acto seguido, su cancelación; devuelve los fines que salieron. */
+  async function playThenCancel(
+    url: string,
+    muted: boolean,
+  ): Promise<{ ended: EventMap['tts:audio-ended'][]; created: number }> {
+    const bus = makeBus();
+    const factory = vi.fn(() => makeFakeAudio() as unknown as HTMLAudioElement);
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (payload) => {
+      ended.push(payload);
+    });
+    renderHook(() => useTtsPlayback({ bus, audioFactory: factory, muted }), {
+      wrapper: wrap(bus),
+    });
+    await act(async () => {
+      await bus.emit('tts:audio', { url, audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' });
+      await bus.emit('tts:cancel', { audioId: 'a', userId: 'me' });
+    });
+    return { ended, created: factory.mock.calls.length };
+  }
+
+  it('un audio descartado no crea reproductor, y cancelarlo después no repite el fin', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { ended, created } = await playThenCancel('http://otro.invalid/audio/a.mp3', false);
+
+    expect(created).toBe(0);
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+    warn.mockRestore();
+  });
+
+  it('silenciado, cancelar un audio que no llegó a sonar tampoco repite el fin', async () => {
+    const { ended, created } = await playThenCancel('/audio/a.mp3', true);
+
+    expect(created).toBe(0);
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+  });
 });
 
 describe('useTtsPlayback', () => {

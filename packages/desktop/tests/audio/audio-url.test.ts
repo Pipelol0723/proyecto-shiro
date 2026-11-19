@@ -46,6 +46,48 @@ describe('resolveAudioUrl', () => {
     expect(resolveAudioUrl(url, 'ws://localhost:9876/bus')).toBeNull();
   });
 
+  it.each([
+    'http://alguien@localhost:9876/audio/a.mp3',
+    'http://alguien:clave@localhost:9876/audio/a.mp3',
+    '/audio/',
+    '/audio/a',
+    '/audio//a.mp3',
+    '/audio/a/b.mp3',
+    '/audio/..%2fx.mp3',
+    '/audio/%5c..%5cx.mp3',
+    '/audio/%2e%2e/x.mp3',
+    '/audio/;x',
+    '/audio/a.mp3?x=1',
+    '/audio/a.mp3#f',
+    '/AUDIO/a.mp3',
+  ])('«%s» no tiene la forma de un audio del core-host', (url) => {
+    expect(resolveAudioUrl(url, 'ws://localhost:9876/bus')).toBeNull();
+  });
+
+  it('la ruta sin barra inicial se resuelve igual', () => {
+    expect(resolveAudioUrl('audio/a.mp3', 'ws://localhost:9876/bus')).toBe(
+      'http://localhost:9876/audio/a.mp3',
+    );
+  });
+
+  it('el puerto por defecto y las mayúsculas no hacen de un servidor otro', () => {
+    expect(
+      resolveAudioUrl('HTTP://SHIRO-HOST.TEST:80/audio/a.mp3', 'ws://shiro-host.test/bus'),
+    ).toBe('http://shiro-host.test/audio/a.mp3');
+  });
+
+  it('un host con punto final no es el mismo servidor', () => {
+    expect(
+      resolveAudioUrl('http://localhost:9876/audio/a.mp3', 'ws://localhost.:9876/bus'),
+    ).toBeNull();
+  });
+
+  it('las credenciales de la dirección del bus no pasan a la del audio', () => {
+    expect(resolveAudioUrl('/audio/a.mp3', 'ws://alguien:clave@localhost:9876/bus')).toBe(
+      'http://localhost:9876/audio/a.mp3',
+    );
+  });
+
   it('si la dirección del bus no se entiende, no se reproduce nada', () => {
     expect(resolveAudioUrl('/audio/a.mp3', 'no es una url')).toBeNull();
     expect(resolveAudioUrl('/audio/a.mp3', 'ftp://shiro-host.test/bus')).toBeNull();

@@ -176,6 +176,25 @@ describe('AudioProvider', () => {
     expect(screen.getByTestId('avatar').getAttribute('data-has-audio')).toBe('yes');
   });
 
+  it('pide el audio al servidor del bus que se le indica', async () => {
+    const bus = makeBus();
+    render(
+      <BusProvider bus={bus}>
+        <CompanionProvider>
+          <AudioProvider hostUrl="ws://shiro-host.test:9000/bus">
+            <p>app</p>
+          </AudioProvider>
+        </CompanionProvider>
+      </BusProvider>,
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO);
+    });
+
+    expect(FakeAudio.instances[0]?.src).toBe('http://shiro-host.test:9000/audio/a.mp3');
+  });
+
   it('useAudio fuera de AudioProvider lanza un error claro', () => {
     // React vuelca el error esperado a stderr; se silencia para no ensuciar vitest.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
