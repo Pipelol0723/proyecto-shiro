@@ -10,7 +10,10 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/index.ts'],
+      // Los archivos que solo declaran tipos no tienen código que ejecutar:
+      // nunca se cargan y v8 cuenta todas sus líneas como sin cubrir. Si
+      // alguno gana código real, sale de esta lista.
+      exclude: ['src/**/*.test.ts', 'src/**/index.ts', 'src/interfaces/**', 'src/types/events.ts'],
       thresholds: {
         lines: 80,
         functions: 80,

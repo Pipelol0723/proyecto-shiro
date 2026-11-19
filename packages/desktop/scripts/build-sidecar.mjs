@@ -23,6 +23,9 @@
  * Pre-requisito: `npm run build` (core + core-host) ya ejecutado, porque
  * bundleamos el JS COMPILADO (`dist/server.js`), no el TS.
  *
+ * Se aborta si este script no corre con el mismo Node que lleva dentro el
+ * sidecar, o si el addon no carga con él: ver `./sidecar-abi.mjs`.
+ *
  * Salida: `packages/desktop/src-tauri/binaries/`.
  *
  * Solo Windows x64 en V1 (ADR 0024 §1). Para otros targets habría que
@@ -34,6 +37,7 @@ import { existsSync, mkdirSync, copyFileSync, rmSync, readdirSync } from 'node:f
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { PKG_TARGET, checkBindingLoads, checkBuildNode } from './sidecar-abi.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -78,6 +82,9 @@ function fail(msg) {
 }
 
 // ─── 0. Verificaciones previas ────────────────────────────────────────
+const nodeProblem = checkBuildNode(process.versions.node);
+if (nodeProblem !== null) fail(nodeProblem);
+
 if (!existsSync(serverEntry)) {
   fail(
     `no existe ${serverEntry}.\n` +
@@ -120,13 +127,13 @@ if (!existsSync(bundleEntry)) {
 step('2/3 — empaquetado con pkg…');
 const exeOut = join(binariesDir, EXE_NAME);
 try {
-  // `pkg <entry> --targets node22-win-x64 --output <exe>`.
-  // node22 = runtime embebido. La primera vez pkg descarga el base
-  // binary de Node (~40 MB, cacheado en ~/.pkg-cache).
+  // `pkg <entry> --targets <PKG_TARGET> --output <exe>`. El target dice
+  // qué Node va embebido. La primera vez pkg descarga el base binary de
+  // Node (~40 MB, cacheado en ~/.pkg-cache).
   const pkgBin = require.resolve('@yao-pkg/pkg/lib-es5/bin.js');
   execFileSync(
     process.execPath,
-    [pkgBin, bundleEntry, '--targets', 'node22-win-x64', '--output', exeOut],
+    [pkgBin, bundleEntry, '--targets', PKG_TARGET, '--output', exeOut],
     { stdio: 'inherit', cwd: desktopDir },
   );
 } catch {
@@ -146,6 +153,10 @@ if (nativeSrc === null) {
       '¿Corriste `npm install` en la raíz? El addon se compila/descarga al instalar.',
   );
 }
+// Si no carga aquí, tampoco cargará en el sidecar: mejor saberlo ahora que
+// en el equipo de quien instale el binario.
+const bindingProblem = checkBindingLoads(nativeSrc, require);
+if (bindingProblem !== null) fail(bindingProblem);
 const nativeDest = join(binariesDir, NATIVE_BINDING);
 copyFileSync(nativeSrc, nativeDest);
 
