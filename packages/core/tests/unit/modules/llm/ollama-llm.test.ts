@@ -325,3 +325,99 @@ describe('OllamaLLM — opciones de Ollama (P-16)', () => {
     ).rejects.toThrow(/cortada/);
   });
 });
+
+describe('OllamaLLM — opciones de Ollama (revisión de P-16)', () => {
+  let fetchSpy: ReturnType<typeof vi.fn<typeof fetch>>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', fetchSpy);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function reply(content: string, extra: Record<string, unknown> = {}): void {
+    fetchSpy.mockResolvedValue(
+      mockResponse({ message: { role: 'assistant', content }, done: true, ...extra }),
+    );
+  }
+
+  function generate(config: Record<string, unknown> = {}) {
+    return new OllamaLLM({ model: 'm', ...config }, makeDeps()).generate({ text: 'hola' });
+  }
+
+  it('keep_alive admite también un número, como Ollama (-1: no descargar nunca)', async () => {
+    reply('{"text":"hi","emotion":"neutral"}');
+    await generate({ keepAlive: -1 });
+
+    const [, init] = fetchSpy.mock.calls[0]!;
+    expect((JSON.parse(init?.body as string) as { keep_alive: unknown }).keep_alive).toBe(-1);
+  });
+
+  it('un keep_alive que Ollama no entendería se rechaza al arrancar, no en cada turno', () => {
+    expect(() => new OllamaLLM({ model: 'm', keepAlive: '-1' }, makeDeps())).toThrow(
+      OllamaLLMError,
+    );
+    expect(() => new OllamaLLM({ model: 'm', keepAlive: 'media hora' }, makeDeps())).toThrow(
+      OllamaLLMError,
+    );
+  });
+
+  it('una opción escrita como en el clasificador se rechaza diciendo cómo va aquí', () => {
+    expect(() => new OllamaLLM({ model: 'm', num_ctx: 8192 }, makeDeps())).toThrow(/numCtx/);
+  });
+
+  it('si se cortó después del texto, el texto sale entero y sin puntos suspensivos', async () => {
+    reply('{"text":"entero","emotion":"hap', { done_reason: 'length' });
+
+    const result = await generate();
+
+    expect(result.text).toBe('entero');
+    expect(result.emotion).toBe('neutral');
+  });
+
+  it('si la emoción llegó entera antes del corte, se conserva', async () => {
+    reply('{"emotion":"divertida","text":"qué bien que', { done_reason: 'length' });
+
+    const result = await generate();
+
+    expect(result.text).toBe('qué bien que…');
+    expect(result.emotion).toBe('divertida');
+  });
+
+  it('un corte justo al terminar el JSON no cambia nada', async () => {
+    reply('{"text":"hola","emotion":"divertida"}', { done_reason: 'length' });
+
+    const result = await generate();
+
+    expect(result).toMatchObject({ text: 'hola', emotion: 'divertida' });
+  });
+
+  it('sin texto que entregar, falla con un error del módulo', async () => {
+    reply('{"emotion":"happy","te', { done_reason: 'length' });
+
+    await expect(generate()).rejects.toBeInstanceOf(OllamaLLMError);
+  });
+
+  it('avisa cuando el prompt y el tope de respuesta no caben en el contexto', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    reply('{"text":"hi","emotion":"neutral"}', { prompt_eval_count: 3_500 });
+
+    await generate({ numCtx: 4096, numPredict: 1024 });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toMatch(/num_ctx/);
+  });
+
+  it('con sitio de sobra no avisa', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    reply('{"text":"hi","emotion":"neutral"}', { prompt_eval_count: 1_200 });
+
+    await generate({ numCtx: 4096, numPredict: 1024 });
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+});

@@ -166,7 +166,7 @@ describe('HybridRouter', () => {
       required: ['tier', 'requires_tools'],
     });
     const options = body.options as Record<string, unknown>;
-    expect(options.temperature).toBe(0.1);
+    expect(options.temperature).toBe(0);
   });
 
   it('route devuelve "local" cuando el clasificador dice local', async () => {
@@ -300,9 +300,8 @@ describe('HybridRouter — opciones de Ollama (P-16)', () => {
 
     expect(body.keep_alive).toBe(DEFAULT_OLLAMA_KEEP_ALIVE);
     expect(body.options.num_ctx).toBe(DEFAULT_OLLAMA_NUM_CTX);
-    expect(body.options.num_predict).toBeGreaterThan(0);
-    expect(body.options.num_predict).toBeLessThanOrEqual(64);
-    expect(body.options.temperature).toBe(0.1);
+    expect(body.options.num_predict).toBe(48);
+    expect(body.options.temperature).toBe(0);
   });
 
   it('las tres se pueden cambiar por configuración', async () => {
@@ -319,5 +318,16 @@ describe('HybridRouter — opciones de Ollama (P-16)', () => {
 
     expect(router.num_ctx).toBe(llm.numCtx);
     expect(router.keep_alive).toBe(llm.keepAlive);
+  });
+});
+
+describe('HybridRouter — opciones de Ollama (revisión de P-16)', () => {
+  it('keep_alive admite un número y rechaza lo que Ollama no entendería', () => {
+    expect(HybridRouterConfigSchema.parse({ keep_alive: -1 }).keep_alive).toBe(-1);
+    expect(() => new HybridRouter({ keep_alive: '-1' }, makeDeps())).toThrow(HybridRouterError);
+  });
+
+  it('una opción escrita como en el LLM se rechaza diciendo cómo va aquí', () => {
+    expect(() => new HybridRouter({ numCtx: 8192 }, makeDeps())).toThrow(/num_ctx/);
   });
 });
