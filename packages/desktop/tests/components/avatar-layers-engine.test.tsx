@@ -11,6 +11,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { Avatar } from '../../src/components/Avatar/Avatar';
@@ -511,6 +512,150 @@ describe('LayersCanvas — fallos y limpieza', () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(load.mock.calls[1]?.[0]).toBe('/otro/avatar.manifest.json');
   });
+});
+
+describe('LayersCanvas — ciclo de vida de React', () => {
+  const URL_A = '/a/avatar.manifest.json';
+  const URL_B = '/b/avatar.manifest.json';
+
+  it('en modo estricto (doble montaje en desarrollo) queda una sola carga viva y un solo bucle', async () => {
+    const models: ReturnType<typeof fakeModel>[] = [];
+    const signals: AbortSignal[] = [];
+    const load = vi.fn<Load>((_url, signal) => {
+      const model = fakeModel();
+      signals.push(signal);
+      models.push(model);
+      return Promise.resolve(model);
+    });
+    const onLoadError = vi.fn();
+
+    const { container } = render(
+      <StrictMode>
+        <LayersCanvas manifestUrl={URL_A} size={200} load={load} onLoadError={onLoadError} />
+      </StrictMode>,
+    );
+    await flush();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(signals.map((s) => s.aborted)).toEqual([true, false]);
+    expect(models[0]?.release).toHaveBeenCalledTimes(1);
+    expect(models[1]?.release).not.toHaveBeenCalled();
+    expect(frames.size).toBe(1);
+    expect(onLoadError).not.toHaveBeenCalled();
+
+    step(0);
+    expect(canvasOf(container).dataset.ready).toBe('true');
+  });
+
+  it('si cambia el manifiesto a mitad de la carga, la primera se cancela y no llega a pintarse', async () => {
+    const first = deferredLoad();
+    const second = deferredLoad();
+    const load = vi.fn<Load>((url, signal) =>
+      url === URL_A ? first.load(url, signal) : second.load(url, signal),
+    );
+    const view = render(<LayersCanvas manifestUrl={URL_A} size={200} load={load} />);
+    const canvas = canvasOf(view.container);
+
+    view.rerender(<LayersCanvas manifestUrl={URL_B} size={200} load={load} />);
+    expect(first.signals[0]?.aborted).toBe(true);
+
+    const stale = fakeModel();
+    first.resolve(stale);
+    await flush();
+    expect(stale.release).toHaveBeenCalledTimes(1);
+    expect(frames.size).toBe(0);
+    expect(canvas.dataset.ready).toBe('false');
+
+    const fresh = fakeModel();
+    second.resolve(fresh);
+    await flush();
+    step(0);
+    expect(canvas.dataset.ready).toBe('true');
+    expect(fresh.release).not.toHaveBeenCalled();
+  });
+
+  it('al cambiar de manifiesto vuelve a «no listo» hasta pintar el nuevo', async () => {
+    const { canvas, load, view } = await mountLoaded();
+    expect(canvas.dataset.ready).toBe('true');
+
+    view.rerender(<LayersCanvas manifestUrl={URL_B} size={200} load={load} />);
+    expect(canvas.dataset.ready).toBe('false');
+
+    await flush();
+    step(FRAME_MS * 3);
+    expect(canvas.dataset.ready).toBe('true');
+  });
+
+  it('avisa al onLoadError del último render, y cambiarlo no vuelve a cargar', async () => {
+    const pending = deferredLoad();
+    const first = vi.fn();
+    const latest = vi.fn();
+    const view = render(
+      <LayersCanvas manifestUrl={URL_A} size={200} load={pending.load} onLoadError={first} />,
+    );
+    view.rerender(
+      <LayersCanvas manifestUrl={URL_A} size={200} load={pending.load} onLoadError={latest} />,
+    );
+
+    pending.reject(new LayersLoadError('image', 'no se pudo cargar la imagen «iris»'));
+    await flush();
+
+    expect(pending.load).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+    expect(latest).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LayersCanvas — navegador y reloj', () => {
+  it.each([
+    ['no existe', undefined],
+    ['no deja escuchar cambios', (): unknown => ({ matches: true })],
+  ])('si matchMedia %s, el modelo se muestra igual y se desmonta sin fallar', async (_n, impl) => {
+    vi.stubGlobal('matchMedia', impl);
+    const { canvas, onLoadError, view } = await mountLoaded();
+
+    expect(canvas.dataset.ready).toBe('true');
+    expect(onLoadError).not.toHaveBeenCalled();
+    expect(() => {
+      view.unmount();
+    }).not.toThrow();
+  });
+
+  it('a 60 Hz pinta uno de cada dos fotogramas, no uno de cada tres', async () => {
+    const { canvas } = await mountLoaded();
+    const before = clears(canvas);
+
+    for (let i = 1; i <= 60; i += 1) step((i * 1000) / 60);
+
+    expect(clears(canvas) - before).toBe(30);
+  });
+
+  it('tras un salto del reloj (una pestaña que vuelve) la animación sigue desde donde estaba', async () => {
+    const { canvas, load, view } = await mountLoaded();
+    view.rerender(
+      <LayersCanvas
+        manifestUrl="/modelo/avatar.manifest.json"
+        size={200}
+        load={load}
+        emotion="divertida"
+      />,
+    );
+
+    step(60_000); // un minuto después: sin tope, el fundido de 140 ms ya habría acabado
+
+    const frame = lastFrame(canvas);
+    expect(frame).toContain('brows_idle');
+    expect(frame).toContain('brows_smirk');
+  });
+
+  it.each([0, -5])(
+    'con un tamaño de %d el lienzo se queda en el mínimo y no falla',
+    async (size) => {
+      const { canvas, onLoadError } = await mountLoaded({ size });
+      expect([canvas.width, canvas.height]).toEqual([1, 1]);
+      expect(onLoadError).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // ── el motor y la lista por defecto ──────────────────────────────────────────

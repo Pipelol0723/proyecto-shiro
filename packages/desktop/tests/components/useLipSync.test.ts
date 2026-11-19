@@ -13,7 +13,7 @@ import { computeMouthOpen, useLipSync } from '../../src/components/Avatar/useLip
 interface FakeContext {
   sources: number;
   level: number;
-  createMediaElementSource: () => { connect: () => void };
+  createMediaElementSource: (element?: object) => { connect: () => void };
   createAnalyser: () => {
     fftSize: number;
     frequencyBinCount: number;
@@ -121,6 +121,48 @@ describe('useLipSync', () => {
     tick(3);
     expect(values.length).toBeGreaterThan(0);
     expect(values.at(-1)).toBeGreaterThan(0);
+  });
+
+  it('otro motor que hereda el mismo <audio> sigue moviendo la boca', () => {
+    // Como la Web Audio de verdad: un elemento solo se deja conectar una vez
+    // en toda su vida, sea cual sea el contexto. Pasa cuando un motor del
+    // avatar falla ya montado y otro toma el relevo con la misma voz sonando.
+    const connected = new WeakSet<object>();
+    const strictContext = (level: number): FakeContext => {
+      const ctx = makeFakeContext(level);
+      ctx.createMediaElementSource = (element?: object) => {
+        if (element === undefined || connected.has(element)) {
+          throw new DOMException('ya está conectado', 'InvalidStateError');
+        }
+        connected.add(element);
+        ctx.sources++;
+        return { connect: () => undefined };
+      };
+      return ctx;
+    };
+    const audio = fakeAudio();
+    const mount = (ctx: FakeContext, values: number[]): (() => void) =>
+      renderHook(() => {
+        useLipSync({
+          audioElement: audio,
+          setMouthOpen: (v: number) => {
+            values.push(v);
+          },
+          smoothing: 1,
+          audioContextFactory: asContextFactory(ctx),
+        });
+      }).unmount;
+
+    const first: number[] = [];
+    const unmountFirst = mount(strictContext(200), first);
+    tick(2);
+    expect(first.at(-1)).toBeGreaterThan(0);
+    unmountFirst();
+
+    const second: number[] = [];
+    mount(strictContext(200), second);
+    tick(2);
+    expect(second.at(-1)).toBeGreaterThan(0);
   });
 
   it('no recrea el MediaElementSource para el mismo elemento (StrictMode-safe)', () => {
