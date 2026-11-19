@@ -968,3 +968,93 @@ describe('wireConversationFlow', () => {
     });
   });
 });
+
+// P-16 (R-134, R-135): antes solo había `latencyMs`, que se cortaba al tener
+// el texto. Ahora cada turno dice cuánto tardó cada etapa, voz incluida.
+describe('wireConversationFlow — tiempos del turno', () => {
+  function run(modules: LoadedModules): {
+    bus: EventBus<EventMap>;
+    measured: EventMap['turn:measured'][];
+    order: string[];
+    dispose: () => void;
+  } {
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const measured: EventMap['turn:measured'][] = [];
+    const order: string[] = [];
+    bus.on('llm:responded', () => {
+      order.push('llm:responded');
+    });
+    bus.on('turn:measured', (payload) => {
+      measured.push(payload);
+      order.push('turn:measured');
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules,
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+    return { bus, measured, order, dispose };
+  }
+
+  it('al acabar emite cuánto tardó cada etapa, con el id del mensaje que abrió el turno', async () => {
+    const memory = makeMemory();
+    const { bus, measured, order, dispose } = run(makeModules({ memory }));
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(measured).toHaveLength(1);
+    const [timing] = measured;
+    expect(timing?.userId).toBe('me');
+    expect(timing?.tier).toBe('local');
+    expect(timing?.turnId).toBe(memory.saved.find((entry) => entry.role === 'user')?.id);
+    expect(Object.keys(timing?.stages ?? {})).toEqual([
+      'route',
+      'context',
+      'llm',
+      'persist',
+      'tts',
+    ]);
+    for (const ms of Object.values(timing?.stages ?? {})) {
+      expect(Number.isInteger(ms)).toBe(true);
+      expect(ms).toBeGreaterThanOrEqual(0);
+    }
+    expect(timing?.totalMs).toBeGreaterThanOrEqual(0);
+    // Va al final: incluye lo que tarda la voz, que viene después del texto.
+    expect(order).toEqual(['llm:responded', 'turn:measured']);
+
+    dispose();
+  });
+
+  it('el tiempo de una etapa lenta sale en esa etapa', async () => {
+    const memory = makeMemory({ recentDelayMs: 60 });
+    const { bus, measured, dispose } = run(makeModules({ memory }));
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    const stages = measured[0]?.stages;
+    expect(stages?.context).toBeGreaterThanOrEqual(50);
+    expect(stages?.route).toBeLessThan(50);
+    expect(measured[0]?.totalMs).toBeGreaterThanOrEqual(stages?.context ?? 0);
+
+    dispose();
+  });
+
+  it('si el turno falla, emite igualmente lo que llegó a medir', async () => {
+    const { bus, measured, dispose } = run(
+      makeModules({ llmLocal: makeLLM('llm:roto', { fail: true }) }),
+    );
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(measured).toHaveLength(1);
+    expect(measured[0]?.tier).toBe('local');
+    expect(measured[0]?.stages.llm).toBeDefined();
+    expect(measured[0]?.stages.tts).toBeDefined();
+    // No llegó a guardar ninguna respuesta.
+    expect(measured[0]?.stages.persist).toBeUndefined();
+
+    dispose();
+  });
+});
