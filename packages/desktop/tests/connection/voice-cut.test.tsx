@@ -116,7 +116,7 @@ function setup(): {
         latencyMs: 5,
       } as EventMap['llm:responded']);
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',

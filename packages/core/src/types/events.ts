@@ -220,7 +220,10 @@ export interface EventMap {
    * conectado decide si lo reproduce (toggle de mute por cliente). Ver
    * ADR 0020, decisión 3.
    *
-   * `url` apunta al endpoint HTTP del core-host. `mimeType` ayuda al
+   * `url` es la **ruta** del audio en el core-host (`/audio/<id>.<ext>`),
+   * sin servidor ni puerto: cada cliente la resuelve contra el origen de su
+   * conexión al bus, que es quien sabe cómo se llega al core-host desde su
+   * máquina (enmienda del 2026-11-19 del ADR 0020). `mimeType` ayuda al
    * cliente a configurar el elemento `<audio>`. `duration` no viene del
    * server — el cliente la mide post-fetch.
    */

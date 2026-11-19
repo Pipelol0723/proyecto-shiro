@@ -6,7 +6,7 @@
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import {
   EventBus,
@@ -76,7 +76,94 @@ function makeFakeAudio(): FakeAudio {
   return fake;
 }
 
-const AUDIO_A = { url: 'http://x/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
+const AUDIO_A = { url: '/audio/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
+
+describe('useTtsPlayback — de qué servidor sale el audio (P-14)', () => {
+  async function play(
+    url: string,
+    hostUrl?: string,
+  ): Promise<{ audio: FakeAudio; ended: EventMap['tts:audio-ended'][] }> {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (payload) => {
+      ended.push(payload);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+          ...(hostUrl !== undefined && { hostUrl }),
+        }),
+      { wrapper: wrap(bus) },
+    );
+    await act(async () => {
+      await bus.emit('tts:audio', { url, audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' });
+    });
+    return { audio, ended };
+  }
+
+  it('con el bus en otra máquina, pide el audio a esa máquina', async () => {
+    const { audio } = await play('/audio/a.mp3', 'ws://shiro-host.test:9000/bus');
+    expect(audio.src).toBe('http://shiro-host.test:9000/audio/a.mp3');
+    expect(audio.paused).toBe(false);
+  });
+
+  it('sin decirle dónde está el bus, lo pide al de siempre', async () => {
+    const { audio } = await play('/audio/a.mp3');
+    expect(audio.src).toBe('http://localhost:9876/audio/a.mp3');
+  });
+
+  it('un audio de otro servidor no se reproduce, y el turno no se queda «hablando»', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { audio, ended } = await play('http://otro.invalid/audio/a.mp3');
+
+    expect(audio.src).toBe('');
+    expect(audio.paused).toBe(true);
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  /** Emite un audio y, acto seguido, su cancelación; devuelve los fines que salieron. */
+  async function playThenCancel(
+    url: string,
+    muted: boolean,
+  ): Promise<{ ended: EventMap['tts:audio-ended'][]; created: number }> {
+    const bus = makeBus();
+    const factory = vi.fn(() => makeFakeAudio() as unknown as HTMLAudioElement);
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (payload) => {
+      ended.push(payload);
+    });
+    renderHook(() => useTtsPlayback({ bus, audioFactory: factory, muted }), {
+      wrapper: wrap(bus),
+    });
+    await act(async () => {
+      await bus.emit('tts:audio', { url, audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' });
+      await bus.emit('tts:cancel', { audioId: 'a', userId: 'me' });
+    });
+    return { ended, created: factory.mock.calls.length };
+  }
+
+  it('un audio descartado no crea reproductor, y cancelarlo después no repite el fin', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { ended, created } = await playThenCancel('http://otro.invalid/audio/a.mp3', false);
+
+    expect(created).toBe(0);
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+    warn.mockRestore();
+  });
+
+  it('silenciado, cancelar un audio que no llegó a sonar tampoco repite el fin', async () => {
+    const { ended, created } = await playThenCancel('/audio/a.mp3', true);
+
+    expect(created).toBe(0);
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+  });
+});
 
 describe('useTtsPlayback', () => {
   it('reproduce el audio recibido vía tts:audio', async () => {
@@ -96,7 +183,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://localhost:9876/audio/abc.mp3',
+        url: '/audio/abc.mp3',
         audioId: 'abc',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -128,7 +215,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -166,7 +253,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -200,7 +287,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -235,7 +322,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -268,7 +355,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -319,7 +406,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',
@@ -355,7 +442,7 @@ describe('useTtsPlayback', () => {
 
     await act(async () => {
       await bus.emit('tts:audio', {
-        url: 'http://x/a.mp3',
+        url: '/audio/a.mp3',
         audioId: 'a',
         mimeType: 'audio/mpeg',
         userId: 'me',

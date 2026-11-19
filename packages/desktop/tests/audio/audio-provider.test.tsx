@@ -89,7 +89,7 @@ function Harness({ bus }: { bus: IEventBus<EventMap> }): JSX.Element {
   );
 }
 
-const AUDIO = { url: 'http://x/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
+const AUDIO = { url: '/audio/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
 
 describe('AudioProvider', () => {
   beforeEach(() => {
@@ -174,6 +174,25 @@ describe('AudioProvider', () => {
       await bus.emit('tts:audio', AUDIO);
     });
     expect(screen.getByTestId('avatar').getAttribute('data-has-audio')).toBe('yes');
+  });
+
+  it('pide el audio al servidor del bus que se le indica', async () => {
+    const bus = makeBus();
+    render(
+      <BusProvider bus={bus}>
+        <CompanionProvider>
+          <AudioProvider hostUrl="ws://shiro-host.test:9000/bus">
+            <p>app</p>
+          </AudioProvider>
+        </CompanionProvider>
+      </BusProvider>,
+    );
+
+    await act(async () => {
+      await bus.emit('tts:audio', AUDIO);
+    });
+
+    expect(FakeAudio.instances[0]?.src).toBe('http://shiro-host.test:9000/audio/a.mp3');
   });
 
   it('useAudio fuera de AudioProvider lanza un error claro', () => {

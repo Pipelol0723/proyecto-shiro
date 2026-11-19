@@ -30,13 +30,19 @@ export const AudioContext = createContext<AudioContextValue | null>(null);
 
 export interface AudioProviderProps {
   children: ReactNode;
+  /** URL del bus del core-host: el audio se pide a ese mismo servidor. */
+  hostUrl?: string;
   /** Solo para tests — sustituye `new Audio()` por algo mockeable. */
   audioFactory?: () => HTMLAudioElement;
 }
 
-export function AudioProvider({ children, audioFactory }: AudioProviderProps): JSX.Element {
+export function AudioProvider({
+  children,
+  hostUrl,
+  audioFactory,
+}: AudioProviderProps): JSX.Element {
   const bus = useBus();
-  const playback = useTtsPlayback({ bus, audioFactory });
+  const playback = useTtsPlayback({ bus, audioFactory, ...(hostUrl !== undefined && { hostUrl }) });
   const { muted, setMuted, cancel, cutLocal, audioElement } = playback;
 
   // Misma transición que dispara `CONNECTION_LOST` en `CompanionProvider`. El
