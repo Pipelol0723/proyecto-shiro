@@ -89,7 +89,7 @@ function Harness({ bus }: { bus: IEventBus<EventMap> }): JSX.Element {
   );
 }
 
-const AUDIO = { url: 'http://x/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
+const AUDIO = { url: '/audio/a.mp3', audioId: 'a', mimeType: 'audio/mpeg', userId: 'me' };
 
 describe('AudioProvider', () => {
   beforeEach(() => {
