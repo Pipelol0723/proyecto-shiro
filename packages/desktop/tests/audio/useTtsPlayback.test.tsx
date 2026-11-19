@@ -38,7 +38,7 @@ interface FakeAudio {
   play: () => Promise<void>;
   pause: () => void;
   addEventListener: (event: string, listener: () => void) => void;
-  trigger(event: 'ended' | 'error'): void;
+  trigger(event: 'ended' | 'error' | 'playing'): void;
 }
 
 function makeFakeAudio(): FakeAudio {
@@ -587,5 +587,65 @@ describe('useTtsPlayback', () => {
     await waitFor(() => {
       expect(ended).toHaveLength(1);
     });
+  });
+});
+
+// P-16: la latencia que importa es hasta que se oye la voz. Solo el cliente
+// sabe cuándo empieza a sonar, así que lo dice.
+describe('useTtsPlayback — primer audio (P-16)', () => {
+  it('cuando la voz empieza a sonar avisa con tts:audio-started, una sola vez', async () => {
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const started: EventMap['tts:audio-started'][] = [];
+    bus.on('tts:audio-started', (payload) => {
+      started.push(payload);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+    await act(async () => {
+      await bus.emit('tts:audio', {
+        url: '/audio/a.mp3',
+        audioId: 'a',
+        mimeType: 'audio/mpeg',
+        userId: 'me',
+      });
+    });
+    expect(started).toEqual([]);
+
+    await act(async () => {
+      audio.trigger('playing');
+      // Tras una pausa por falta de datos, `playing` se repite: no cuenta otra vez.
+      audio.trigger('playing');
+      await Promise.resolve();
+    });
+
+    expect(started).toEqual([{ audioId: 'a', userId: 'me' }]);
+  });
+
+  it('silenciado no hay voz que empiece: no avisa', async () => {
+    const bus = makeBus();
+    const started: EventMap['tts:audio-started'][] = [];
+    bus.on('tts:audio-started', (payload) => {
+      started.push(payload);
+    });
+    renderHook(() => useTtsPlayback({ bus, muted: true }), { wrapper: wrap(bus) });
+
+    await act(async () => {
+      await bus.emit('tts:audio', {
+        url: '/audio/a.mp3',
+        audioId: 'a',
+        mimeType: 'audio/mpeg',
+        userId: 'me',
+      });
+    });
+
+    expect(started).toEqual([]);
   });
 });

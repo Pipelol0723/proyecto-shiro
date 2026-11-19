@@ -26,6 +26,7 @@ import type {
   MemoryEntry,
 } from '@proyecto-shiro/core';
 import { wireConversationFlow } from '../../src/pipeline/conversation-flow.js';
+import { AudioCache } from '../../src/audio/audio-cache.js';
 
 function makeLogger(): Logger {
   return new Logger('error', { module: 'flow-test' });
@@ -1056,5 +1057,47 @@ describe('wireConversationFlow — tiempos del turno', () => {
     expect(measured[0]?.stages.persist).toBeUndefined();
 
     dispose();
+  });
+});
+
+describe('wireConversationFlow — primer audio', () => {
+  it('cuando el cliente dice que la voz empezó a sonar, deja en el log cuánto tardó', async () => {
+    const info = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => undefined);
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const cache = new AudioCache();
+    const tts: ITTSModule = {
+      id: 'tts:mock',
+      synthesize: () => Promise.resolve({ audio: Buffer.from([1]), mimeType: 'audio/mpeg' }),
+    };
+    const audios: EventMap['tts:audio'][] = [];
+    bus.on('tts:audio', (payload) => {
+      audios.push(payload);
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({ tts }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+      audioCache: cache,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+    const audioId = audios[0]?.audioId ?? '';
+    const firstAudioLines = (): string[] =>
+      info.mock.calls.map(([message]) => String(message)).filter((m) => m.includes('primer audio'));
+    expect(firstAudioLines()).toEqual([]);
+
+    await bus.emit('tts:audio-started', { audioId, userId: 'me' });
+    // Repetido, o de un audio que no es de ningún turno: no cuenta.
+    await bus.emit('tts:audio-started', { audioId, userId: 'me' });
+    await bus.emit('tts:audio-started', { audioId: 'otro', userId: 'me' });
+
+    expect(firstAudioLines()).toHaveLength(1);
+    expect(firstAudioLines()[0]).toMatch(/primer audio a los \d+ ms/);
+
+    cache.stop();
+    dispose();
+    info.mockRestore();
   });
 });
