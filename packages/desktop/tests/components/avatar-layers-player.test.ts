@@ -52,11 +52,15 @@ class FakeContext {
     const top = this.stack.pop();
     if (top !== undefined) [this.globalAlpha, this.globalCompositeOperation] = top;
   }
-  translate(): void {}
+  translate(): void {
+    // Los casos no miran dónde cae la figura, solo qué se pinta y cómo.
+  }
   scale(x: number, y: number): void {
     this.scales.push([x, y]);
   }
-  clearRect(): void {}
+  clearRect(): void {
+    // El registro de dibujos no se borra: cada caso lee los suyos.
+  }
   drawImage(image: { name: string }, x: number, y: number): void {
     this.log.push({
       image: image.name,
