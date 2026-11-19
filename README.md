@@ -83,7 +83,7 @@ desde el 2026-11-13; las demás fases, pendientes de aprobación.
 
 ## Requisitos
 
-- Node.js 22, la versión de `.node-version`. Es la que usan el CI y el sidecar del binario; con otra, `build:sidecar` se niega a empaquetar
+- Node.js 22 (22.13 o posterior), la versión de `.node-version`. Es la que usan el CI y el sidecar del binario; con otra, `build:sidecar` se niega a empaquetar
 - npm >= 10
 - **Rust 1.90+** (solo para `tauri:dev` y `tauri:build` — el modo dev de Vite no lo requiere). Instala desde [rustup.rs](https://rustup.rs/).
 - En Windows: **Microsoft C++ Build Tools** + **WebView2 Runtime** (preinstalado en Windows 11). Tauri lo verifica al primer `tauri:dev`.
