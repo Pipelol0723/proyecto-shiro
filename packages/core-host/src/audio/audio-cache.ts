@@ -74,8 +74,8 @@ export class AudioCache {
 
   /**
    * Guarda un buffer y devuelve el `audioId` y la URL relativa que el
-   * server expone (`/audio/<id>.<ext>`). El caller construye la URL
-   * absoluta añadiendo el origin (`http://host:port`).
+   * server expone (`/audio/<id>.<ext>`). Esa ruta es la que viaja en
+   * `tts:audio`: cada cliente la resuelve contra su conexión al bus.
    */
   put(buffer: Buffer, mimeType: string, ttlMs?: number): { audioId: string; relativeUrl: string } {
     const audioId = this.generateId();

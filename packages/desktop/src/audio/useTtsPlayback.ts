@@ -149,11 +149,12 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
       // (el server normalmente cancela primero, pero por robustez).
       stopCurrent();
 
-      currentAudioIdRef.current = payload.audioId;
       currentUserIdRef.current = payload.userId;
 
       if (mutedRef.current) {
-        // No reproducimos pero desbloqueamos el estado del reducer.
+        // No reproducimos pero desbloqueamos el estado del reducer. No queda
+        // como audio en curso: su fin ya se emite aquí, y un `tts:cancel`
+        // posterior lo emitiría otra vez.
         void bus.emit('tts:audio-ended', {
           userId: payload.userId,
           audioId: payload.audioId,
@@ -166,7 +167,6 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
         // No es un audio del servidor al que estamos conectados: no se
         // reproduce, y el turno no se queda «hablando».
         console.warn(`[Audio] se descarta un audio que no es de este servidor: ${payload.url}`);
-        currentAudioIdRef.current = null;
         void bus.emit('tts:audio-ended', {
           userId: payload.userId,
           audioId: payload.audioId,
@@ -177,6 +177,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
       const factory = audioFactoryRef.current;
       const audio = factory ? factory() : new Audio();
       audioRef.current = audio;
+      currentAudioIdRef.current = payload.audioId;
       // CORS: el audio se sirve desde el core-host (otro origen/puerto), que
       // devuelve `Access-Control-Allow-Origin` a los orígenes permitidos
       // (ADR 0027, 2a). Sin

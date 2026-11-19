@@ -13,8 +13,12 @@
 /** Dónde escucha el bus del core-host si no se configura `VITE_SHIRO_HOST_URL`. */
 export const DEFAULT_HOST_URL = 'ws://localhost:9876/bus';
 
-/** El core-host solo sirve audio bajo esta ruta. */
-const AUDIO_PATH_PREFIX = '/audio/';
+/**
+ * La forma de la ruta que sirve el core-host: `/audio/<id>.<ext>`, un solo
+ * tramo. La extensión no se limita aquí a una lista: esa la decide el
+ * servidor, que contesta 404 a la que no conoce.
+ */
+const AUDIO_PATH_RE = /^\/audio\/[\w-]+\.[a-z0-9]+$/;
 
 /** Protocolo HTTP que corresponde al de la URL del bus. */
 const HTTP_PROTOCOL: Record<string, string> = {
@@ -56,6 +60,10 @@ export function resolveAudioUrl(url: string, hostUrl: string = DEFAULT_HOST_URL)
   // `origin` solo no basta: el de un `blob:http://…` es el de la URL que lleva dentro.
   if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return null;
   if (resolved.origin !== origin) return null;
-  if (!resolved.pathname.startsWith(AUDIO_PATH_PREFIX)) return null;
+  // Credenciales en la URL: el origen es el mismo, pero no es lo que emite el
+  // core-host, y los navegadores no las tratan igual al pedir el audio.
+  if (resolved.username !== '' || resolved.password !== '') return null;
+  if (resolved.search !== '' || resolved.hash !== '') return null;
+  if (!AUDIO_PATH_RE.test(resolved.pathname)) return null;
   return resolved.href;
 }

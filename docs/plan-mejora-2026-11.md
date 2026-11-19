@@ -576,7 +576,7 @@ Los ADR de la vía de iniciativa (IN-0, ME-0, SE-0 y D-0) no están en esta tabl
 | 0024      | `SHIRO_PACKAGED` desde lib.rs                                                                                     | P-25b, recortable F3                                          |
 | 0024      | Override persistente en `app_local_data_dir`                                                                      | P-34 (vía ADR 0032), F4                                       |
 | 0017      | Historial reciente desde SQLite y decisión de retención del WAL                                                   | P-10, F2 (implementación de la retención en P-11b)            |
-| 0020      | Contrato de la URL de audio (relativa) y CORS                                                                     | P-14, F2                                                      |
+| 0020      | Contrato de la URL de audio (relativa) y CORS                                                                     | P-14, F2 (hecha el 2026-11-19)                                |
 | 0023      | Flujo de push tras la aprobación                                                                                  | P-23, F3                                                      |
 | 0023      | Riesgo residual del eval                                                                                          | P-25a, F3                                                     |
 | 0022      | Semántica del allowlist de shell por argumento (nota)                                                             | P-26a, F3                                                     |
