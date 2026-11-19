@@ -17,7 +17,10 @@
  * - Un `HTMLAudioElement` solo puede conectarse a UN
  *   `MediaElementAudioSourceNode` en toda su vida. Cacheamos el analyser
  *   por elemento (`WeakMap`) para sobrevivir el doble montaje de
- *   React StrictMode en dev sin lanzar "already connected".
+ *   React StrictMode en dev sin lanzar "already connected". La caché es
+ *   del módulo, no de cada uso del hook: si un motor del avatar falla ya
+ *   montado y otro toma el relevo (ADR 0028 §3), el segundo hereda el
+ *   analyser del primero en vez de quedarse con la boca cerrada.
  * - El source enruta el audio por el grafo, así que conectamos
  *   `source → analyser → destination` para que el sonido siga oyéndose.
  * - El `AudioContext` puede arrancar suspendido; lo reanudamos (ya hubo
@@ -75,26 +78,41 @@ export function computeMouthOpen(freqData: Uint8Array, gain = DEFAULT_GAIN): num
   return scaled;
 }
 
+/** El analyser de un `<audio>` y el contexto en el que vive. */
+interface AttachedAnalyser {
+  analyser: AnalyserNode;
+  context: AudioContext;
+}
+
 /**
- * Obtiene (o crea y cachea) el `AnalyserNode` enganchado al elemento.
- * Devuelve `null` si `createMediaElementSource` lanza (p.ej. el elemento
- * ya estaba conectado a otro source fuera de nuestro control).
+ * Analyser ya enganchado a cada `<audio>`, compartido por todos los usos del
+ * hook: el elemento solo se deja conectar una vez, así que quien llega
+ * después reutiliza lo que ya hay.
+ */
+const attachedAnalysers = new WeakMap<HTMLAudioElement, AttachedAnalyser>();
+
+/**
+ * Obtiene (o crea y cachea) el `AnalyserNode` enganchado al elemento. El
+ * contexto solo se pide si hace falta crear uno. Devuelve `null` si
+ * `createMediaElementSource` lanza (p.ej. el elemento ya estaba conectado a
+ * otro source fuera de nuestro control).
  */
 function attachAnalyser(
-  ctx: AudioContext,
+  getContext: () => AudioContext,
   el: HTMLAudioElement,
-  cache: WeakMap<HTMLAudioElement, AnalyserNode>,
-): AnalyserNode | null {
-  const cached = cache.get(el);
+): AttachedAnalyser | null {
+  const cached = attachedAnalysers.get(el);
   if (cached !== undefined) return cached;
   try {
-    const source = ctx.createMediaElementSource(el);
-    const analyser = ctx.createAnalyser();
+    const context = getContext();
+    const source = context.createMediaElementSource(el);
+    const analyser = context.createAnalyser();
     analyser.fftSize = FFT_SIZE;
     source.connect(analyser);
-    analyser.connect(ctx.destination);
-    cache.set(el, analyser);
-    return analyser;
+    analyser.connect(context.destination);
+    const attached = { analyser, context };
+    attachedAnalysers.set(el, attached);
+    return attached;
   } catch {
     return null;
   }
@@ -113,8 +131,6 @@ export function useLipSync(options: UseLipSyncOptions): void {
   // Una sola AudioContext por instancia del hook; NO se cierra en el
   // cleanup para no invalidar el source cacheado del elemento.
   const ctxRef = useRef<AudioContext | null>(null);
-  // Analyser cacheado por elemento (clave del fix StrictMode).
-  const cacheRef = useRef<WeakMap<HTMLAudioElement, AnalyserNode>>(new WeakMap());
   // Valor actual de boca, para suavizar entre frames.
   const mouthRef = useRef(0);
 
@@ -125,14 +141,15 @@ export function useLipSync(options: UseLipSyncOptions): void {
       return;
     }
 
-    const ctx = (ctxRef.current ??= audioContextFactory
-      ? audioContextFactory()
-      : new AudioContext());
+    const attached = attachAnalyser(
+      () => (ctxRef.current ??= audioContextFactory ? audioContextFactory() : new AudioContext()),
+      audioElement,
+    );
+    if (attached === null) return;
+    const { analyser } = attached;
 
-    const analyser = attachAnalyser(ctx, audioElement, cacheRef.current);
-    if (analyser === null) return;
-
-    void ctx.resume();
+    // El contexto es el del analyser, que puede ser de otro uso del hook.
+    void attached.context.resume();
 
     const data = new Uint8Array(analyser.frequencyBinCount);
     let raf = 0;

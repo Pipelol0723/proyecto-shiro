@@ -251,3 +251,43 @@ Criterio acordado con quien implementa el motor en el cliente:
   ligera con cara de dormida. Cuando llegue ese paso hará falta una expresión
   `asleep` en el manifiesto de la chibi (ojos cerrados, brillo bajo). No está
   hecha.
+
+## Nota 2026-11-18 — el esquema de la app
+
+El esquema que valida los manifiestos en el cliente está en
+`packages/desktop/src/components/Avatar/engines/layers/manifest.ts`, con la
+cabecera común en `engines/manifest-header.ts`. Acepta los dos manifiestos de
+`test-model/` y rechaza los 54 inválidos de `behavior-cases.json`. Es algo más
+estricto que este documento; **donde difieran, manda el esquema**:
+
+- **Rutas** (`layers` y `face.pieces`). Además de lo dicho arriba, no admiten
+  espacios, tabuladores, saltos de línea ni otros caracteres de control; ni
+  `|`, `%`, `?`, `#` o la barra invertida; ni el segmento `.`, ni segmentos
+  vacíos (doble barra o barra final). Como mucho, 200 caracteres. El
+  analizador de URL quita o reinterpreta varios de esos caracteres, y con
+  ellos una ruta podía salir de la carpeta del modelo.
+- **Nombres** de piezas, estados de ojos, expresiones y emociones: como mucho
+  64 caracteres, y nunca `__proto__`, `constructor` ni `prototype`.
+- **Claves desconocidas**: se rechazan también dentro de `face.eyes.<estado>`,
+  `face.blink`, `face.gaze`, el `glow` de cada expresión, `cost` y
+  `capabilities`. En `layers` se siguen ignorando.
+- **Topes**: lado máximo de 8192 px (`size` y `face.rect`); `interval_s` entre
+  0,1 y 600 s; `duration_ms` entre 10 y 5000 ms; como mucho 256 piezas y 64
+  entradas en `eyes`, `expressions`, `emotions`, `mouth_open` y
+  `mouth_thresholds`.
+- **Cabecera** `form`, `cost` y `capabilities`: se acepta, opcional, en la
+  raíz. Hoy nada la lee.
+
+Al cargar un modelo, el cliente añade tres comprobaciones que el esquema no
+puede hacer:
+
+- Cada capa debe medir `size` y cada pieza de la cara, el ancho y el alto de
+  `face.rect`. Si una imagen no cuadra o falta, el modelo entero no se muestra.
+- El manifiesto no puede pasar de 256 KB, ni las imágenes que declara de
+  512 MB una vez descodificadas.
+- Lo que llega tras una redirección se rechaza.
+
+Y el reproductor del cliente añade dos cosas al del prototipo: con «reducir
+movimiento» no hay respiración y el brillo con pulso se queda en su nivel
+fijo (el destello al cambiar de expresión se mantiene), y `dispose()` suelta
+las imágenes y el lienzo de los ojos.

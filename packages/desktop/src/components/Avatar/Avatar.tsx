@@ -1,178 +1,181 @@
 /**
- * Avatar — wrapper que decide entre Live2D y Orbe (fallback).
+ * Avatar — elige qué motor dibuja a Shiro y cae al Orbe si ninguno puede.
  *
- * Lógica de decisión (ADR 0021 §3):
+ * Selector por candidatos (ADR 0028 §3): recibe una lista ordenada de modelos
+ * y monta el primero que esté disponible. Cada motor aporta su comprobación
+ * (`probe`), con un tiempo límite, y su componente se importa solo si se va a
+ * usar. El Orbe (ADR 0009) es siempre el último recurso y nunca falla.
  *
- *   ¿`<modelPath>` responde a HEAD con 200?
- *   ¿Cubism Core JS cargado en `window`?
- *      sí → import('./Live2DCanvas') dinámico, monta
- *      no/error → <Orb>
+ * La lista por defecto es Live2D y, después, la chibi por capas (el orden del
+ * ADR 0028 §3). Live2D conserva su comprobación de siempre (ADR 0021 §3): el
+ * modelo responde a un HEAD y el Cubism Core está cargado. La chibi comprueba
+ * que su manifiesto existe y es válido. Con la chibi instalada y sin el modelo
+ * Live2D, sale la chibi.
  *
- * El fallback es **automático** y silencioso: si la detección falla, el
- * Orbe (ADR 0009) se renderiza como antes, con las mismas props. El
- * companion sigue 100% funcional aunque el dev no haya descargado el SDK
- * + modelo todavía.
+ * **Mientras se comprueba, Orbe.** Si un candidato resulta disponible se
+ * cambia al motor; si no, no pasa nada. Entre que el motor se monta y pinta
+ * su primer fotograma (lo que tarde en cargar el modelo) no se ve ni el Orbe
+ * ni el avatar: ese hueco lo cierra AV-3 con la señal de «listo» del motor
+ * (ADR 0035 §5).
  *
- * **Por qué dynamic import del Live2DCanvas**: `pixi-live2d-display`
- * tira un error a top-level del módulo cuando `window.Live2DCubismCore`
- * no está definido al *importar* (no al instanciar). Si el import fuese
- * estático, el bundle del Avatar entero rompe en clientes sin el SDK,
- * tumbando el fallback al Orbe. Importando el canvas DESPUÉS de
- * verificar Cubism Core, garantizamos que pixi-live2d-display solo
- * se evalúa cuando es seguro.
- *
- * **Estado inicial = Orbe**. Mientras la detección está en curso
- * (`pending`), mostramos el Orbe — así no hay flash visual. Si la
- * detección resuelve en disponible, swappeamos al Live2D; si resuelve
- * en no-disponible, no hacemos nada (seguimos con Orbe).
- *
- * **`onLoadError` del canvas**: si el `Live2DCanvas` falla al cargar el
- * modelo DESPUÉS de pasar la detección (texturas 404, formato corrupto),
- * lo desmontamos y volvemos al Orbe — el efecto es el mismo que un
- * fallback inicial.
+ * **Si el motor falla después de montado** (avisa por `onLoadError`, o lanza
+ * al pintar y lo recoge el `ErrorBoundary`), se desmonta y se sigue por el
+ * siguiente candidato; al final, el Orbe. Un motor que lanza en pleno render
+ * no puede llevarse la app entera a blanco.
  */
 
-import { useCallback, useEffect, useState, type ComponentType } from 'react';
-import type { Emotion } from '@proyecto-shiro/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Orb } from '../Orb';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { ensureCubismCore } from './cubism-core';
-import { isModelReachable } from './model-loader';
-import { AVATAR_CONFIG, type AvatarRuntimeConfig } from './config';
+import { AVATAR_CONFIG, CHIBI_MANIFEST_URL, type AvatarRuntimeConfig } from './config';
+import { layersCandidate, layersEngine } from './engines/layers/engine';
+import { live2dCandidate, live2dEngine } from './engines/live2d';
+import { selectEngine, type AvatarSelection } from './engines/select';
+import type { AvatarCandidate, AvatarEngineDefinition } from './engines/types';
 import type { AvatarProps } from './types';
 import styles from './Avatar.module.css';
 
-type Live2DStatus = 'pending' | 'available' | 'unavailable';
-
-interface Live2DCanvasComponentProps {
-  size: number;
-  config: AvatarRuntimeConfig;
-  audioElement?: HTMLAudioElement | null;
-  emotion?: Emotion;
-  onLoadError?: (err: unknown) => void;
-}
-
-type Live2DCanvasComponent = ComponentType<Live2DCanvasComponentProps>;
+/** Motores que conoce el cliente. Añadir uno es añadirlo aquí. */
+const DEFAULT_ENGINES: readonly AvatarEngineDefinition[] = [live2dEngine, layersEngine];
 
 export interface AvatarComponentProps extends AvatarProps {
   /**
-   * Override de la config (modelPath, maxFps, etc.). Default
-   * `AVATAR_CONFIG` (hardcoded en `config.ts`). Útil para tests y para
-   * cuando llegue una fuente de config dinámica server-side.
+   * Configuración del candidato Live2D por defecto (modelPath, maxFps, etc.).
+   * Default `AVATAR_CONFIG`. Se ignora si se pasa `candidates`.
    */
   config?: AvatarRuntimeConfig;
+  /**
+   * Modelos a probar, en orden. Por defecto, el Live2D de `config` y la chibi
+   * por capas. Se compara por contenido: pasar una lista nueva con lo mismo no
+   * reinicia nada.
+   */
+  candidates?: readonly AvatarCandidate[];
+  /** Motores disponibles. Debe ser una lista estable; por defecto, los del cliente. */
+  engines?: readonly AvatarEngineDefinition[];
 }
 
 export function Avatar(props: AvatarComponentProps): JSX.Element {
+  const { config = AVATAR_CONFIG, candidates: given } = props;
+  const candidates = useMemo(
+    () => given ?? [live2dCandidate(config), layersCandidate(CHIBI_MANIFEST_URL)],
+    [given, config],
+  );
+  // Una lista distinta es otro avatar: se empieza de cero. La clave es el
+  // contenido, no la identidad, para que una lista escrita en línea no
+  // reinicie la selección en cada render.
+  //
+  // Provisional: desmontar y volver al Orbe es lo contrario de lo que pide el
+  // cambio en caliente (ADR 0035 §5: el modelo viejo sigue pintando mientras
+  // carga el nuevo). Esta `key` desaparece con AV-3.
+  return <AvatarStage key={candidatesKey(candidates)} {...props} candidates={candidates} />;
+}
+
+/** Los candidatos son datos planos; si alguno no se puede serializar, vale la lista entera. */
+function candidatesKey(candidates: readonly AvatarCandidate[]): string {
+  try {
+    return JSON.stringify(candidates);
+  } catch {
+    return `sin-clave-${String(candidates.length)}`;
+  }
+}
+
+interface SelectionState {
+  selection: AvatarSelection | null;
+  /** Primer candidato por comprobar: avanza cuando el motor montado falla. */
+  from: number;
+}
+
+function AvatarStage(
+  props: AvatarComponentProps & { candidates: readonly AvatarCandidate[] },
+): JSX.Element {
   const {
     emotion = 'neutral',
     speaking = false,
     listening = false,
     thinking = false,
     size = 280,
-    config = AVATAR_CONFIG,
     audioElement = null,
+    candidates,
+    engines = DEFAULT_ENGINES,
   } = props;
 
-  const [status, setStatus] = useState<Live2DStatus>('pending');
-  const [Live2DCanvas, setLive2DCanvas] = useState<Live2DCanvasComponent | null>(null);
+  const [{ selection, from }, setState] = useState<SelectionState>({ selection: null, from: 0 });
+  // El contenido de `candidates` no cambia mientras vive este componente (su
+  // `key` es ese contenido); el ref evita depender de su identidad.
+  const candidatesRef = useRef(candidates);
+  candidatesRef.current = candidates;
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      // 1. Verifica que el modelo es alcanzable (HEAD). Cheap, sin
-      //    descargar texturas. Si el dev no ha bajado los assets, este
-      //    paso falla rápido y caemos al Orbe sin tocar PIXI.
-      const reachable = await isModelReachable(config.modelPath);
-      if (cancelled) return;
-      if (!reachable) {
-        setStatus('unavailable');
-        return;
-      }
-      // 2. Asegura el Cubism Core en `window`. Inyecta el <script> una
-      //    sola vez (cache interno).
-      const coreLoaded = await ensureCubismCore(config.cubismCoreUrl);
-      if (cancelled) return;
-      if (!coreLoaded) {
-        setStatus('unavailable');
-        return;
-      }
-      // 3. Solo AHORA importamos el canvas (que a su vez evalúa
-      //    pixi-live2d-display). Si el import falla por cualquier
-      //    motivo (bug de la lib, conflicto de versiones), capturamos
-      //    y caemos al Orbe.
-      try {
-        const mod = (await import('./Live2DCanvas')) as {
-          Live2DCanvas: Live2DCanvasComponent;
-        };
-        if (cancelled) return;
-        setLive2DCanvas(() => mod.Live2DCanvas);
-        setStatus('available');
-      } catch {
-        if (cancelled) return;
-        setStatus('unavailable');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [config.modelPath, config.cubismCoreUrl]);
-
-  // Tras un load-error a posteriori del canvas, lo tratamos como
-  // unavailable y caemos al Orbe.
-  const handleCanvasLoadError = useCallback((): void => {
-    setStatus('unavailable');
-  }, []);
-
-  if (status === 'available' && Live2DCanvas !== null) {
-    // `onLoadError` cubre fallos asíncronos (texturas 404 tras montar). Pero
-    // pixi-live2d-display también puede **lanzar en pleno render** (crash del
-    // renderer en la WebView empaquetada) — eso no lo atrapa ningún try/catch
-    // ni el onLoadError, y sin un boundary se llevaba TODA la app a blanco.
-    // El ErrorBoundary captura ese throw y cae al Orbe, igual que el resto de
-    // fallbacks (ADR 0021 §3: el fallback al Orbe debe ser a prueba de balas).
-    const orbFallback = (
-      <Orb
-        emotion={emotion}
-        speaking={speaking}
-        listening={listening}
-        thinking={thinking}
-        size={size}
-      />
+    const controller = new AbortController();
+    void selectEngine(candidatesRef.current, engines, { signal: controller.signal, from }).then(
+      (result) => {
+        if (controller.signal.aborted) return;
+        setState((current) => ({ ...current, selection: result }));
+      },
     );
+    return () => {
+      // Cancela la comprobación en curso: ni monta nada ni deja peticiones colgando.
+      controller.abort();
+    };
+  }, [engines, from]);
+
+  // El motor montado falló: fuera, y a seguir por el siguiente candidato.
+  //
+  // El aviso va ligado al candidato que lo recibe: si un motor ya desmontado
+  // avisa tarde, no tumba al que está montado ahora. Y es la misma función
+  // mientras dure la selección: Live2DCanvas la tiene entre las dependencias
+  // de su efecto, y una nueva en cada render reconstruiría el lienzo.
+  const mountedIndex = selection?.index;
+  const handleEngineFailure = useMemo(
+    () => (): void => {
+      if (mountedIndex === undefined) return;
+      setState((current) =>
+        current.selection?.index === mountedIndex
+          ? { selection: null, from: mountedIndex + 1 }
+          : current,
+      );
+    },
+    [mountedIndex],
+  );
+
+  const orb = (
+    <Orb
+      emotion={emotion}
+      speaking={speaking}
+      listening={listening}
+      thinking={thinking}
+      size={size}
+    />
+  );
+
+  if (selection !== null) {
+    const { candidate, Component, index } = selection;
     return (
-      <div className={styles.avatarWrap} data-emotion={emotion} data-render="live2d">
+      <div className={styles.avatarWrap} data-emotion={emotion} data-render={candidate.kind}>
         <ErrorBoundary
-          fallback={orbFallback}
+          key={index}
+          fallback={orb}
           onError={(err) => {
-            console.warn('[Avatar] Live2D crasheó al renderizar — cayendo al Orbe', err);
-            handleCanvasLoadError();
+            console.warn(`[Avatar] el motor «${candidate.kind}» falló al pintar`, err);
+            handleEngineFailure();
           }}
         >
-          <Live2DCanvas
+          <Component
+            candidate={candidate}
             size={size}
-            config={config}
-            audioElement={audioElement}
             emotion={emotion}
-            onLoadError={handleCanvasLoadError}
+            audioElement={audioElement}
+            onLoadError={handleEngineFailure}
           />
         </ErrorBoundary>
       </div>
     );
   }
 
-  // `pending` y `unavailable` ambos renderizan Orbe — el cambio entre
-  // pending → available swappea sin flash porque el Orbe ya está montado
-  // y el canvas aparece al lado en su lugar.
+  // Comprobando, o sin ningún candidato disponible: Orbe.
   return (
     <div className={styles.avatarWrap} data-emotion={emotion} data-render="orb">
-      <Orb
-        emotion={emotion}
-        speaking={speaking}
-        listening={listening}
-        thinking={thinking}
-        size={size}
-      />
+      {orb}
     </div>
   );
 }

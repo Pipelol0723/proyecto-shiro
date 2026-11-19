@@ -24,6 +24,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { Avatar } from '../../src/components/Avatar/Avatar';
+import { CHIBI_MANIFEST_URL } from '../../src/components/Avatar/config';
 import { __resetCubismCoreCache } from '../../src/components/Avatar/cubism-core';
 
 // Mock del canvas: render un placeholder simple, expone el onLoadError
@@ -61,7 +62,16 @@ beforeEach(() => {
   canvasShouldThrow = false;
   ensureCubismCoreMock.mockReset();
   fetchMock.mockReset();
-  vi.stubGlobal('fetch', fetchMock);
+  // La chibi por capas, el segundo candidato de la lista por defecto, no está
+  // instalada en estos tests: su manifiesto responde 404. Así «cae al Orbe»
+  // quiere decir de verdad que no quedaba otro modelo, y no que el doble de
+  // `fetch` de Live2D le sirvió algo que no supo leer.
+  vi.stubGlobal('fetch', (input: string | URL, init?: RequestInit): unknown => {
+    if (input.toString() === CHIBI_MANIFEST_URL) {
+      return Promise.resolve({ ok: false, status: 404, redirected: false });
+    }
+    return fetchMock(input, init) as unknown;
+  });
 });
 
 afterEach(() => {

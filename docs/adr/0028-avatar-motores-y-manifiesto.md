@@ -1,6 +1,6 @@
 # ADR 0028: Avatar — motores intercambiables, manifiesto por modelo y motor de capas
 
-- **Status**: Accepted (sin implementar; integración en el cliente aprobada el 2026-11-14)
+- **Status**: Accepted (implementado en el paso AV-2 del plan)
 - **Fecha**: 2026-11-12
 - **Decidido por**: Pipelol
 
@@ -197,3 +197,64 @@ Las capas de la chibi salen del borrador original del personaje y van en
   Sigue sin implementar.
 - El cambio de modelo con la app en marcha, que este ADR deja fuera, se
   propone en el ADR 0035 (pendiente de aceptar).
+
+## Nota 2026-11-18 — AV-2 en curso: contrato y selector
+
+- **Hecho** (paso AV-2 del plan): el selector por candidatos con tiempo límite
+  y el contrato de los motores. Live2D pasa a ser un candidato más y se ve
+  igual, con una salvedad: su comprobación tiene ahora los 4 s de límite del
+  §3, que antes no tenía. Si el modelo o el Cubism Core tardan más, sale el
+  orbe. El esquema del manifiesto va en su propio PR; falta el motor de capas.
+- **Dónde quedó cada cosa.** El contrato está en `engines/types.ts` y el
+  selector en `engines/select.ts`. El esquema va en
+  `engines/manifest-header.ts` (cabecera común) y `engines/layers/manifest.ts`,
+  no dentro de `types.ts` como preveían las notas de implementación. Los
+  archivos de Live2D siguen donde estaban: moverlos a `engines/live2d/` queda
+  para un cambio aparte, sin mezclarlo con este.
+- **`setLookAt` se amplía**: acepta `null` (devuelve la mirada a la expresión)
+  y la `y` es opcional. Lo usa el prototipo y lo necesita el traspaso de
+  estado del ADR 0035.
+- **Hiyori sigue sin manifiesto.** Su candidato lleva la configuración de
+  siempre: es `{ kind, config }` y no `{ kind, manifestUrl }` como dice el §3. El §2 preveía darle uno; se hará cuando haya un modelo Live2D de
+  Shiro: el de prueba lo descarga cada uno, y exigirle un archivo más rompería
+  las instalaciones que ya funcionan.
+- **Si el motor montado falla**, el selector pasa al siguiente candidato; el
+  orbe solo sale cuando no queda ninguno. Antes, con un solo motor, caía
+  directamente al orbe.
+
+## Nota 2026-11-18 — AV-2 completo: el motor de capas en la app
+
+- **Hecho**: el motor de capas del §4 y su alta en el selector. La lista por
+  defecto es Live2D y después la chibi (§3). Con la chibi instalada y sin el
+  modelo Live2D, sale la chibi; con los dos, sale Live2D. Elegir entre ellos
+  con la app en marcha es el paso AV-3 ([ADR 0035](0035-avatar-eleccion-de-modelo-en-caliente.md)).
+- **Dónde quedó cada cosa**, en `engines/layers/`: `manifest.ts` (esquema),
+  `loader.ts` (baja el manifiesto y las imágenes), `player.ts` (el
+  reproductor, port del prototipo), `LayersCanvas.tsx` (el lienzo y su bucle
+  de animación) y `engine.tsx` (el candidato y su comprobación).
+- **Dónde se busca la chibi**: en
+  `public/avatar/models/shiro-chibi/avatar.manifest.json` (§5: la carpeta no
+  se versiona). La URL es una constante del cliente, como la de Hiyori; pasará
+  a venir de una lista de modelos cuando se pueda elegir (AV-3).
+- **Lo que se aparta de las notas de implementación**:
+  - No hay `useBlink.ts`. El parpadeo va dentro del reproductor, que no tiene
+    reloj propio: avanza con el bucle del lienzo.
+  - La emoción se traduce a expresión con el mapa `emotions` del manifiesto.
+    `useAvatarExpression` sigue siendo solo de Live2D.
+  - La mirada la mueve la expresión (`gaze`). El verbo `setLookAt` está en el
+    reproductor, pero nada de la app lo llama todavía.
+- **Lo que el motor concreta del §4**:
+  - Un modelo es todo o nada: una imagen que falta, o que no mide lo que dice
+    el manifiesto, lo invalida entero y el selector pasa al siguiente.
+  - Ninguna petición sale de la carpeta del manifiesto.
+  - Las imágenes se traen con `fetch` y `createImageBitmap`: la carga se puede
+    cancelar y la memoria se suelta al desmontar.
+  - Pinta como mucho 30 veces por segundo, igual que Live2D (ADR 0021 §4).
+  - Con «reducir movimiento» no respira ni pulsa el brillo.
+- **Sigue pendiente**: el manifiesto de Hiyori (§2), mover los archivos de
+  Live2D a `engines/live2d/`, y conectar los verbos y el ciclo de vida con el
+  selector para el cambio en caliente (AV-3).
+- **Un hueco conocido**: el orbe se retira cuando el motor se monta, no cuando
+  pinta. Mientras cargan las imágenes de la chibi (unas décimas de segundo) no
+  se ve nada. A Live2D le pasa lo mismo desde antes, y durante más tiempo. Lo
+  cierra la señal de «listo» del motor que pide el ADR 0035 §5.

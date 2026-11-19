@@ -39,3 +39,10 @@ export const AVATAR_CONFIG: AvatarRuntimeConfig = {
   // si quieres las motions de cuerpo de vuelta. Ver ADR 0021 §5.
   idleAnimation: false,
 };
+
+/**
+ * Manifiesto de la chibi por capas (ADR 0028 §4 y §5). La carpeta del modelo
+ * no se versiona: quien quiera verla copia ahí sus archivos (ver el README).
+ * Si no está, el selector sigue con el siguiente candidato y, al final, el Orbe.
+ */
+export const CHIBI_MANIFEST_URL = '/avatar/models/shiro-chibi/avatar.manifest.json';

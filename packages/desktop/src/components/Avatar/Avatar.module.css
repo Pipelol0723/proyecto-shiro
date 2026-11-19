@@ -19,3 +19,24 @@
   /* Evita scrollbars accidentales si el canvas ligero excede el wrap. */
   overflow: hidden;
 }
+
+/* Lienzo del motor de capas. Es invisible hasta pintar el primer fotograma y
+   entonces aparece con un fundido corto. Mientras cargan las imágenes no se
+   ve nada: el orbe ya se ha retirado. Lo arregla la señal de «listo» de AV-3
+   (ADR 0035 §5), con la que el selector mantiene lo anterior hasta entonces. */
+.layersCanvas {
+  display: block;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.layersCanvas[data-ready='true'] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layersCanvas {
+    transition: none;
+  }
+}

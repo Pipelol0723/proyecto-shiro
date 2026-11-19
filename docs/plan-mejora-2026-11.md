@@ -337,7 +337,7 @@ Fuera de las fases. Decidida por el dueño el 2026-11-14; se intercala con la Fa
 | ID                    | Paso                                                                                                                                          | Depende de                                             |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | ~~AV-1~~ (2026-11-18) | [ADR 0035](adr/0035-avatar-eleccion-de-modelo-en-caliente.md), aceptado: quién decide el modelo, con qué señales y cómo se cambia en caliente | —                                                      |
-| AV-2                  | Chibi en la app: contrato, manifiesto, selector y motor de capas, con la mirada móvil (ADR 0028)                                              | —                                                      |
+| ~~AV-2~~ (2026-11-18) | Chibi en la app: contrato, manifiesto, selector y motor de capas, con la mirada móvil (ADR 0028)                                              | —                                                      |
 | AV-3                  | Cambio manual de modelo desde la app                                                                                                          | AV-1 y AV-2                                            |
 | AV-4                  | Reglas automáticas: «dormida» pasa a chibi; con pocos recursos, a un modelo más ligero                                                        | AV-3 y P-16 (rendimiento y latencia medidos)           |
 | AV-5                  | Shiro decide: su preferencia cuenta en la elección                                                                                            | AV-4                                                   |
@@ -346,6 +346,8 @@ Fuera de las fases. Decidida por el dueño el 2026-11-14; se intercala con la Fa
 | AV-8                  | Modelos 2D (Live2D, torso primero) y 3D (VRM, motor nuevo con su ADR)                                                                         | Que existan el arte y el modelo; medir el 3D en la GPU |
 
 AV-2 es el primer PR de código y lo revisa el dueño: cambia cómo la app elige y maneja el avatar. Las piezas, el prototipo y el modelo de prueba los prepara la sesión de diseño del personaje; el código de `packages/desktop` lo escribe una sola sesión.
+
+**Avance (2026-11-18).** AV-2 hecho en cinco pasos: el esquema del manifiesto, el contrato y el selector de motores, el reproductor, el cargador y el montaje en la app. El dueño revisa los dos que cambian la app: el selector y el montaje. Queda fuera, anotado en el ADR 0028: Hiyori sigue sin manifiesto, el verbo de la mirada no lo llama nadie todavía y, con los dos modelos instalados, sale Live2D hasta que AV-3 deje elegir.
 
 ### Vía paralela: rediseño de la app
 
