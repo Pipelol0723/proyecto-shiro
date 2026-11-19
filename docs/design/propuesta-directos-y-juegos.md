@@ -7,6 +7,12 @@ ejecuta sin que el dueño apruebe cada paso.
 
 > **Estado** (2026-11-18): propuesta sin aprobar y sin implementar. Recoge lo
 > que el dueño pidió ese día y sus respuestas a cuatro preguntas.
+>
+> **Nota 2026-11-19:** queda planeada y se hace después de la iniciativa. Lo
+> que el dueño decidió ese día (canal afiliado, cuenta propia de Shiro,
+> memoria pública separada, qué hace sin preguntar) y el orden de los pasos
+> están en la
+> [vía de iniciativa del plan de mejora](../plan-mejora-2026-11.md#vía-paralela-iniciativa-sentidos-vida-propia-y-directos).
 
 ## Qué pidió el dueño
 
