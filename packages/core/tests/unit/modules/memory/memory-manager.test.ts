@@ -166,46 +166,79 @@ describe('MemoryManager', () => {
     });
   });
 
-  describe('getRecent / searchSemantic', () => {
-    it('devuelve [] sin llamar a Letta cuando lettaUp=false', async () => {
+  describe('getRecent (desde SQLite, P-10)', () => {
+    async function seed(): Promise<void> {
+      for (let i = 1; i <= 4; i += 1) {
+        await manager.save(
+          makeEntry({
+            id: `m${String(i)}`,
+            role: i % 2 === 1 ? 'user' : 'assistant',
+            timestamp: `2026-05-29T12:00:0${String(i)}.000Z`,
+          }),
+        );
+      }
+    }
+
+    it('con Letta caído devuelve los últimos turnos, que están en SQLite', async () => {
+      await seed();
+      expect(manager.isLettaUp()).toBe(false);
+
+      const recent = await manager.getRecent(USER, 3);
+
+      expect(recent.map((e) => e.id)).toEqual(['m2', 'm3', 'm4']);
+    });
+
+    it('con Letta arriba tampoco se lo pide a Letta, y ve lo que aún no se ha sincronizado', async () => {
+      vi.spyOn(letta, 'ping').mockResolvedValue(true);
+      // El push a Letta falla: los turnos se quedan pendientes en SQLite.
+      vi.spyOn(letta, 'save').mockRejectedValue(new Error('lento'));
       const recentSpy = vi.spyOn(letta, 'getRecent');
+      await manager.runDrainerOnce();
+      expect(manager.isLettaUp()).toBe(true);
+      await seed();
+
+      const recent = await manager.getRecent(USER, 2);
+
+      expect(recent.map((e) => e.id)).toEqual(['m3', 'm4']);
+      expect(recentSpy).not.toHaveBeenCalled();
+    });
+
+    it('excluye el turno que se le indica', async () => {
+      await seed();
+      const recent = await manager.getRecent(USER, 2, { excludeId: 'm4' });
+      expect(recent.map((e) => e.id)).toEqual(['m2', 'm3']);
+    });
+  });
+
+  describe('searchSemantic (Letta)', () => {
+    it('devuelve [] sin llamar a Letta cuando lettaUp=false', async () => {
       const searchSpy = vi.spyOn(letta, 'searchSemantic');
 
-      expect(await manager.getRecent(USER, 5)).toEqual([]);
       expect(await manager.searchSemantic('q', USER, 5)).toEqual([]);
 
-      expect(recentSpy).not.toHaveBeenCalled();
       expect(searchSpy).not.toHaveBeenCalled();
     });
 
     it('delega a Letta cuando está arriba', async () => {
       vi.spyOn(letta, 'ping').mockResolvedValue(true);
-      const recentSpy = vi
-        .spyOn(letta, 'getRecent')
-        .mockResolvedValue([makeEntry({ id: 'from-letta' })]);
       const searchSpy = vi
         .spyOn(letta, 'searchSemantic')
         .mockResolvedValue([makeEntry({ id: 'semantic' })]);
       await manager.runDrainerOnce();
-
-      const recent = await manager.getRecent(USER, 5);
-      expect(recentSpy).toHaveBeenCalledWith(USER, 5);
-      expect(recent[0]?.id).toBe('from-letta');
 
       const semantic = await manager.searchSemantic('query', USER, 3);
       expect(searchSpy).toHaveBeenCalledWith('query', USER, 3);
       expect(semantic[0]?.id).toBe('semantic');
     });
 
-    it('si Letta falla durante un read, devuelve [] sin lanzar (no marca down)', async () => {
+    it('si Letta falla durante la búsqueda, devuelve [] sin lanzar (no marca down)', async () => {
       vi.spyOn(letta, 'ping').mockResolvedValue(true);
-      vi.spyOn(letta, 'getRecent').mockRejectedValue(new Error('500'));
+      vi.spyOn(letta, 'searchSemantic').mockRejectedValue(new Error('500'));
       await manager.runDrainerOnce();
       expect(manager.isLettaUp()).toBe(true);
 
-      const result = await manager.getRecent(USER, 5);
-      expect(result).toEqual([]);
-      // Un read fallido no tumba el estado: lo decide el ping (checkLetta).
+      expect(await manager.searchSemantic('q', USER, 5)).toEqual([]);
+      // Una lectura fallida no tumba el estado: lo decide el ping (checkLetta).
       expect(manager.isLettaUp()).toBe(true);
     });
   });

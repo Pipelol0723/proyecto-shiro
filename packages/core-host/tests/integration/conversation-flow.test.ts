@@ -639,6 +639,58 @@ describe('wireConversationFlow', () => {
       dispose();
     });
 
+    it('el mensaje actual no entra en su propio contexto, ni como reciente ni como parecido', async () => {
+      const bus = new EventBus<EventMap>({ logger: makeLogger() });
+      const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
+        text: 'ok',
+        emotion: 'neutral',
+        tokensUsed: 1,
+      });
+      // Como la memoria de verdad: lo guardado ya se puede leer en el mismo
+      // turno, y la búsqueda por parecido encuentra primero el propio mensaje.
+      const stored: MemoryEntry[] = [
+        {
+          id: 'previo',
+          role: 'assistant',
+          text: 'lo de antes',
+          timestamp: '2026-05-29T12:00:00.000Z',
+          userId: 'me',
+        },
+      ];
+      const memory: IMemoryModule = {
+        id: 'memory:eco',
+        save: (entry) => {
+          stored.push(entry);
+          return Promise.resolve();
+        },
+        getRecent: (_userId, limit, options) =>
+          Promise.resolve(stored.filter((e) => e.id !== options?.excludeId).slice(-limit)),
+        searchSemantic: () => Promise.resolve([...stored].reverse()),
+        clear: () => Promise.resolve(),
+      };
+      const modules = makeModules({
+        memory,
+        llmLocal: { id: 'llm:spy', generate: generateSpy },
+      });
+
+      const dispose = wireConversationFlow({
+        bus,
+        modules,
+        systemPrompt: 'Eres Shiro.',
+        logger: makeLogger(),
+        simulationSpeed: 0,
+      });
+
+      await bus.emit('user:message', { text: 'mensaje de ahora', userId: 'me' });
+
+      const req = generateSpy.mock.calls[0]?.[0];
+      expect(req?.text).toBe('mensaje de ahora');
+      expect(req?.context).toContain('lo de antes');
+      expect(req?.context).not.toContain('mensaje de ahora');
+
+      dispose();
+    });
+
     it('pasa el context formateado al LLM cuando hay entradas', async () => {
       const bus = new EventBus<EventMap>({ logger: makeLogger() });
       const generateSpy = vi.fn<(req: LLMRequest) => Promise<LLMResponse>>().mockResolvedValue({
