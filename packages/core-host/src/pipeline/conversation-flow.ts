@@ -44,6 +44,7 @@ import type {
 } from '@proyecto-shiro/core';
 import type { AudioCache } from '../audio/audio-cache.js';
 import { buildToolDefs, makeToolExecutor } from './tool-loop.js';
+import { TurnTiming, formatTurnTiming } from './turn-timing.js';
 import { createApprovalGate } from './approval-gate.js';
 
 export interface MemoryReadsConfig {
@@ -137,6 +138,8 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
 
   const unsubscribe = bus.on('user:message', async (payload) => {
     const startTime = Date.now();
+    // Cuánto tarda cada etapa (P-16). `startTime` sigue para `latencyMs`.
+    const timing = new TurnTiming();
 
     // 0. Persistir el user msg al WAL — fire-and-forget. `local.save`
     //    dentro del MemoryManager es síncrono, así que SQLite ya tiene
@@ -159,21 +162,18 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
 
     try {
       // 1. Router decide el tier.
-      const tier = await modules.router.route({
-        text: payload.text,
-        userId: payload.userId,
-      });
+      const tier = await timing.measure('route', () =>
+        modules.router.route({
+          text: payload.text,
+          userId: payload.userId,
+        }),
+      );
       await bus.emit('router:routed', { tier, userId: payload.userId });
 
       // 2. Lectura de memoria con timeout. Si tarda demasiado o devuelve
       //    vacío, procedemos sin contexto.
-      const context = await fetchContext(
-        modules.memory,
-        payload.text,
-        payload.userId,
-        userEntryId,
-        memoryReads,
-        child,
+      const context = await timing.measure('context', () =>
+        fetchContext(modules.memory, payload.text, payload.userId, userEntryId, memoryReads, child),
       );
 
       // 3. LLM correspondiente responde. Si el tier es cloud y el slot cloud
@@ -199,23 +199,27 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           typeof modules.llmCloud.generateWithTools === 'function' &&
           modules.tools.list().length > 0
         ) {
-          response = await modules.llmCloud.generateWithTools(llmRequest, {
-            tools: buildToolDefs(modules.tools),
-            executeTool: makeToolExecutor(
-              modules.tools,
-              { logger: child, userId: payload.userId },
-              child,
-              approvalGate,
-              // Persiste cada acción como turno `tool` (ADR 0022 §6).
-              // Fire-and-forget vía el WAL, igual que user/assistant.
-              (entry) => {
-                void persistEntry(modules.memory, child, entry);
-              },
-            ),
-          });
+          const generateWithTools = modules.llmCloud.generateWithTools.bind(modules.llmCloud);
+          // El tiempo de las tools y de sus aprobaciones cuenta como «llm».
+          response = await timing.measure('llm', () =>
+            generateWithTools(llmRequest, {
+              tools: buildToolDefs(modules.tools),
+              executeTool: makeToolExecutor(
+                modules.tools,
+                { logger: child, userId: payload.userId },
+                child,
+                approvalGate,
+                // Persiste cada acción como turno `tool` (ADR 0022 §6).
+                // Fire-and-forget vía el WAL, igual que user/assistant.
+                (entry) => {
+                  void persistEntry(modules.memory, child, entry);
+                },
+              ),
+            }),
+          );
         } else {
           const llm = tier === 'local' ? modules.llmLocal : modules.llmCloud;
-          response = await llm.generate(llmRequest);
+          response = await timing.measure('llm', () => llm.generate(llmRequest));
         }
       } catch (err) {
         if (tier !== 'cloud') throw err;
@@ -226,7 +230,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           userId: payload.userId,
         });
         effectiveTier = 'local';
-        response = await modules.llmLocal.generate(llmRequest);
+        response = await timing.measure('llm', () => modules.llmLocal.generate(llmRequest));
       }
 
       // 4. Emite la respuesta tipada. `LLMResponse.emotion` es opcional;
@@ -243,28 +247,34 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       child.debug(`turno completo en ${latencyMs}ms (tier=${effectiveTier})`);
 
       // 5. Persistir el assistant reply al WAL.
-      await persistEntry(modules.memory, child, {
-        id: randomUUID(),
-        role: 'assistant',
-        text: response.text,
-        timestamp: new Date().toISOString(),
-        userId: payload.userId,
-        metadata: { emotion, tier: effectiveTier, latencyMs },
-      });
+      const reply = response;
+      await timing.measure('persist', () =>
+        persistEntry(modules.memory, child, {
+          id: randomUUID(),
+          role: 'assistant',
+          text: reply.text,
+          timestamp: new Date().toISOString(),
+          userId: payload.userId,
+          metadata: { emotion, tier: effectiveTier, latencyMs },
+        }),
+      );
 
       // 6. TTS: sintetiza, cachea, emite tts:audio (cliente reproduce y
       //    emitirá tts:audio-ended cuando termine). Si el cache no está
       //    configurado (tests legacy), cae al simulador.
-      await dispatchTTS(
-        bus,
-        modules.tts,
-        audioCache,
-        response.text,
-        emotion,
-        payload.userId,
-        simulationSpeed,
-        child,
+      await timing.measure('tts', () =>
+        dispatchTTS(
+          bus,
+          modules.tts,
+          audioCache,
+          reply.text,
+          emotion,
+          payload.userId,
+          simulationSpeed,
+          child,
+        ),
       );
+      await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, effectiveTier);
     } catch (err) {
       child.error('error procesando turno, emitiendo fallback', { err });
       // Un fallo de la nube ya se anunció arriba y el turno siguió en local:
@@ -282,16 +292,19 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         tier: 'local',
         latencyMs,
       });
-      await dispatchTTS(
-        bus,
-        modules.tts,
-        audioCache,
-        FALLBACK_RESPONSE,
-        'neutral',
-        payload.userId,
-        simulationSpeed,
-        child,
+      await timing.measure('tts', () =>
+        dispatchTTS(
+          bus,
+          modules.tts,
+          audioCache,
+          FALLBACK_RESPONSE,
+          'neutral',
+          payload.userId,
+          simulationSpeed,
+          child,
+        ),
       );
+      await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, 'local');
     }
   });
 
@@ -299,6 +312,24 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
     unsubscribe();
     for (const u of unsubscribers) u();
   };
+}
+
+/**
+ * Deja en el log una línea con los tiempos del turno y los emite por el bus
+ * (`turn:measured`). Va al final del turno, con la voz ya sintetizada.
+ */
+async function reportTurnTiming(
+  bus: IEventBus<EventMap>,
+  logger: Logger,
+  timing: TurnTiming,
+  turnId: string,
+  userId: string,
+  tier: 'local' | 'cloud',
+): Promise<void> {
+  const stages = timing.stages();
+  const totalMs = timing.elapsedMs();
+  logger.info(`turno ${turnId} (${tier}): ${formatTurnTiming(stages, totalMs)}`);
+  await bus.emit('turn:measured', { userId, turnId, tier, stages, totalMs });
 }
 
 /**

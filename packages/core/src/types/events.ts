@@ -213,6 +213,25 @@ export interface EventMap {
    */
   'llm:failed': { reason: TurnFailureReason; tier: 'local' | 'cloud'; userId: string };
 
+  // ─── Tiempos del turno ──────────────────────────────────────────────
+  /**
+   * Cuánto tardó cada etapa de un turno, en milisegundos. Lo emite el
+   * core-host al final, cuando la voz de la respuesta ya está sintetizada:
+   * `latencyMs` de `llm:responded` se corta antes, al tener el texto.
+   *
+   * `stages` lleva solo las etapas que ocurrieron (si el turno falla antes
+   * de guardar la respuesta, no hay `persist`). `totalMs` va desde que
+   * llegó `user:message` hasta que el audio quedó listo para pedirse.
+   * `turnId` es el id del mensaje del usuario que abrió el turno.
+   */
+  'turn:measured': {
+    userId: string;
+    turnId: string;
+    tier: 'local' | 'cloud';
+    stages: { route?: number; context?: number; llm?: number; persist?: number; tts?: number };
+    totalMs: number;
+  };
+
   // ─── TTS (salida de voz) ────────────────────────────────────────────
   /**
    * Audio sintetizado disponible para reproducir. El `core-host` cachea
