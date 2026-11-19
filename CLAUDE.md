@@ -140,7 +140,13 @@ CLAUDE.md: si tocas un bloque marcado con `agents-md`, ejecuta
 `npm run agents:sync`). Compilar core primero es obligatorio: los demás
 paquetes leen sus tipos de `packages/core/dist`, que no se versiona. El CI
 ejecuta además `npm run audit:prod` (avisos `high` o `critical` en
-dependencias de producción), que necesita red.
+dependencias de producción), que necesita red, y la cobertura de core
+(`npm run test:coverage -w @proyecto-shiro/core`, que falla por debajo de los
+umbrales de `packages/core/vitest.config.ts`). El job `verify-windows` repite
+`verify` en Windows.
+
+La versión de Node es la de `.node-version` (22). La siguen el CI, el release,
+`engines` y el sidecar del binario, que no se empaqueta con otra.
 
 ## Calidad de código
 
@@ -149,7 +155,7 @@ dependencias de producción), que necesita red.
 - Cada módulo del core **implementa una interfaz** en `packages/core/src/interfaces/`.
 - Comunicación entre módulos **vía EventBus** — nunca llamadas directas. Ver [ADR 0001](docs/adr/0001-arquitectura-modular-event-driven.md).
 - Eventos del bus tipados con generics. Naming: `<modulo>:<verbo>` (p.ej. `stt:transcribed`, `llm:chunk`).
-- Tests con **Vitest**. Cobertura objetivo > 80% en `packages/core/`.
+- Tests con **Vitest**. Cobertura de `packages/core/` por encima del 80 %, aplicada en el CI.
 - Validación de configs YAML en runtime con **zod**.
 
 ## Lo que NO se commitea
