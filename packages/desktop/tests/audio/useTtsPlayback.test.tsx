@@ -649,3 +649,45 @@ describe('useTtsPlayback — primer audio (P-16)', () => {
     expect(started).toEqual([]);
   });
 });
+
+describe('useTtsPlayback — primer audio (revisión de P-16)', () => {
+  it('un audio que ya se cortó no avisa aunque el navegador diga que suena', async () => {
+    const bus = makeBus();
+    const audios: FakeAudio[] = [];
+    const started: EventMap['tts:audio-started'][] = [];
+    bus.on('tts:audio-started', (payload) => {
+      started.push(payload);
+    });
+    renderHook(
+      () =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => {
+            const audio = makeFakeAudio();
+            audios.push(audio);
+            return audio as unknown as HTMLAudioElement;
+          },
+          muted: false,
+        }),
+      { wrapper: wrap(bus) },
+    );
+    const emitAudio = (audioId: string) =>
+      bus.emit('tts:audio', {
+        url: `/audio/${audioId}.mp3`,
+        audioId,
+        mimeType: 'audio/mpeg',
+        userId: 'me',
+      });
+
+    await act(async () => {
+      await emitAudio('a');
+      // Llega otro audio y corta el primero antes de que empiece a sonar.
+      await emitAudio('b');
+      audios[0]?.trigger('playing');
+      audios[1]?.trigger('playing');
+      await Promise.resolve();
+    });
+
+    expect(started).toEqual([{ audioId: 'b', userId: 'me' }]);
+  });
+});

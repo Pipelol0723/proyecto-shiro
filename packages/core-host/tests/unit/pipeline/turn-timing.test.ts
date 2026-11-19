@@ -93,10 +93,14 @@ describe('formatTurnTiming', () => {
   it('una línea con las etapas en el orden del turno y el total', () => {
     expect(
       formatTurnTiming({ tts: 410, llm: 900, route: 120, context: 35, persist: 2 }, 1_480),
-    ).toBe('route=120ms context=35ms llm=900ms persist=2ms tts=410ms total=1480ms');
+    ).toBe('route=120ms context=35ms llm=900ms persist=2ms tts=410ms resto=13ms total=1480ms');
   });
 
   it('las etapas que no ocurrieron no salen', () => {
-    expect(formatTurnTiming({ route: 120 }, 130)).toBe('route=120ms total=130ms');
+    expect(formatTurnTiming({ route: 120 }, 130)).toBe('route=120ms resto=10ms total=130ms');
+  });
+
+  it('si las etapas suman el total, no hay resto que decir', () => {
+    expect(formatTurnTiming({ route: 100, llm: 30 }, 130)).toBe('route=100ms llm=30ms total=130ms');
   });
 });

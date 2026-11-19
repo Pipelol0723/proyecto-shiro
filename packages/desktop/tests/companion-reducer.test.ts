@@ -424,45 +424,65 @@ describe('companionReducer — fallos del turno (TURN_FAILED)', () => {
 });
 
 describe('companionReducer — tiempos del turno (P-16)', () => {
-  const reply = {
-    type: 'SHIRO_REPLY',
-    text: 'hola',
-    emotion: 'neutral',
-    tier: 'local',
-    latencyMs: 900,
-  } as const;
-  const measured = {
-    type: 'TURN_MEASURED',
-    stages: { route: 120, context: 35, llm: 745, persist: 2, tts: 410 },
-    totalMs: 1_480,
-  } as const;
+  const reply = (turnId: string | undefined, text = 'hola') =>
+    ({
+      type: 'SHIRO_REPLY',
+      text,
+      emotion: 'neutral',
+      tier: 'local',
+      latencyMs: 900,
+      ...(turnId !== undefined && { turnId }),
+    }) as const;
+  const measured = (turnId: string) =>
+    ({
+      type: 'TURN_MEASURED',
+      turnId,
+      stages: { route: 120, context: 35, llm: 745, persist: 2, tts: 410 },
+      totalMs: 1_480,
+    }) as const;
 
-  it('apunta el tiempo hasta la voz y las etapas en la última respuesta de Shiro', () => {
-    const withReply = companionReducer(baseState, reply);
+  it('apunta el tiempo hasta la voz y las etapas en la respuesta de ese turno', () => {
+    const withReply = companionReducer(baseState, reply('t1'));
 
-    const result = companionReducer(withReply, measured);
+    const result = companionReducer(withReply, measured('t1'));
 
     const last = result.history.at(-1);
     expect(last?.voiceReadyMs).toBe(1_480);
-    expect(last?.stages).toEqual(measured.stages);
+    expect(last?.stages).toEqual(measured('t1').stages);
     // Lo demás del mensaje no cambia.
     expect(last?.text).toBe('hola');
     expect(last?.latencyMs).toBe(900);
   });
 
-  it('sin ninguna respuesta de Shiro no hace nada', () => {
-    expect(companionReducer(baseState, measured)).toBe(baseState);
+  it('con dos turnos solapados, cada medida va a su respuesta', () => {
+    // La voz del turno A tarda; el turno B responde antes de que A termine.
+    const withA = companionReducer(baseState, reply('a', 'respuesta A'));
+    const withB = companionReducer(withA, reply('b', 'respuesta B'));
+
+    const result = companionReducer(withB, measured('a'));
+
+    expect(result.history.at(-2)?.voiceReadyMs).toBe(1_480);
+    expect(result.history.at(-1)?.voiceReadyMs).toBeUndefined();
+  });
+
+  it('una medida de un turno que este cliente no vio no se cuelga de otra respuesta', () => {
+    // Al reconectar a mitad de turno, o con el historial recién recuperado.
+    const withOld = companionReducer(baseState, reply(undefined, 'de antes'));
+    const withOther = companionReducer(withOld, reply('otro', 'de otro turno'));
+
+    expect(companionReducer(withOther, measured('no-visto'))).toBe(withOther);
+    expect(companionReducer(baseState, measured('no-visto'))).toBe(baseState);
   });
 
   it('no toca un mensaje del usuario que haya llegado después', () => {
-    const withReply = companionReducer(baseState, reply);
+    const withReply = companionReducer(baseState, reply('t1'));
     const withUser = companionReducer(withReply, {
       type: 'USER_SAID',
       text: 'otra cosa',
       userId: 'me',
     });
 
-    const result = companionReducer(withUser, measured);
+    const result = companionReducer(withUser, measured('t1'));
 
     expect(result.history.at(-1)?.role).toBe('user');
     expect(result.history.at(-1)?.voiceReadyMs).toBeUndefined();
