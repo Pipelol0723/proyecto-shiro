@@ -35,6 +35,12 @@ import type { LLMRequest } from '../../interfaces/ILLMModule.js';
 import type { IRouterModule, LLMTier } from '../../interfaces/IRouterModule.js';
 import type { Logger } from '../../core/logger.js';
 import type { ModuleDeps } from '../../core/module-loader.js';
+import {
+  DEFAULT_OLLAMA_KEEP_ALIVE,
+  DEFAULT_OLLAMA_NUM_CTX,
+  OllamaKeepAliveSchema,
+  misnamedOllamaOption,
+} from '../llm/ollama-options.js';
 
 // ─── Schema de config ─────────────────────────────────────────────────
 
@@ -48,6 +54,19 @@ export const HybridRouterConfigSchema = z.object({
    * más (cold load), caemos al fallback heurístico.
    */
   timeout_ms: z.number().int().positive().default(2_000),
+  /**
+   * Cuánto mantiene Ollama el modelo cargado tras clasificar: una duración
+   * (`30m`, `1h`) o un número de segundos (`-1`: no descargarlo nunca).
+   */
+  keep_alive: OllamaKeepAliveSchema.default(DEFAULT_OLLAMA_KEEP_ALIVE),
+  /**
+   * Ventana de contexto en tokens. Tiene que ser la misma que la del LLM
+   * local (`llm.local.config.numCtx`) si comparten modelo: con otra, Ollama
+   * recarga el modelo en cada cambio.
+   */
+  num_ctx: z.number().int().positive().default(DEFAULT_OLLAMA_NUM_CTX),
+  /** Tope de tokens de la clasificación: es un JSON de dos campos. */
+  num_predict: z.number().int().positive().default(48),
   /**
    * **Deprecated en V1.** Asumía clasificación con score 0-1 con
    * threshold de corte; V1 usa clasificación binaria, así que el
@@ -170,6 +189,10 @@ export class HybridRouter implements IRouterModule {
   private readonly logger: Logger;
 
   constructor(rawConfig: unknown, deps: ModuleDeps) {
+    const misnamed = misnamedOllamaOption(rawConfig, 'snake');
+    if (misnamed !== null) {
+      throw new HybridRouterError(`HybridRouter: config inválida — ${misnamed}`);
+    }
     const result = HybridRouterConfigSchema.safeParse(rawConfig);
     if (!result.success) {
       throw new HybridRouterError(
@@ -220,7 +243,13 @@ export class HybridRouter implements IRouterModule {
           ],
           format: buildClassifierSchema(),
           stream: false,
-          options: { temperature: 0.1 },
+          keep_alive: this.config.keep_alive,
+          options: {
+            // Con salida estructurada, Ollama recomienda temperatura 0.
+            temperature: 0,
+            num_ctx: this.config.num_ctx,
+            num_predict: this.config.num_predict,
+          },
         }),
         signal: controller.signal,
       });
