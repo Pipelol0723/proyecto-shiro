@@ -9,6 +9,8 @@
  * - Con Whisper sin contestar, el micro se suelta en menos de 5 s y el
  *   mensaje dice qué hacer.
  * - Soltar la tecla antes de tiempo no deja nada grabando.
+ * - A Whisper no se le llama hasta tener el micro: su sesión se cierra a los
+ *   15 s sin tráfico, y contestar al permiso puede tardar más.
  *
  * Que no se pierda la primera sílaba con un micro real se comprueba a mano
  * en la app (20 pruebas, criterio del gate de la Fase 2).
@@ -77,15 +79,21 @@ interface Capture {
   /** Resuelve o rechaza el permiso del micro, si se pidió «a mano». */
   grantMic: () => void;
   denyMic: (name: string) => void;
+  /** Termina de cargar el worklet, si se pidió «a mano». */
+  loadWorklet: () => void;
 }
 
-/** Sustituye las API de captura. Con `manualMic`, el permiso lo da el test. */
-function stubCapture(options: { manualMic?: boolean } = {}): Capture {
+/**
+ * Sustituye las API de captura. Con `manualMic`, el permiso lo da el test;
+ * con `manualWorklet`, también el final de la carga del worklet.
+ */
+function stubCapture(options: { manualMic?: boolean; manualWorklet?: boolean } = {}): Capture {
   const track = { stop: vi.fn() };
   const closeContext = vi.fn(() => Promise.resolve());
   const stream = { getTracks: () => [track] };
   let resolveMic: (value: unknown) => void = () => undefined;
   let rejectMic: (err: unknown) => void = () => undefined;
+  let resolveWorklet: () => void = () => undefined;
   const ports: { onmessage: ((event: { data: unknown }) => void) | null }[] = [];
 
   Object.defineProperty(navigator, 'mediaDevices', {
@@ -105,7 +113,15 @@ function stubCapture(options: { manualMic?: boolean } = {}): Capture {
     'AudioContext',
     class {
       sampleRate = 16_000;
-      audioWorklet = { addModule: vi.fn(() => Promise.resolve()) };
+      audioWorklet = {
+        addModule: vi.fn(() =>
+          options.manualWorklet === true
+            ? new Promise<void>((resolve) => {
+                resolveWorklet = resolve;
+              })
+            : Promise.resolve(),
+        ),
+      };
       createMediaStreamSource = (): unknown => ({ connect: vi.fn(), disconnect: vi.fn() });
       close = closeContext;
     },
@@ -137,6 +153,9 @@ function stubCapture(options: { manualMic?: boolean } = {}): Capture {
       const err = new Error('Permission denied');
       err.name = name;
       rejectMic(err);
+    },
+    loadWorklet: () => {
+      resolveWorklet();
     },
   };
 }
@@ -318,7 +337,7 @@ describe('useMicrophonePTT — el micro falla o se suelta antes de tiempo', () =
     expect(result.current.state).toBe('error');
     expect(result.current.error).toMatch(/permiso/i);
     expect(result.current.error).not.toContain('Permission denied');
-    expect(FakeWebSocket.last().closed).toBe(true);
+    expect(FakeWebSocket.instances).toHaveLength(0);
     expect(events).toEqual([]);
   });
 
@@ -334,30 +353,80 @@ describe('useMicrophonePTT — el micro falla o se suelta antes de tiempo', () =
       await result.current.stop();
     });
     expect(result.current.state).toBe('idle');
-    expect(FakeWebSocket.last().closed).toBe(true);
 
     capture.grantMic();
     await settle();
 
     expect(result.current.state).toBe('idle');
     expect(capture.track.stop).toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
     expect(events).toEqual([]);
   });
 
-  it('si Whisper falla mientras aún se pide el micro, el micro que llega después se suelta', async () => {
+  it('no llama a Whisper hasta tener el micro: tardar en dar el permiso no estropea el turno', async () => {
     const capture = stubCapture({ manualMic: true });
-    const { result } = setup(capture);
+    const { result, events } = setup(capture);
+    act(() => {
+      void result.current.start();
+    });
+    // Más que el plazo de conexión y que los 15 s de inactividad del servicio.
+    await settle(20_000);
+
+    expect(result.current.state).toBe('requesting');
+    expect(result.current.error).toBeNull();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+
+    capture.grantMic();
+    await settle();
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(result.current.state).toBe('recording');
+    expect(events).toEqual(['stt:listening']);
+  });
+
+  it('si Whisper falla mientras se prepara la captura, el micro se suelta', async () => {
+    const capture = stubCapture({ manualWorklet: true });
+    const { result, events } = setup(capture);
     act(() => {
       void result.current.start();
     });
     await settle(DEFAULT_CONNECT_TIMEOUT_MS);
     expect(result.current.state).toBe('error');
 
-    capture.grantMic();
+    capture.loadWorklet();
     await settle();
 
     expect(result.current.state).toBe('error');
     expect(capture.track.stop).toHaveBeenCalled();
+    expect(capture.closeContext).toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
+  it('desmontar mientras se pide el micro: el que llega después se suelta y no se graba', async () => {
+    const bus = makeBus();
+    const capture = stubCapture({ manualMic: true });
+    const events: string[] = [];
+    bus.on('stt:listening', () => {
+      events.push('stt:listening');
+    });
+    const { result, unmount } = renderHook(() =>
+      useMicrophonePTT({ bus, userId: 'me', enabled: false }),
+    );
+    act(() => {
+      void result.current.start();
+    });
+    await settle();
+    // Si ya hubiera una conexión con Whisper, que esté abierta: es el caso en
+    // el que nadie avisaba al turno de que la pantalla se había ido.
+    FakeWebSocket.instances.at(-1)?.open();
+    await settle();
+
+    unmount();
+    capture.grantMic();
+    await settle();
+
+    expect(capture.track.stop).toHaveBeenCalled();
+    expect(events).toEqual([]);
   });
 
   it('al desmontar a mitad de turno se cierra también el WS', async () => {

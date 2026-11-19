@@ -9,6 +9,7 @@ import {
   DEFAULT_CONNECT_TIMEOUT_MS,
   DEFAULT_FINAL_TIMEOUT_MS,
   MAX_PENDING_BYTES,
+  PCM_BYTES_PER_SECOND,
   WhisperSttClient,
   WhisperSttError,
 } from '../../src/audio/whisper-stt-client';
@@ -453,5 +454,88 @@ describe('WhisperSttClient — plazos y audio durante la apertura', () => {
     expect(ws.sent).toEqual([]);
     // Quien esperaba la apertura se entera de que ya no va a pasar.
     expect(await opening).toBeInstanceOf(Error);
+  });
+
+  it('un turno largo tiene más plazo para el final: lo que dura su audio', async () => {
+    const client = makeClient();
+    const opening = client.open();
+    const ws = FakeWebSocket.last();
+    // 2 s dichos mientras abre y 8 s después: 10 s de audio.
+    client.sendChunk(new ArrayBuffer(PCM_BYTES_PER_SECOND * 2));
+    ws.simulateOpen();
+    await opening;
+    client.sendChunk(new ArrayBuffer(PCM_BYTES_PER_SECOND * 8));
+
+    const stopping = settled(client.stop());
+    await vi.advanceTimersByTimeAsync(DEFAULT_FINAL_TIMEOUT_MS + 10_000 - 1);
+    expect(client.state).toBe('stopping');
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(((await stopping) as WhisperSttError).code).toBe('final-timeout');
+  });
+
+  it('lo que llega después de abortar no se entrega', async () => {
+    const onPartial = vi.fn<(text: string) => void>();
+    const onFinal = vi.fn<(text: string) => void>();
+    const client = new WhisperSttClient({
+      url: 'ws://x:8765/stt',
+      webSocketCtor: FakeWebSocket as unknown as typeof WebSocket,
+      onPartial,
+      onFinal,
+    });
+    const opening = client.open();
+    const ws = FakeWebSocket.last();
+    ws.simulateOpen();
+    await opening;
+
+    client.abort();
+    // Un socket que se está cerrando aún entrega lo que venía de camino.
+    ws.simulateMessage(JSON.stringify({ type: 'partial', text: 'hol' }));
+    ws.simulateMessage(JSON.stringify({ type: 'transcribed', text: 'hola', isFinal: true }));
+
+    expect(onPartial).not.toHaveBeenCalled();
+    expect(onFinal).not.toHaveBeenCalled();
+    expect(client.state).toBe('closed');
+  });
+
+  it('una transcripción que llega con el plazo ya vencido no revive el turno', async () => {
+    const onFinal = vi.fn<(text: string) => void>();
+    const client = new WhisperSttClient({
+      url: 'ws://x:8765/stt',
+      webSocketCtor: FakeWebSocket as unknown as typeof WebSocket,
+      onFinal,
+    });
+    const opening = client.open();
+    const ws = FakeWebSocket.last();
+    ws.simulateOpen();
+    await opening;
+
+    const stopping = settled(client.stop());
+    await vi.advanceTimersByTimeAsync(DEFAULT_FINAL_TIMEOUT_MS);
+    await stopping;
+
+    ws.simulateMessage(JSON.stringify({ type: 'transcribed', text: 'tarde', isFinal: true }));
+
+    expect(onFinal).not.toHaveBeenCalled();
+    expect(client.state).toBe('error');
+    // Quien pregunte después sigue viendo el fallo, no una transcripción.
+    expect(((await settled(client.stop())) as WhisperSttError).code).toBe('final-timeout');
+  });
+
+  it('pedir el final dos veces es la misma espera, y se pide una sola vez', async () => {
+    const client = makeClient();
+    const opening = client.open();
+    const ws = FakeWebSocket.last();
+
+    const first = client.stop();
+    expect(client.stop()).toBe(first);
+
+    ws.simulateOpen();
+    await opening;
+    expect(client.stop()).toBe(first);
+    expect(texts(ws)).toEqual([{ type: 'stop' }]);
+
+    ws.simulateMessage(JSON.stringify({ type: 'transcribed', text: 'hola', isFinal: true }));
+    await expect(first).resolves.toBeUndefined();
   });
 });

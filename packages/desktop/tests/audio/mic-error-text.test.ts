@@ -44,6 +44,12 @@ describe('describeMicError', () => {
     expect(text).not.toContain('ws://');
   });
 
+  it('un error del servicio no da por hecho que se dijo algo: también llega antes de hablar', () => {
+    const text = describeMicError(new WhisperSttError('server', 'modelo aún cargando'));
+    expect(text).not.toMatch(/lo que dijiste/);
+    expect(text).toMatch(/Setup/);
+  });
+
   it('conectar y no terminar de transcribir no dicen lo mismo', () => {
     const connect = describeMicError(new WhisperSttError('connect-timeout', 'x'));
     const final = describeMicError(new WhisperSttError('final-timeout', 'x'));
