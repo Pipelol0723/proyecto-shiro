@@ -15,9 +15,13 @@
        borra ese contenedor y su volumen.
 
   La restauración de verdad (poner la copia en el sitio de la memoria y del
-  Letta en uso) no la hace este script: está en RESTORE.md.
+  Letta en uso) no la hace este script: ver RESTORE.md.
 
-  Códigos de salida: 0 la copia se restaura bien; 1 algo no cuadra o falló.
+  Códigos de salida:
+    0  todo lo que lleva la copia se ha comprobado y se restaura bien
+    1  algo no cuadra o falló
+    2  lo comprobado está bien, pero quedó una parte sin comprobar: se pidió
+       -SkipLetta, o la copia no lleva el recuento de filas de Letta
 
 .EXAMPLE
   npm run backup:check -- -Backup E:\shiro-backup\20261120T083005Z
@@ -37,9 +41,12 @@ $ErrorActionPreference = 'Stop'
 
 $helper = Join-Path $PSScriptRoot 'backup\memory-backup.mjs'
 $lettaRowsSql = Join-Path $PSScriptRoot 'backup\letta-rows.sql'
-$container = "shiro-restore-check-$PID"
+# Un nombre que no pueda coincidir con ningún otro contenedor: al terminar se
+# borra por nombre, y solo puede ser el de esta ejecución.
+$container = "shiro-restore-check-$PID-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 $script:started = $false
 $script:rowsFile = $null
+$script:partial = $null
 
 function Write-Step([string]$Message) { Write-Host "[ensayo] $Message" }
 
@@ -59,11 +66,11 @@ function Invoke-Check {
   $summary = "$(Invoke-Helper check --dir $Backup)" | ConvertFrom-Json
   Write-Step "memoria: $($summary.turns) turnos, como dice el manifiesto; los archivos coinciden"
   if (-not $summary.complete) {
-    Write-Step 'la copia no lleva el volcado de Letta: solo se ha comprobado la memoria'
+    Write-Step 'la copia no lleva el volcado de Letta: lo que lleva, la memoria, está comprobado'
     return
   }
   if ($SkipLetta) {
-    Write-Step 'el volcado de Letta no se ha ensayado (-SkipLetta)'
+    $script:partial = 'el volcado de Letta no se ha ensayado (-SkipLetta)'
     return
   }
   if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -73,10 +80,12 @@ function Invoke-Check {
 
   # Un Letta aparte: sin puertos publicados y con un volumen propio, que se
   # borra al terminar. No toca el contenedor ni el volumen del Letta en uso.
+  # Se da por arrancado antes de pedirlo: si Docker lo crea y falla al
+  # arrancarlo, también hay que borrarlo. El error de Docker se deja ver.
   Write-Step "arrancando un Letta temporal ($container)"
-  Invoke-Quiet { docker run -d --name $container $summary.lettaImage } | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw 'no se pudo arrancar el Letta temporal (¿Docker está en marcha?)' }
   $script:started = $true
+  & docker run -d --name $container $summary.lettaImage | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw 'no se pudo arrancar el Letta temporal' }
 
   $deadline = (Get-Date).AddSeconds($StartTimeoutSeconds)
   while ($true) {
@@ -92,6 +101,13 @@ function Invoke-Check {
   & docker exec $container sh -c ('createdb -U $POSTGRES_USER restore_check && ' +
     'pg_restore -U $POSTGRES_USER -d restore_check --no-owner /tmp/letta.dump') | Out-Host
   if ($LASTEXITCODE -ne 0) { throw 'pg_restore falló: el volcado no se restaura' }
+
+  if ($null -eq $summary.lettaTables) {
+    # Sin el recuento de cuando se copió, restaurar sin errores es todo lo que
+    # se puede decir: no hay con qué comparar.
+    $script:partial = 'el volcado de Letta se restaura sin errores, pero la copia no lleva el recuento de filas: no se ha podido comparar'
+    return
+  }
 
   # El SQL viaja en base64 dentro de la orden: por una tubería, Windows
   # PowerShell le pone delante una marca BOM.
@@ -109,8 +125,13 @@ function Invoke-Check {
 $exitCode = 1
 try {
   Invoke-Check
-  Write-Step 'la copia se restaura bien'
-  $exitCode = 0
+  if ($script:partial) {
+    Write-Step "lo comprobado está bien, pero falta una parte: $($script:partial)"
+    $exitCode = 2
+  } else {
+    Write-Step 'todo lo que lleva la copia se restaura bien'
+    $exitCode = 0
+  }
 } catch {
   Write-Host "[ensayo] ERROR: $($_.Exception.Message)"
 } finally {
@@ -118,7 +139,6 @@ try {
   if ($script:started) {
     # Con -v se va también su volumen: lleva una copia del Letta restaurado.
     Invoke-Quiet { docker rm -f -v $container } | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Host "[ensayo] no se pudo borrar el contenedor temporal: docker rm -f -v $container" }
   }
 }
 exit $exitCode

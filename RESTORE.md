@@ -47,8 +47,8 @@ Códigos de salida:
 
 | Código | Qué pasó                                                                              |
 | ------ | ------------------------------------------------------------------------------------- |
-| 0      | Copia hecha y comprobada en el destino.                                               |
-| 1      | Error. No se anota nada.                                                              |
+| 0      | Copia hecha y comprobada en el destino. Puede ser parcial (sin Letta): lo dice.       |
+| 1      | Error. La copia no se da por hecha.                                                   |
 | 2      | El otro equipo no responde (apagado o sin cable). No es un error: se repite otro día. |
 | 3      | La carpeta de las copias no existe y no se pidió crearla.                             |
 
@@ -58,7 +58,7 @@ Códigos de salida:
 
 Una copia que no se ha restaurado nunca no es una copia. El ensayo comprueba que la copia se restaura, sin tocar la memoria ni el Letta en uso.
 
-Si la copia está en otro equipo, tráela primero a una carpeta temporal:
+Si la copia está en otro equipo, tráela primero a una carpeta temporal **que no exista** (si existe, `scp` mete la copia dentro y el ensayo no la encuentra):
 
 ```powershell
 scp -i <clave> -r <usuario>@<equipo>:C:/shiro-backup/<nombre> $env:TEMP\shiro-ensayo
@@ -76,7 +76,17 @@ El ensayo hace tres cosas:
 2. Abre la memoria copiada, le pasa la comprobación de SQLite y cuenta los turnos.
 3. Si la copia lleva `letta.dump`, arranca un Letta temporal con la misma imagen y sin puertos, restaura el volcado en una base aparte y compara las filas de cada tabla con las que había al copiar. Al terminar borra ese contenedor y su volumen.
 
-Sale con el código 0 si la copia se restaura bien. Anota la fecha y los recuentos en [`docs/topologia.md`](docs/topologia.md) y borra la carpeta temporal, que lleva el historial en claro:
+Códigos de salida del ensayo:
+
+| Código | Qué pasó                                                                                                        |
+| ------ | --------------------------------------------------------------------------------------------------------------- |
+| 0      | Todo lo que lleva la copia se ha comprobado y se restaura bien.                                                 |
+| 1      | Algo no cuadra o falló. La copia no sirve tal cual.                                                             |
+| 2      | Lo comprobado está bien, pero falta una parte: se pidió `-SkipLetta`, o la copia no lleva el recuento de Letta. |
+
+Una copia sin `letta.dump` sale con 0 si su memoria está bien: se ha comprobado todo lo que lleva, y el ensayo dice que no lleva Letta.
+
+Anota la fecha y los recuentos en [`docs/topologia.md`](docs/topologia.md) y borra la carpeta temporal, que lleva el historial en claro:
 
 ```powershell
 Remove-Item $env:TEMP\shiro-ensayo -Recurse
@@ -86,64 +96,22 @@ El ensayo se repite cada trimestre (P-43 del plan de mejora) y antes de cualquie
 
 ## Restaurar de verdad
 
-Primero ensaya la copia que vas a restaurar. Después, con **Shiro cerrado** (la app o `npm run dev`):
+**Todavía no hay una orden para esto, y no conviene hacerlo a mano.** Llega con `npm run backup:restore`, la parte de P-11a que sigue a esta.
 
-### 1. La memoria local
+Por qué no a mano. Al escribir este documento se ensayaron los pasos y se revisaron uno a uno, y en los dos sitios hay maneras de estropear la restauración sin que nada avise:
 
-En la carpeta de datos (`packages\core-host\data` en desarrollo; `%LOCALAPPDATA%\com.pipelol.proyecto-shiro\data` en la app instalada):
+- **La memoria local.** Si al lado de la `memory.db` restaurada se queda un `memory.db-wal` de la memoria anterior, SQLite lo aplica encima: la app abre sin errores y enseña los turnos de antes, no los de la copia. Hay que apartar los tres archivos (`memory.db`, `memory.db-wal` y `memory.db-shm`) y comprobar que no queda ninguno antes de copiar.
+- **Letta.** Restaurar encima de la base en uso con `pg_restore --clean` termina con cientos de errores y la base sin tablas (probado el 2026-11-20 en un Letta temporal). Lo que funciona es restaurar en una base aparte, cambiarla por la que hay en una sola transacción y reiniciar Letta. Hecho a mano, una orden que falla no para a las siguientes.
+- **Las dos a la vez.** La memoria local anota qué turnos se han enviado ya a Letta. Si se restaura una memoria y un Letta de copias distintas, hay turnos que constan como enviados y que ese Letta no tiene: no se reenvían solos.
 
-```powershell
-New-Item -ItemType Directory antes | Out-Null
-Move-Item memory.db, memory.db-wal, memory.db-shm antes -ErrorAction SilentlyContinue
-Copy-Item <copia>\memory.db memory.db
-```
-
-Los archivos `memory.db-wal` y `memory.db-shm` de la memoria anterior **no pueden quedarse** al lado de la restaurada: SQLite intentaría aplicarlos sobre ella. Por eso se apartan los tres.
-
-Al arrancar, Shiro enseña el historial de la copia. Si la copia es de un esquema anterior, la migra sola y deja al lado una copia previa a la migración.
-
-### 2. Letta
-
-El volcado se restaura en un Letta **de la misma imagen** que el de la copia (está en el manifiesto, en `letta.image`, y es la que fija `docker-compose.yml`). Con el contenedor de Letta en marcha:
-
-```powershell
-$c = docker ps --filter "label=com.docker.compose.service=letta" --format "{{.Names}}"
-docker cp <copia>\letta.dump "${c}:/tmp/letta.dump"
-docker cp scripts\backup\letta-swap.sql "${c}:/tmp/letta-swap.sql"
-docker exec $c sh -c 'createdb -U $POSTGRES_USER letta_restaurada && pg_restore -U $POSTGRES_USER -d letta_restaurada --no-owner /tmp/letta.dump'
-docker exec $c sh -c 'psql -U $POSTGRES_USER -d postgres -v ON_ERROR_STOP=1 --single-transaction -f /tmp/letta-swap.sql'
-docker restart $c
-```
-
-Qué hace cada paso:
-
-1. Lleva al contenedor el volcado y el SQL del intercambio.
-2. Restaura el volcado en una base nueva, `letta_restaurada`. La base en uso no se toca todavía.
-3. Intercambia las bases en una sola transacción: la que había pasa a llamarse `letta_antes` y la restaurada pasa a ser `letta`. Si algo falla, no cambia nada.
-4. Reinicia Letta para que abra la base restaurada.
-
-Si el intercambio dice que la base está en uso, repite esa orden: Letta abrió una conexión entre dos pasos. Si dice que `letta_antes` ya existe, es de una restauración anterior: bórrala (abajo) y repite.
-
-Cuando hayas comprobado que Shiro recuerda lo que debe, borra la base anterior:
-
-```powershell
-docker exec $c sh -c 'dropdb -U $POSTGRES_USER letta_antes'
-```
-
-**No restaures encima de la base en uso** con `pg_restore --clean`. Probado el 2026-11-20 en un Letta temporal: termina con cientos de errores y la base se queda sin tablas.
-
-### 3. Si Letta no se puede restaurar
-
-Pasa si solo hay copias parciales, o si el Letta nuevo es de otra versión. La memoria local guarda todos los turnos, así que Letta se puede volver a llenar desde ella: se borra en la memoria local el agente anotado y la marca de «ya enviado» de cada turno, y Shiro los vuelve a mandar a un agente nuevo.
-
-La orden que hace eso (`reindex-memory`) todavía no existe: es la parte de P-11a que falta. Hasta entonces, restaura solo la memoria local. Shiro funciona con ella y enseña el historial; lo que no tendrá es la búsqueda de Letta sobre los turnos anteriores.
+Si necesitas restaurar antes de que exista la orden, pide ayuda con la copia delante y **no borres nada**: ni la memoria que hay, ni el volumen de Letta, ni las copias.
 
 ## Si la imagen de Letta no trajera `pg_dump`
 
 La imagen fijada hoy lo trae (comprobado el 2026-11-20: PostgreSQL 15). Tras subir Letta de versión, compruébalo antes de fiarte de la copia:
 
 ```powershell
-docker exec $c which pg_dump
+docker exec <contenedor de Letta> sh -c "command -v pg_dump"
 ```
 
 Si no está, la alternativa es copiar el volumen `letta_pgdata` con el contenedor parado (`docker compose stop letta`), o hacer el volcado desde un contenedor auxiliar de Postgres de la misma versión mayor.
