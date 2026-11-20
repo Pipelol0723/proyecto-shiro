@@ -49,6 +49,9 @@ param(
   # Falla si Letta no está en marcha, en vez de hacer una copia parcial.
   [switch]$RequireLetta,
   [string]$LettaContainer,
+  # Copia también una memoria sin ningún turno. Sin esto es un error: lo normal
+  # es que la ruta de memory.db esté mal.
+  [switch]$AllowEmpty,
   [int]$Keep = 7
 )
 
@@ -215,6 +218,7 @@ function Invoke-Backup {
   $copy = Join-Path $script:tmp 'copia'
   New-Item -ItemType Directory -Path $copy | Out-Null
   $createArgs = @('create', '--db', $MemoryDb, '--out', $copy, '--name', $name)
+  if ($AllowEmpty) { $createArgs += '--allow-empty' }
 
   $letta = Get-LettaDump $copy
   if ($letta.Reason) { $createArgs += @('--no-letta', $letta.Reason) }
@@ -259,9 +263,15 @@ function Invoke-Backup {
   Invoke-AtDestination "Rename-Item -LiteralPath $partialQ -NewName $(ConvertTo-Quoted $name)" | Out-Null
   $script:partial = $null
 
-  # 3. Se retiran las copias que sobran: solo carpetas con nombre de copia, y
-  #    solo dentro de la carpeta de las copias.
-  $present = Invoke-AtDestination "Get-ChildItem -LiteralPath $rootQ -Directory | ForEach-Object { `$_.Name }"
+  # 3. Se retiran las copias que sobran: solo carpetas con nombre de copia y
+  #    con su manifiesto, y solo dentro de la carpeta de las copias. De cada
+  #    una se dice si es completa: la última completa no se retira nunca.
+  $present = Invoke-AtDestination ("Get-ChildItem -LiteralPath $rootQ -Directory | ForEach-Object { " +
+    "`$state = 'sin-manifiesto'; `$file = Join-Path `$_.FullName 'manifest.json'; " +
+    "if (Test-Path -LiteralPath `$file) { try { " +
+    "if ((Get-Content -LiteralPath `$file -Raw -Encoding UTF8 | ConvertFrom-Json).complete) " +
+    "{ `$state = 'completa' } else { `$state = 'parcial' } } catch { } }; " +
+    "`$_.Name + '=' + `$state }")
   $extra = @($present) | & node $helper rotate --keep $Keep
   if ($LASTEXITCODE -ne 0) { throw 'no se pudo decidir qué copias sobran' }
   foreach ($old in @($extra)) {

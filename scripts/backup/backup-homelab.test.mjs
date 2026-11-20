@@ -21,15 +21,16 @@ after(() => {
 });
 
 /** Una memoria con turnos en su propia carpeta, como la de la app. */
-function makeMemory(/** @type {string} */ folder) {
+function makeMemory(/** @type {string} */ folder, turns = 1) {
   mkdirSync(join(work, folder), { recursive: true });
   const path = join(work, folder, 'memory.db');
   const db = new Database(path);
   db.exec(`CREATE TABLE messages (id TEXT PRIMARY KEY, user_id TEXT, role TEXT, text TEXT,
     timestamp TEXT, metadata TEXT, synced_at TEXT)`);
-  db.prepare(
-    `INSERT INTO messages VALUES ('a', 'me', 'user', 'hola', '2026-11-20T10:00:00.000Z', NULL, NULL)`,
-  ).run();
+  const insert = db.prepare(
+    `INSERT INTO messages VALUES (?, 'me', 'user', 'hola', '2026-11-20T10:00:00.000Z', NULL, NULL)`,
+  );
+  for (let i = 0; i < turns; i += 1) insert.run(`t${String(i)}`);
   db.close();
   return path;
 }
@@ -83,22 +84,53 @@ test('una copia a una carpeta: llega entera, se comprueba y se anota', { skip },
   assert.deepEqual({ name: record.name, complete: record.complete }, { name, complete: false });
 });
 
-test('conserva las copias más nuevas y no toca lo demás que haya en la carpeta', { skip }, () => {
-  const db = makeMemory('rotar');
-  const destination = join(work, 'rotar-destino');
-  for (const old of ['20250101T000000Z', '20250102T000000Z', '20250103T000000Z', 'otra-carpeta']) {
-    mkdirSync(join(destination, old), { recursive: true });
-  }
-  writeFileSync(join(destination, 'notas.txt'), 'no es una copia');
+test(
+  'conserva las más nuevas y la última completa, y no toca lo que no es una copia',
+  { skip },
+  () => {
+    const db = makeMemory('rotar');
+    const destination = join(work, 'rotar-destino');
+    /** Una carpeta del destino; con `complete` lleva un manifiesto de copia. */
+    const folder = (/** @type {string} */ name, /** @type {boolean} */ complete) => {
+      mkdirSync(join(destination, name), { recursive: true });
+      if (complete === undefined) return;
+      writeFileSync(join(destination, name, 'manifest.json'), JSON.stringify({ complete }));
+    };
+    folder('20250101T000000Z', true);
+    folder('20250102T000000Z', false);
+    folder('20250103T000000Z', false);
+    folder('20250104T000000Z'); // con nombre de copia, pero sin manifiesto
+    folder('otra-carpeta');
+    writeFileSync(join(destination, 'notas.txt'), 'no es una copia');
 
-  const { code, output } = run(['-MemoryDb', db, '-Destination', destination, '-Keep', '2']);
+    // La copia nueva va sin Letta: con dos por conservar, sobraría la completa.
+    const { code, output } = run(['-MemoryDb', db, '-Destination', destination, '-Keep', '2']);
 
-  assert.equal(code, 0, output);
-  const left = readdirSync(destination).sort();
-  assert.equal(left.length, 4, left.join(', '));
-  assert.deepEqual(left.slice(0, 1), ['20250103T000000Z']);
-  assert.match(left[1] ?? '', BACKUP_NAME);
-  assert.deepEqual(left.slice(2), ['notas.txt', 'otra-carpeta']);
+    assert.equal(code, 0, output);
+    const left = readdirSync(destination).sort();
+    assert.equal(left.length, 6, left.join(', '));
+    assert.deepEqual(left.slice(0, 3), [
+      '20250101T000000Z',
+      '20250103T000000Z',
+      '20250104T000000Z',
+    ]);
+    assert.match(left[3] ?? '', BACKUP_NAME);
+    assert.deepEqual(left.slice(4), ['notas.txt', 'otra-carpeta']);
+  },
+);
+
+test('una memoria sin turnos no se copia, salvo que se pida', { skip }, () => {
+  const db = makeMemory('vacia', 0);
+  const destination = join(work, 'vacia-destino');
+  mkdirSync(destination);
+
+  const refused = run(['-MemoryDb', db, '-Destination', destination]);
+  assert.equal(refused.code, 1, refused.output);
+  assert.deepEqual(readdirSync(destination), [], 'no queda nada a medias en el destino');
+  assert.equal(existsSync(join(work, 'vacia', 'last-backup.json')), false);
+
+  const allowed = run(['-MemoryDb', db, '-Destination', destination, '-AllowEmpty']);
+  assert.equal(allowed.code, 0, allowed.output);
 });
 
 test('si el otro equipo no responde, sale con un código propio y no anota nada', { skip }, () => {
