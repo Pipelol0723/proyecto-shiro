@@ -303,3 +303,18 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
 - Motivo: el asistente podía salir todo en verde con el chat roto (R-280,
   R-155). Parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md). Quedan
   fuera el estado del agente de Letta y el de las claves de voz.
+
+## Nota 2026-11-20 — la última copia de seguridad en el informe (§6)
+
+- El informe `system:health` gana un campo opcional, **`lastBackup`**: la
+  fecha de la última copia de la memoria, si llevaba el volcado de Letta y la
+  fecha de la última que sí lo llevaba. Sale de `last-backup.json`, que
+  `npm run backup` escribe al lado de `memory.db`. Falta si no se ha hecho
+  ninguna copia. Solo lleva fechas: no dice dónde está la copia.
+- Al arrancar, el `core-host` avisa en el log si no hay ninguna copia anotada
+  o si la última tiene 14 días o más. Con copia reciente pero sin una completa
+  reciente deja una nota, sin alarmar. Una copia que no se hace es el riesgo;
+  que el aviso salga solo es la mitigación (P-11a del
+  [plan de mejora](../plan-mejora-2026-11.md), apartado 8.1).
+- La interfaz todavía no lo enseña: llega con el chip de estado (RD-7) y la
+  zona de actividad (RD-5).

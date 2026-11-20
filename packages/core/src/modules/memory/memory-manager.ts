@@ -289,6 +289,14 @@ export class MemoryManager implements IMemoryModule {
   }
 
   /**
+   * Archivo de la memoria local (SQLite). Al lado se anota la última copia de
+   * seguridad; el `core-host` lo lee de ahí para el informe de salud.
+   */
+  getLocalDbPath(): string {
+    return this.config.local.db_path;
+  }
+
+  /**
    * Devuelve los parámetros que el pipeline conversacional necesita
    * para construir el contexto del LLM en cada turno (límite de turnos
    * recientes, límite semántico y timeout). El bootstrap los lee de

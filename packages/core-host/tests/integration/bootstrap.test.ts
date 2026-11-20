@@ -8,7 +8,10 @@
  * Es el primer test "end-to-end real" del split cliente/server.
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterSchema,
   EventBus,
@@ -97,6 +100,12 @@ async function waitFor(
   }
 }
 
+/** Carpetas temporales de los tests que usan una memoria en disco. */
+const tempDirs: string[] = [];
+afterAll(() => {
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+});
+
 describe('core-host bootstrap end-to-end', () => {
   let result: BootstrapResult | null = null;
 
@@ -117,6 +126,36 @@ describe('core-host bootstrap end-to-end', () => {
     });
     expect(result.transport.address).toBe('127.0.0.1');
   });
+
+  // P-11a: `npm run backup` anota cada copia al lado de la memoria.
+  it('el informe de salud lleva la fecha de la última copia de la memoria', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'shiro-bootstrap-backup-'));
+    tempDirs.push(dataDir);
+    const record = { at: '2026-11-19T10:00:00.000Z', complete: false, lastCompleteAt: null };
+    writeFileSync(
+      join(dataDir, 'last-backup.json'),
+      JSON.stringify({ ...record, name: '20261119T100000Z', turns: 3 }),
+    );
+    const dbPath = join(dataDir, 'memory.db').replaceAll('\\', '/');
+    const yaml = FIXTURE_YAML.replace(`db_path: ':memory:'`, `db_path: '${dbPath}'`);
+    expect(yaml).not.toBe(FIXTURE_YAML);
+
+    result = await bootstrap({
+      port: 0,
+      config: ModulesConfigSchema.parse(parseYaml(yaml)),
+      character: FIXTURE_CHARACTER,
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+    const reports: EventMap['system:health'][] = [];
+    result.bus.on('system:health', (report) => {
+      reports.push(report);
+    });
+    await result.bus.emit('system:health-check', {});
+
+    await waitFor(() => reports.length > 0, { timeoutMs: 8000 });
+    expect(reports[0]?.lastBackup).toEqual(record);
+  }, 15_000);
 
   it('un fallo de clave de la nube vuelve a emitir system:health con el problema', async () => {
     result = await bootstrap({

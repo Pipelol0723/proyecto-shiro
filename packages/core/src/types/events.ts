@@ -26,6 +26,19 @@ import type { TurnFailureReason } from './turn-failure.js';
  * `keyof EventMap` produzca una union de strings, no un indexed type.
  */
 
+/**
+ * Última copia de seguridad de la memoria, leída de `last-backup.json` (lo
+ * escribe `npm run backup`). Solo fechas: no dice dónde está la copia.
+ */
+export interface LastBackupInfo {
+  /** ISO de la última copia, lleve o no el volcado de Letta. */
+  at: string;
+  /** La última copia llevaba también el volcado de Letta. */
+  complete: boolean;
+  /** ISO de la última copia completa; `null` si nunca hubo una. */
+  lastCompleteAt: string | null;
+}
+
 /** Estado de un servicio externo en el healthcheck del sistema. */
 export type ServiceStatus = 'ok' | 'down';
 
@@ -68,6 +81,11 @@ export interface SystemHealthReport {
    * cuando todo lo vivo está listo, o cuando no se pudo averiguar.
    */
   readiness?: ServiceReadiness;
+  /**
+   * Última copia de seguridad de la memoria (P-11a). Ausente si no se ha
+   * hecho ninguna, o si la anotación no se pudo leer.
+   */
+  lastBackup?: LastBackupInfo;
   /** ISO timestamp del momento del chequeo. */
   checkedAt: string;
 }
