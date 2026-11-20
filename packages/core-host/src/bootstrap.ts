@@ -5,7 +5,8 @@
  *
  * Flujo:
  *   1. Logger raíz.
- *   2. WebSocketServerTransport (escucha en `port`/`path`).
+ *   2. WebSocketServerTransport: reserva `port` enseguida, pero no
+ *      atiende a nadie hasta el último paso (P-13).
  *   3. EventBus inyectando el transport.
  *   4. ModuleLoader con factories registradas (mocks por ahora — ver
  *      `mocks/noop-modules.ts`).
@@ -108,24 +109,29 @@ export interface BootstrapResult {
  * `Promise` resuelve cuando el server está escuchando y el Orchestrator
  * ha emitido `bus:ready`.
  *
- * El puerto se abre al final, con todos los manejadores ya puestos (P-13):
- * abriéndolo al principio, un cliente que conectaba durante el arranque se
- * quedaba sin historial, sin el estado de los servicios y perdía sus
- * primeros mensajes. Tampoco se espera a Letta para abrirlo.
+ * El puerto se reserva al principio y se empieza a atender al final, con
+ * todos los manejadores ya puestos (P-13). Antes se atendía desde el primer
+ * momento, y un cliente que conectaba durante el arranque se quedaba sin
+ * historial, sin el estado de los servicios y perdía sus primeros mensajes.
+ * Reservarlo al principio importa: si ya hay otro core-host en ese puerto,
+ * este falla enseguida, sin haber abierto la memoria ni llamado a nadie.
+ * Tampoco se espera a Letta para empezar a atender.
  */
 export async function bootstrap(options: BootstrapOptions): Promise<BootstrapResult> {
   const logger = options.logger ?? new Logger();
   const child = logger.child({ module: 'bootstrap' });
 
-  // 1. Transport server-side. Todavía no escucha: el puerto se abre al
-  //    final, cuando todo lo demás está en su sitio.
+  // 1. Transport server-side. Reserva el puerto ya (si está ocupado, falla
+  //    aquí, antes de tocar nada) pero todavía no atiende: quien conecte
+  //    recibe un 503 y reintenta hasta que todo esté en su sitio.
   const transport = new WebSocketServerTransport({
     port: options.port,
     host: options.host,
     path: options.path,
     logger,
-    autoListen: false,
+    deferConnections: true,
   });
+  await transport.ready();
 
   // 2. EventBus inyectando el transport.
   const bus = new EventBus<EventMap>({
@@ -493,18 +499,9 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     child.info('core-host apagado');
   };
 
-  // Lo último: abrir el puerto. Quien conecte desde ahora encuentra todos
+  // Lo último: empezar a atender. Quien conecte desde ahora encuentra todos
   // los manejadores puestos.
-  try {
-    await transport.listen();
-  } catch (err) {
-    // Puerto ocupado u otro fallo al vincular: se suelta lo ya arrancado
-    // (temporizadores, la base de la memoria) y el error sigue su camino.
-    await shutdown().catch((shutdownErr: unknown) => {
-      child.warn('no se pudo soltar todo tras fallar al abrir el puerto', { err: shutdownErr });
-    });
-    throw err;
-  }
+  transport.acceptConnections();
 
   child.info(
     `core-host listo en puerto ${transport.port}${options.path ?? '/bus'} (personaje: ${options.character.identity.name})`,
