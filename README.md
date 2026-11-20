@@ -513,23 +513,25 @@ cp -r docs/design/chibi-prototype/test-model/assets \
 
 ## Scripts disponibles (desde la raíz)
 
-| Comando                                         | Descripción                                              |
-| ----------------------------------------------- | -------------------------------------------------------- |
-| `npm run build`                                 | Compila todos los workspaces (`tsc` por paquete)         |
-| `npm run typecheck`                             | Verifica tipos en todos los paquetes                     |
-| `npm test`                                      | Ejecuta tests vía Vitest workspace                       |
-| `npm run test:watch`                            | Tests en modo watch                                      |
-| `npm run test:coverage`                         | Tests con reporte de cobertura                           |
-| `npm run test:coverage -w @proyecto-shiro/core` | Cobertura de core con sus umbrales (lo que aplica el CI) |
-| `npm run lint`                                  | Lintea todo el monorepo con ESLint                       |
-| `npm run lint:fix`                              | Lintea y arregla lo automatizable                        |
-| `npm run format`                                | Formatea con Prettier (todos los paquetes)               |
-| `npm run format:check`                          | Verifica formato sin escribir (lo que usa el CI)         |
-| `npm run verify`                                | Todos los checks del CI, en orden                        |
-| `npm run test:scripts`                          | Tests de los scripts de la raíz (`node --test`)          |
-| `npm run audit:prod`                            | Audit de producción: falla con high o critical           |
-| `npm run agents:sync`                           | Regenera AGENTS.md desde los bloques de CLAUDE.md        |
-| `npm run agents:check`                          | Falla si AGENTS.md no coincide con CLAUDE.md             |
+| Comando                                         | Descripción                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| `npm run build`                                 | Compila todos los workspaces (`tsc` por paquete)            |
+| `npm run typecheck`                             | Verifica tipos en todos los paquetes                        |
+| `npm test`                                      | Ejecuta tests vía Vitest workspace                          |
+| `npm run test:watch`                            | Tests en modo watch                                         |
+| `npm run test:coverage`                         | Tests con reporte de cobertura                              |
+| `npm run test:coverage -w @proyecto-shiro/core` | Cobertura de core con sus umbrales (lo que aplica el CI)    |
+| `npm run lint`                                  | Lintea todo el monorepo con ESLint                          |
+| `npm run lint:fix`                              | Lintea y arregla lo automatizable                           |
+| `npm run format`                                | Formatea con Prettier (todos los paquetes)                  |
+| `npm run format:check`                          | Verifica formato sin escribir (lo que usa el CI)            |
+| `npm run verify`                                | Todos los checks del CI, en orden                           |
+| `npm run test:scripts`                          | Tests de los scripts de la raíz (`node --test`)             |
+| `npm run audit:prod`                            | Audit de producción: falla con high o critical              |
+| `npm run backup`                                | Copia de seguridad de la memoria ([RESTORE.md](RESTORE.md)) |
+| `npm run backup:check`                          | Ensayo de restauración de una copia                         |
+| `npm run agents:sync`                           | Regenera AGENTS.md desde los bloques de CLAUDE.md           |
+| `npm run agents:check`                          | Falla si AGENTS.md no coincide con CLAUDE.md                |
 
 Para ejecutar un script solo en un paquete:
 

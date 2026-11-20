@@ -24,6 +24,7 @@
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "voices": "node scripts/gemini-voices.mjs",
     "backup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-homelab.ps1",
+    "backup:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restore-check.ps1",
     "agents:sync": "node scripts/sync-agents-md.mjs",
     "agents:check": "node scripts/sync-agents-md.mjs --check",
     "audit:prod": "node scripts/audit-prod.mjs",
