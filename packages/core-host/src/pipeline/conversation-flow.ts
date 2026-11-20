@@ -319,11 +319,14 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       );
       await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, effectiveTier);
     } catch (err) {
-      child.error('error procesando turno, emitiendo fallback', { err });
+      const reason = classifyTurnFailure(err);
+      // Una respuesta sin texto es un caso esperable: aviso, sin traza.
+      if (reason === 'empty') child.warn('el modelo contestó sin texto, emitiendo fallback');
+      else child.error('error procesando turno, emitiendo fallback', { err });
       // Un fallo de la nube ya se anunció arriba y el turno siguió en local:
       // lo que llega aquí es del modelo local o de un paso anterior a él.
       await bus.emit('llm:failed', {
-        reason: classifyTurnFailure(err),
+        reason,
         tier: 'local',
         userId: payload.userId,
       });

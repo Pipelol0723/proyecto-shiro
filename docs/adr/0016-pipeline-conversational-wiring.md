@@ -187,3 +187,22 @@ El error específico (timeout de Ollama, 401 de Anthropic, etc.) va al log. El u
   distinguir una respuesta de un error ni decir qué arreglar (R-281). Es la
   primera parte de P-12 del [plan de mejora](../plan-mejora-2026-11.md); el
   aviso en el chat llega con el cliente.
+
+## Nota 2026-11-20 — motivo `empty`
+
+- La lista cerrada de `llm:failed` gana un motivo: **`empty`**. El modelo
+  contestó, pero sin texto: una respuesta vacía, o cortada por el tope de
+  tokens antes de llegar al texto. Antes esa respuesta se entregaba tal cual:
+  una burbuja vacía, sin voz y sin aviso.
+- La comprobación está en el pipeline, después de cada llamada al LLM, y no en
+  cada módulo. Si quien contesta vacío es la nube, el turno sigue en local,
+  como con cualquier otro fallo suyo. Si es el local, sale la respuesta de
+  error de siempre. Una respuesta vacía no se guarda en la memoria.
+- Para el aviso de la clave de la nube, un `empty` cuenta como una respuesta:
+  la nube contestó, así que borra un `auth` o `quota` anotado.
+- **Queda sin resolver.** Si la nube ya ejecutó herramientas en ese turno y su
+  respuesta final llega vacía, responde el modelo local, que no sabe lo que se
+  hizo. Ya pasaba con cualquier otro fallo de la nube a mitad del bucle; lo
+  corrige P-32 del [plan de mejora](../plan-mejora-2026-11.md), que quita el
+  paso a local cuando ya hubo efectos.
+- Es el arreglo IN-F del plan de mejora.
