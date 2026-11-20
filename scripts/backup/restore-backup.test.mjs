@@ -395,10 +395,14 @@ test(
     assert.match(output, /la base de Letta ya está cambiada/);
     assert.match(output, /docker restart letta-1/);
     assert.match(output, /-Memory/);
-    // Lo restaurado no se retira: ya es la base en uso.
+    // Lo restaurado no se retira después del cambio: ya es la base en uso.
+    const afterSwap = docker.slice(
+      docker.findIndex((line) => line.includes('--single-transaction')),
+    );
     assert.equal(
-      docker.some((line) => line.includes('dropdb')),
+      afterSwap.some((line) => line.includes('dropdb')),
       false,
+      afterSwap.join(' | '),
     );
     assert.equal(turnsIn(db), 7);
   },

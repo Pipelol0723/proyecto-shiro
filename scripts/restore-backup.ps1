@@ -167,7 +167,10 @@ function Switch-LettaDatabase([string]$Container, [string]$New, [string]$Old) {
 
   Write-Step 'reiniciando Letta'
   & docker restart $Container | Out-Null
-  if ($LASTEXITCODE -ne 0) { throw "no se pudo reiniciar Letta: reinícialo a mano (docker restart $Container)" }
+  if ($LASTEXITCODE -ne 0) {
+    throw ("la base de Letta ya está cambiada (la anterior quedó como «$Old»), pero Letta no se pudo reiniciar. " +
+      "Reinícialo a mano (docker restart $Container). Si ibas a restaurar también la memoria, repite solo con -Memory")
+  }
   $deadline = (Get-Date).AddSeconds($StartTimeoutSeconds)
   while ($true) {
     Invoke-Quiet { docker exec $Container sh -c 'pg_isready -U $POSTGRES_USER -d $POSTGRES_DB' } | Out-Null
@@ -240,11 +243,16 @@ function Restore-Memory([string]$Stamp, $Manifest) {
   $left = @($memoryFiles | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) })
   if ($left.Count -gt 0) { throw "siguen en la carpeta: $($left -join ', '). No se ha copiado nada" }
 
-  Copy-Item -LiteralPath (Join-Path $Backup 'memory.db') -Destination $MemoryDb
+  $where = if ($present.Count -gt 0) { "La anterior está en $aside" } else { 'No había ninguna antes' }
+  try {
+    Copy-Item -LiteralPath (Join-Path $Backup 'memory.db') -Destination $MemoryDb
+  } catch {
+    throw "no se pudo copiar la memoria de la copia ($($_.Exception.Message)). $where"
+  }
   $expected = ($Manifest.files | Where-Object { $_.name -eq 'memory.db' }).sha256
   if ((Get-Sha256 $MemoryDb) -ne $expected) {
     Remove-Item -LiteralPath $MemoryDb -Force
-    throw 'la memoria no llegó igual que en la copia y se ha retirado. La anterior está apartada'
+    throw "la memoria no llegó igual que en la copia y se ha retirado. $where"
   }
   if ($present.Count -gt 0) { Write-Step "memoria restaurada. La anterior queda en $aside" }
   else { Write-Step 'memoria restaurada. No había ninguna antes' }
