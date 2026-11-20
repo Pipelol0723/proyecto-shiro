@@ -9,8 +9,8 @@
  * envío y el borrado en el destino los hace el script de PowerShell.
  */
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
+import { rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -49,26 +49,32 @@ export function checkNode(nodeVersion, wanted) {
 /**
  * Copia `memory.db` con la API de backup de SQLite, que es segura con la base
  * abierta y el WAL a medias; copiar el archivo a mano no lo es (R-329). El
- * origen se abre en solo lectura: aquí no se migra ni se escribe.
+ * origen se abre en solo lectura: aquí no se migra ni se escribe. Si algo
+ * falla, no se deja una copia a medias.
  *
  * @param {string} dbPath
  * @param {string} outFile
  */
 export async function snapshotMemory(dbPath, outFile) {
   if (!existsSync(dbPath)) throw new Error(`no existe la base de la memoria: ${dbPath}`);
-  const source = new Database(dbPath, { readonly: true, fileMustExist: true });
   try {
-    await source.backup(outFile);
-  } finally {
-    source.close();
-  }
-  // La copia queda en un solo archivo, sin `-wal` ni `-shm` al lado.
-  const copy = new Database(outFile);
-  try {
-    copy.pragma('journal_mode = DELETE');
-    return inspectMemory(copy);
-  } finally {
-    copy.close();
+    const source = new Database(dbPath, { readonly: true, fileMustExist: true });
+    try {
+      await source.backup(outFile);
+    } finally {
+      source.close();
+    }
+    // La copia queda en un solo archivo, sin `-wal` ni `-shm` al lado.
+    const copy = new Database(outFile);
+    try {
+      copy.pragma('journal_mode = DELETE');
+      return inspectMemory(copy);
+    } finally {
+      copy.close();
+    }
+  } catch (err) {
+    rmSync(outFile, { force: true });
+    throw err;
   }
 }
 
@@ -78,26 +84,28 @@ function inspectMemory(db) {
   if (integrity !== 'ok') {
     throw new Error(`la copia no pasa la comprobación de SQLite: ${String(integrity)}`);
   }
-  const table = db
-    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'messages'`)
-    .get();
-  if (table === undefined) {
+  const columns = /** @type {{ name: string }[]} */ (db.pragma('table_info(messages)')).map(
+    (column) => column.name,
+  );
+  if (columns.length === 0) {
     throw new Error('la base no tiene la tabla de turnos: no parece la memoria de Shiro');
   }
+  // Una base de un esquema anterior también se copia: lo que no tenga, no se cuenta.
+  const pending = columns.includes('synced_at') ? 'SUM(synced_at IS NULL)' : 'NULL';
   const row =
     /** @type {{ turns: number, pending: number | null, first: string | null, last: string | null }} */ (
       db
         .prepare(
-          `SELECT COUNT(*) AS turns, SUM(synced_at IS NULL) AS pending,
-                MIN(timestamp) AS first, MAX(timestamp) AS last
-         FROM messages`,
+          `SELECT COUNT(*) AS turns, ${pending} AS pending,
+                  MIN(timestamp) AS first, MAX(timestamp) AS last
+           FROM messages`,
         )
         .get()
     );
   return {
     userVersion: Number(db.pragma('user_version', { simple: true })),
     turns: row.turns,
-    pending: row.pending ?? 0,
+    pending: row.pending,
     firstTurnAt: row.first,
     lastTurnAt: row.last,
   };
@@ -112,23 +120,25 @@ export async function sha256File(path) {
 
 /**
  * Modelos de `ollama list`, con el identificador corto de cada uno. Los pesos
- * no se copian (se vuelven a descargar): basta con saber cuáles eran.
+ * no se copian (se vuelven a descargar): basta con saber cuáles eran. `null`
+ * si el texto no trae ninguno: un error de Ollama no es una lista vacía.
  *
  * @param {string} text
  */
 export function parseOllamaList(text) {
-  return text
+  const models = text
     .split(/\r?\n/)
     .slice(1)
     .map((line) => line.trim().split(/\s+/))
     .filter((cols) => cols.length >= 2)
     .map(([name, id]) => ({ name, id }));
+  return models.length > 0 ? models : null;
 }
 
 /**
  * Filas por tabla del Postgres de Letta, de líneas `tabla=n`. Van en el
  * manifiesto para comparar al restaurar: un volcado no se puede contar sin
- * restaurarlo.
+ * restaurarlo. `null` si el texto no trae ningún recuento.
  *
  * @param {string} text
  */
@@ -139,7 +149,7 @@ export function parseRowCounts(text) {
     const match = /^(\w+)=(\d+)$/.exec(line.trim());
     if (match?.[1] !== undefined) rows[match[1]] = Number(match[2]);
   }
-  return rows;
+  return Object.keys(rows).length > 0 ? rows : null;
 }
 
 /** La imagen de Letta fijada en `docker-compose.yml`. @param {string} text */
@@ -148,19 +158,42 @@ export function lettaImageFromCompose(text) {
 }
 
 /**
- * Qué copias sobran. Solo propone carpetas con nombre de copia: lo demás que
- * haya en el destino no se toca nunca.
+ * Las copias que hay en el destino, de líneas `nombre=completa` o
+ * `nombre=parcial`. Lo que no sea eso (otra carpeta, una copia sin manifiesto,
+ * una línea repetida) no cuenta como copia.
  *
- * @param {string[]} names nombres que hay en la carpeta de destino
+ * @param {string} text
+ */
+export function parseCopies(text) {
+  /** @type {Map<string, boolean>} */
+  const copies = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    const [name = '', state] = line.trim().split('=');
+    if (BACKUP_NAME.test(name) && (state === 'completa' || state === 'parcial')) {
+      copies.set(name, state === 'completa');
+    }
+  }
+  return [...copies].map(([name, complete]) => ({ name, complete }));
+}
+
+/**
+ * Qué copias sobran. Se conservan las `keep` más nuevas y, además, la última
+ * completa: varias copias seguidas sin el volcado de Letta no pueden echar a
+ * la única que lo lleva.
+ *
+ * @param {{ name: string, complete: boolean }[]} copies
  * @param {number} keep cuántas copias se conservan
  */
-export function planRotation(names, keep) {
+export function planRotation(copies, keep) {
   if (!Number.isInteger(keep) || keep < 1) throw new Error('hay que conservar al menos una copia');
-  return names
-    .filter((name) => BACKUP_NAME.test(name))
-    .sort()
-    .reverse()
-    .slice(keep);
+  const sorted = [...new Map(copies.map((copy) => [copy.name, copy])).values()]
+    .filter((copy) => BACKUP_NAME.test(copy.name))
+    .sort((a, b) => (a.name < b.name ? 1 : -1));
+  const lastComplete = sorted.find((copy) => copy.complete)?.name;
+  return sorted
+    .slice(keep)
+    .map((copy) => copy.name)
+    .filter((name) => name !== lastComplete);
 }
 
 /**
@@ -176,27 +209,84 @@ export async function buildManifest({ dir, name, createdAt, memory, letta, ollam
   for (const file of names) {
     const path = join(dir, file);
     if (!existsSync(path)) throw new Error(`falta ${file} en la copia`);
-    files.push({ name: file, bytes: statSync(path).size, sha256: await sha256File(path) });
+    const bytes = statSync(path).size;
+    // Un volcado que falló a medias deja un archivo vacío: no es una copia.
+    if (bytes === 0) throw new Error(`${file} está vacío: la copia no se da por buena`);
+    files.push({ name: file, bytes, sha256: await sha256File(path) });
   }
   // Sin el volcado de Letta la copia vale, pero no es completa: se dice.
   return { format: 1, name, createdAt, complete: letta.included, files, memory, letta, ollama };
 }
 
 /**
- * Comprueba una copia contra su manifiesto. Devuelve lo que no cuadra.
+ * Lee un manifiesto y comprueba que tiene la forma de uno: una copia sin la
+ * memoria, o que dice ser completa sin el volcado, no es una copia.
+ *
+ * @param {string} dir
+ */
+export function readManifest(dir) {
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+  const files = Array.isArray(manifest?.files) ? manifest.files : [];
+  const names = files.map((/** @type {{ name?: unknown }} */ file) => file.name);
+  if (names.some((/** @type {unknown} */ n) => typeof n !== 'string' || /[\\/]/.test(n))) {
+    throw new Error('el manifiesto nombra un archivo que no está en la carpeta de la copia');
+  }
+  if (!names.includes('memory.db')) throw new Error('el manifiesto no incluye la memoria');
+  if (manifest.complete === true && !names.includes(LETTA_DUMP)) {
+    throw new Error('el manifiesto dice que la copia es completa y no incluye el volcado de Letta');
+  }
+  return manifest;
+}
+
+/**
+ * Comprueba los archivos de una copia contra su manifiesto. Devuelve lo que no
+ * cuadra. Solo mira los hashes: abrir la memoria y contar es del ensayo de
+ * restauración.
  *
  * @param {string} dir
  * @returns {Promise<string[]>}
  */
 export async function verifyBackup(dir) {
-  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
   const problems = [];
-  for (const file of manifest.files) {
+  for (const file of readManifest(dir).files) {
     const path = join(dir, file.name);
     if (!existsSync(path)) problems.push(`falta ${file.name}`);
     else if ((await sha256File(path)) !== file.sha256) problems.push(`${file.name} no coincide`);
   }
   return problems;
+}
+
+/**
+ * Anota la copia en `last-backup.json`, al lado de la memoria. Una copia sin
+ * el volcado de Letta también se anota, pero conserva la fecha de la última
+ * completa: son dos avisos distintos.
+ *
+ * @param {string} dbPath
+ * @param {string} dir carpeta de la copia, con su manifiesto
+ * @param {Date} now
+ */
+export function markLastBackup(dbPath, dir, now) {
+  const manifest = readManifest(dir);
+  const file = join(dirname(dbPath), LAST_BACKUP_FILE);
+  let previous = null;
+  try {
+    previous = JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    // Sin anotación previa, o ilegible: se empieza de cero.
+  }
+  const at = now.toISOString();
+  const earlier = typeof previous?.lastCompleteAt === 'string' ? previous.lastCompleteAt : null;
+  const record = {
+    at,
+    name: manifest.name,
+    complete: manifest.complete === true,
+    turns: manifest.memory.turns,
+    lastCompleteAt: manifest.complete === true ? at : earlier,
+  };
+  // Se escribe aparte y se renombra: un corte a medias no deja el archivo roto.
+  writeFileSync(`${file}.tmp`, `${JSON.stringify(record, null, 2)}\n`);
+  renameSync(`${file}.tmp`, file);
+  return file;
 }
 
 /** @param {string[]} argv */
@@ -211,9 +301,10 @@ async function main(argv) {
       name: { type: 'string' },
       keep: { type: 'string', default: '7' },
       'letta-image': { type: 'string' },
+      'letta-rows': { type: 'string' },
       'no-letta': { type: 'string' },
       'ollama-list': { type: 'string' },
-      'letta-rows': { type: 'string' },
+      'allow-empty': { type: 'boolean', default: false },
     },
   });
   const root = new URL('../../', import.meta.url);
@@ -221,16 +312,20 @@ async function main(argv) {
     if (value === undefined || value === '') throw new Error(`falta --${flag}`);
     return value;
   };
+  const text = (/** @type {string | undefined} */ file) =>
+    file === undefined ? '' : readFileSync(file, 'utf8');
 
   if (command === 'name') return backupName(new Date());
   if (command === 'rotate') {
-    const names = readFileSync(0, 'utf8').split(/\r?\n/).filter(Boolean);
-    return planRotation(names, Number(values.keep)).join('\n');
+    return planRotation(parseCopies(readFileSync(0, 'utf8')), Number(values.keep)).join('\n');
   }
   if (command === 'verify') {
     const problems = await verifyBackup(need(values.dir, 'dir'));
     if (problems.length > 0) throw new Error(`la copia no cuadra: ${problems.join('; ')}`);
     return 'ok';
+  }
+  if (command === 'mark') {
+    return markLastBackup(need(values.db, 'db'), need(values.dir, 'dir'), new Date());
   }
   if (command === 'create') {
     const problem = checkNode(
@@ -242,6 +337,13 @@ async function main(argv) {
     const name = need(values.name, 'name');
     mkdirSync(out, { recursive: true });
     const memory = await snapshotMemory(need(values.db, 'db'), join(out, 'memory.db'));
+    if (memory.turns === 0 && !values['allow-empty']) {
+      rmSync(join(out, 'memory.db'), { force: true });
+      throw new Error(
+        'la memoria no tiene ningún turno: ¿es la base correcta? No se da por copiada ' +
+          '(con --allow-empty se copia igual)',
+      );
+    }
     const pinned = lettaImageFromCompose(readFileSync(new URL('docker-compose.yml', root), 'utf8'));
     const skipped = values['no-letta'];
     const manifest = await buildManifest({
@@ -254,33 +356,13 @@ async function main(argv) {
           ? {
               included: true,
               image: values['letta-image'] ?? pinned,
-              rows:
-                values['letta-rows'] === undefined
-                  ? null
-                  : parseRowCounts(readFileSync(values['letta-rows'], 'utf8')),
+              rows: parseRowCounts(text(values['letta-rows'])),
             }
           : { included: false, image: pinned, reason: skipped },
-      ollama:
-        values['ollama-list'] === undefined
-          ? null
-          : parseOllamaList(readFileSync(values['ollama-list'], 'utf8')),
+      ollama: parseOllamaList(text(values['ollama-list'])),
     });
     writeFileSync(join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     return JSON.stringify({ name, turns: memory.turns, complete: manifest.complete });
-  }
-  if (command === 'mark') {
-    const manifest = JSON.parse(
-      readFileSync(join(need(values.dir, 'dir'), 'manifest.json'), 'utf8'),
-    );
-    const record = {
-      at: new Date().toISOString(),
-      name: manifest.name,
-      complete: manifest.complete,
-      turns: manifest.memory.turns,
-    };
-    const file = join(dirname(need(values.db, 'db')), LAST_BACKUP_FILE);
-    writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
-    return file;
   }
   throw new Error('uso: memory-backup.mjs name | create | verify | rotate | mark');
 }
