@@ -38,6 +38,7 @@ const env = process.env;
 fs.appendFileSync(env.STUB_LOG, command + ' ' + args.join(' ') + '\\n');
 if (command === 'ps') console.log((env.STUB_CONTAINERS ?? 'letta-1').split(',').join('\\n'));
 if (command === 'inspect') console.log(env.STUB_IMAGE ?? 'letta/letta@sha256:de-pega');
+if (command === 'restart' && env.STUB_RESTART_FAIL) process.exit(1);
 if (command === 'exec') {
   const script = args.join(' ');
   if (script.includes('pg_restore') && env.STUB_RESTORE_FAIL) process.exit(1);
@@ -377,3 +378,28 @@ test('sin copia y sin vuelta atrás, no hay nada que hacer', { skip }, () => {
   assert.equal(code, 1, output);
   assert.match(output, /-Backup/);
 });
+
+test(
+  'si Letta no se reinicia tras el cambio, dice que la base ya está cambiada y cómo seguir',
+  { skip },
+  () => {
+    const data = makeDataDir('reinicio-datos');
+    const db = join(data, 'memory.db');
+
+    const { code, output, docker } = run(
+      ['-Backup', makeCopy('reinicio', true), '-Memory', '-Letta', '-Yes', '-MemoryDb', db],
+      { STUB_RESTART_FAIL: '1' },
+    );
+
+    assert.equal(code, 1, output);
+    assert.match(output, /la base de Letta ya está cambiada/);
+    assert.match(output, /docker restart letta-1/);
+    assert.match(output, /-Memory/);
+    // Lo restaurado no se retira: ya es la base en uso.
+    assert.equal(
+      docker.some((line) => line.includes('dropdb')),
+      false,
+    );
+    assert.equal(turnsIn(db), 7);
+  },
+);
