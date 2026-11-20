@@ -74,11 +74,21 @@ if (command === 'ps') console.log((env.STUB_CONTAINERS ?? 'letta-1').split(',').
 if (command === 'inspect') console.log('letta/letta@sha256:de-pega');
 if (command === 'cp') {
   if (env.STUB_CP_FAIL) process.exit(1);
-  fs.writeFileSync(args[1], 'volcado de pega; memoria ya copiada al volcar: ' + env.STUB_MEMORY_AT_DUMP);
+  const atDump = fs.readFileSync(require('node:path').join(__dirname, 'memoria-al-volcar.txt'), 'utf8');
+  fs.writeFileSync(args[1], 'volcado de pega; memoria ya copiada al volcar: ' + atDump);
 }
 if (command === 'exec') {
   const script = args.join(' ');
-  if (script.includes('pg_dump') && env.STUB_DUMP_FAIL) process.exit(1);
+  if (script.includes('pg_dump')) {
+    if (env.STUB_DUMP_FAIL) process.exit(1);
+    const os = require('node:os');
+    const path = require('node:path');
+    const copied = fs
+      .readdirSync(os.tmpdir())
+      .filter((name) => name.startsWith('shiro-backup-2'))
+      .some((name) => fs.existsSync(path.join(os.tmpdir(), name, 'copia', 'memory.db')));
+    fs.writeFileSync(path.join(__dirname, 'memoria-al-volcar.txt'), String(copied));
+  }
   if (script.includes('psql')) console.log('agents=1\\nmessages=2');
 }
 `,

@@ -282,7 +282,8 @@ function Invoke-Backup {
   New-Item -ItemType Directory -Path $copy | Out-Null
   # La memoria va antes que el volcado de Letta: un turno que se envíe a
   # Letta entre los dos pasos queda en la copia como pendiente, y al restaurar
-  # se reenvía. Al revés constaría como enviado sin estar en el volcado.
+  # se reenvía. Al revés constaría como enviado sin estar en el volcado. Lo
+  # que se diga después de la instantánea no entra en la memoria copiada.
   Write-Step 'sacando la instantánea de la memoria'
   $snapshotArgs = @('snapshot', '--db', $MemoryDb, '--out', $copy)
   if ($AllowEmpty) { $snapshotArgs += '--allow-empty' }

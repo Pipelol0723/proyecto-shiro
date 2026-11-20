@@ -20,6 +20,8 @@ import Database from 'better-sqlite3';
 export const BACKUP_NAME = /^\d{8}T\d{6}Z$/;
 /** Nombre del volcado de Letta dentro de la copia. */
 export const LETTA_DUMP = 'letta.dump';
+/** Marca que deja `snapshot` junto a la instantánea, hasta que se escribe el manifiesto. */
+const SNAPSHOT_MARK = 'snapshot.json';
 /** Archivo que anota la última copia correcta, al lado de `memory.db`. */
 export const LAST_BACKUP_FILE = 'last-backup.json';
 
@@ -350,7 +352,8 @@ export function markLastBackup(dbPath, dir, now) {
  * La instantánea de la memoria en la carpeta de la copia. Va antes que el
  * volcado de Letta: un turno que se envíe entre los dos pasos queda aquí como
  * pendiente y, al restaurar, se reenvía. Al revés constaría como enviado sin
- * estar en el volcado, y Letta se quedaría sin él.
+ * estar en el volcado, y Letta se quedaría sin él. Lo que se diga después de
+ * la instantánea no está en la memoria copiada, como en cualquier copia.
  *
  * @param {string} dbPath
  * @param {string} out
@@ -371,13 +374,31 @@ async function takeSnapshot(dbPath, out, options) {
         '(con --allow-empty se copia igual)',
     );
   }
+  // La marca dice qué archivo es la instantánea: el manifiesto no acepta otro.
+  const sha256 = await sha256File(join(out, 'memory.db'));
+  writeFileSync(join(out, SNAPSHOT_MARK), JSON.stringify({ sha256 }));
   return memory;
 }
 
-/** Lo que hay en una instantánea ya sacada. @param {string} out */
-function readSnapshot(out) {
+/**
+ * Lo que hay en una instantánea ya sacada. Exige la marca que deja
+ * `snapshot` y que el archivo siga siendo el mismo: una `memory.db` que se
+ * quedó en la carpeta de otro intento no pasa por instantánea. La marca se
+ * retira: no viaja con la copia.
+ *
+ * @param {string} out
+ */
+async function readSnapshot(out) {
   const file = join(out, 'memory.db');
-  if (!existsSync(file)) throw new Error('falta la instantánea de la memoria en la copia');
+  const mark = join(out, SNAPSHOT_MARK);
+  if (!existsSync(file) || !existsSync(mark)) {
+    throw new Error('falta la instantánea de la memoria en la copia: sácala antes con «snapshot»');
+  }
+  const { sha256 } = JSON.parse(readFileSync(mark, 'utf8'));
+  if (sha256 !== (await sha256File(file))) {
+    throw new Error('la memoria de la carpeta no es la instantánea que se sacó: repite la copia');
+  }
+  rmSync(mark);
   const db = new Database(file, { readonly: true, fileMustExist: true });
   try {
     return inspectMemory(db);
@@ -454,7 +475,11 @@ async function main(argv) {
     const name = need(values.name, 'name');
     // Sin `--db`, la instantánea ya está en la carpeta (orden `snapshot`).
     const memory =
-      values.db === undefined ? readSnapshot(out) : await takeSnapshot(values.db, out, values);
+      values.db === undefined
+        ? await readSnapshot(out)
+        : await takeSnapshot(values.db, out, values).finally(() => {
+            rmSync(join(out, SNAPSHOT_MARK), { force: true });
+          });
     const pinned = lettaImageFromCompose(readFileSync(new URL('docker-compose.yml', root), 'utf8'));
     const skipped = values['no-letta'];
     const manifest = await buildManifest({
