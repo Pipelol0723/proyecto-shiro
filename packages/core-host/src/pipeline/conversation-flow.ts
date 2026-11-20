@@ -159,11 +159,16 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       `turno ${pending.turnId}: primer audio a los ${String(pending.timing.elapsedMs())} ms`,
     );
   });
-  // Un audio cancelado o terminado ya no va a «empezar a sonar».
-  const forgetAudio = (payload: { audioId?: string }): void => {
-    if (payload.audioId !== undefined) awaitingFirstAudio.delete(payload.audioId);
-  };
-  unsubscribers.push(bus.on('tts:cancel', forgetAudio), bus.on('tts:audio-ended', forgetAudio));
+  // Un audio cancelado ya no va a «empezar a sonar». `tts:audio-ended` NO
+  // sirve para olvidarlo: con varios clientes conectados, uno silenciado (o
+  // al que el navegador no deja reproducir) lo da por terminado al instante,
+  // antes de que suene en otro. Lo que nadie llegue a reproducir lo retira el
+  // tope de `MAX_PENDING_FIRST_AUDIO`.
+  unsubscribers.push(
+    bus.on('tts:cancel', (payload) => {
+      awaitingFirstAudio.delete(payload.audioId);
+    }),
+  );
 
   const unsubscribe = bus.on('user:message', async (payload) => {
     const startTime = Date.now();
