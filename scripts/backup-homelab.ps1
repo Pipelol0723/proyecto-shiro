@@ -82,6 +82,13 @@ $script:exitCode = 1
 $script:tmp = $null
 $script:partial = $null
 
+# El hash de un archivo, con .NET y no con la función de PowerShell: lanzado desde
+# PowerShell 7, Windows PowerShell hereda su lista de módulos y deja de
+# reconocer esa función. Va como texto porque se ejecuta también en el destino.
+$sha256Function = 'function Get-Sha256([string]$Path) { $stream = [System.IO.File]::OpenRead($Path); ' +
+  'try { ([System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($stream))).Replace(''-'', '''').ToLower() } ' +
+  'finally { $stream.Dispose() } }; '
+
 function Write-Step([string]$Message) { Write-Host "[copia] $Message" }
 
 function ConvertTo-Quoted([string]$Text) { "'" + $Text.Replace("'", "''") + "'" }
@@ -310,10 +317,10 @@ function Invoke-Backup {
     Copy-Item -LiteralPath $copy -Destination $script:partial -Recurse
   }
 
-  $hashes = Invoke-AtDestination ("Get-ChildItem -LiteralPath $partialQ -File | ForEach-Object { " +
-    "`$_.Name + '=' + (Get-FileHash -LiteralPath `$_.FullName -Algorithm SHA256).Hash.ToLower() }")
+  $hashes = Invoke-AtDestination ($sha256Function + "Get-ChildItem -LiteralPath $partialQ -File | " +
+    "ForEach-Object { `$_.Name + '=' + (Get-Sha256 `$_.FullName) }")
   $expected = @($manifest.files | ForEach-Object { "$($_.name)=$($_.sha256)" })
-  $expected += 'manifest.json=' + (Get-FileHash -LiteralPath $manifestFile -Algorithm SHA256).Hash.ToLower()
+  $expected += 'manifest.json=' + (& ([scriptblock]::Create($sha256Function + 'Get-Sha256 $args[0]')) $manifestFile)
   foreach ($line in $expected) {
     if (@($hashes) -notcontains $line) {
       throw "$($line.Split('=')[0]) no llegó igual al destino: la copia no se da por buena"
