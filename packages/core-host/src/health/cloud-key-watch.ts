@@ -27,6 +27,8 @@ export interface CloudKeyWatch {
  *   turno que el router mandó a la nube (`router:routed`) y que no falló por
  *   el camino. El reporte hablado de self-dev también emite `llm:responded`
  *   con el nivel nube, pero no llama a la nube: no prueba nada de la clave.
+ * - Una respuesta sin texto de la nube (`empty`) también lo borra: es un fallo
+ *   del turno, pero la nube contestó.
  * - Los demás fallos de la nube (red, modelo, desconocido) no dicen nada de la
  *   clave: ni anotan ni borran. Tampoco los del modelo local.
  */
@@ -50,6 +52,7 @@ export function watchCloudKey(
   });
   const offFailed = bus.on('llm:failed', (p) => {
     if (p.tier !== 'cloud') return;
+    if (p.reason === 'empty' && cloudTurnOpen) set(undefined);
     cloudTurnOpen = false;
     if (p.reason === 'auth' || p.reason === 'quota') set(p.reason);
   });

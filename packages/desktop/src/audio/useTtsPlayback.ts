@@ -109,6 +109,14 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
     writeStoredMute(next);
   }, []);
 
+  // Silenciar corta también la frase que ya suena, no solo las siguientes.
+  // Se hace al cambiar el estado, venga de la interfaz o de quien monta el
+  // reproductor; el corte en sí está más abajo (`silenceCurrent`).
+  const silenceCurrentRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    if (muted) silenceCurrentRef.current();
+  }, [muted]);
+
   // Refs estables para que los effects no se re-suscriban en cada render.
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentAudioIdRef = useRef<string | null>(null);
@@ -142,6 +150,16 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions): UseTtsPlaybackRe
     currentAudioIdRef.current = null;
     setAudioElement(null);
   }, []);
+
+  // Corta el audio en curso y avisa de su fin, para que el turno deje de
+  // «hablar». Sin efecto si no suena nada.
+  silenceCurrentRef.current = () => {
+    const audioId = currentAudioIdRef.current;
+    if (audioRef.current === null || audioId === null) return;
+    const userId = currentUserIdRef.current ?? '';
+    stopCurrent();
+    void bus.emit('tts:audio-ended', { userId, audioId });
+  };
 
   useEffect(() => {
     const unsubAudio = bus.on('tts:audio', (payload) => {

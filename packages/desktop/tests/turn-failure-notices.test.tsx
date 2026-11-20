@@ -117,3 +117,16 @@ describe('del bus a la pantalla', () => {
     },
   );
 });
+
+// IN-F: el motivo nuevo dice lo que pasó, no el aviso genérico.
+describe('describeTurnFailure — respuesta vacía', () => {
+  it('la nube y el local tienen su propio texto, distinto del genérico', () => {
+    const cloud = describeTurnFailure({ reason: 'empty', tier: 'cloud' });
+    const local = describeTurnFailure({ reason: 'empty', tier: 'local' });
+
+    expect(cloud).toMatch(/sin texto/);
+    expect(local).toMatch(/sin texto/);
+    expect(cloud).not.toBe(describeTurnFailure({ reason: 'unknown', tier: 'cloud' }));
+    expect(local).not.toBe(describeTurnFailure({ reason: 'unknown', tier: 'local' }));
+  });
+});

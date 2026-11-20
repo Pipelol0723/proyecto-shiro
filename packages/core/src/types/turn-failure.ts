@@ -16,6 +16,11 @@ export const TURN_FAILURE_REASONS = [
   'unavailable',
   /** El servicio no tiene el modelo pedido (404). */
   'model-missing',
+  /**
+   * El modelo contestó, pero sin texto: una respuesta vacía, o cortada por el
+   * tope de tokens antes de llegar a él.
+   */
+  'empty',
   'unknown',
 ] as const;
 

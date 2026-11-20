@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyTurnFailure } from '../../../src/types/turn-failure.js';
+import { classifyTurnFailure, isTurnFailureReason } from '../../../src/types/turn-failure.js';
 
 /** Error envuelto como hacen los módulos LLM: mensaje genérico y motivo en `cause`. */
 function wrap(cause: unknown): Error {
@@ -86,5 +86,18 @@ describe('classifyTurnFailure', () => {
     const b = new Error('b', { cause: a });
     (a as { cause?: unknown }).cause = b;
     expect(classifyTurnFailure(a)).toBe('unknown');
+  });
+});
+
+// IN-F: un modelo que contesta sin texto es un fallo del turno, con su motivo.
+describe('motivo «empty»', () => {
+  it('está en la lista cerrada', () => {
+    expect(isTurnFailureReason('empty')).toBe(true);
+  });
+
+  it('se reconoce por la etiqueta que pone quien detecta la respuesta vacía', () => {
+    const err = Object.assign(new Error('respuesta vacía'), { failureReason: 'empty' });
+    expect(classifyTurnFailure(err)).toBe('empty');
+    expect(classifyTurnFailure(new Error('envoltorio', { cause: err }))).toBe('empty');
   });
 });

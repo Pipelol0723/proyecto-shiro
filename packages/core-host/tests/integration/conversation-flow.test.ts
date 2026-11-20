@@ -1240,6 +1240,101 @@ describe('wireConversationFlow — tiempos del turno (revisión de P-16)', () =>
   });
 });
 
+// IN-F: una respuesta sin texto (cortada por el tope de tokens, o vacía sin
+// más) se entregaba tal cual: burbuja vacía, sin voz y sin aviso.
+describe('wireConversationFlow — respuesta vacía', () => {
+  function run(modules: LoadedModules): {
+    bus: EventBus<EventMap>;
+    failed: EventMap['llm:failed'][];
+    responded: EventMap['llm:responded'][];
+    dispose: () => void;
+  } {
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const failed: EventMap['llm:failed'][] = [];
+    const responded: EventMap['llm:responded'][] = [];
+    bus.on('llm:failed', (payload) => {
+      failed.push(payload);
+    });
+    bus.on('llm:responded', (payload) => {
+      responded.push(payload);
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules,
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+    return { bus, failed, responded, dispose };
+  }
+
+  const empty = (id: string, text: string): ILLMModule =>
+    makeLLM(id, { response: { text, emotion: 'neutral', tokensUsed: 1 } });
+
+  it('si el modelo local contesta sin texto, el turno falla con su motivo y no se guarda nada vacío', async () => {
+    const memory = makeMemory();
+    const { bus, failed, responded, dispose } = run(
+      makeModules({ memory, llmLocal: empty('llm:local', '   ') }),
+    );
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(failed).toEqual([{ reason: 'empty', tier: 'local', userId: 'me' }]);
+    expect(responded).toHaveLength(1);
+    expect(responded[0]?.text.trim()).not.toBe('');
+    expect(memory.saved.filter((entry) => entry.role === 'assistant')).toEqual([]);
+
+    dispose();
+  });
+
+  it('si la nube contesta sin texto, se avisa y responde el modelo local', async () => {
+    const { bus, failed, responded, dispose } = run(
+      makeModules({
+        router: makeRouter({ tier: 'cloud' }),
+        llmCloud: empty('llm:nube', ''),
+        llmLocal: empty('llm:local', 'aquí estoy'),
+      }),
+    );
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(failed).toEqual([{ reason: 'empty', tier: 'cloud', userId: 'me' }]);
+    expect(responded).toHaveLength(1);
+    expect(responded[0]).toMatchObject({ text: 'aquí estoy', tier: 'local' });
+
+    dispose();
+  });
+
+  it('si la nube y el local contestan sin texto, salen los dos avisos y un solo mensaje de fallo', async () => {
+    const memory = makeMemory();
+    const { bus, failed, responded, dispose } = run(
+      makeModules({
+        memory,
+        router: makeRouter({ tier: 'cloud' }),
+        llmCloud: empty('llm:nube', ''),
+        llmLocal: empty('llm:local', '\n'),
+      }),
+    );
+    const measured: EventMap['turn:measured'][] = [];
+    bus.on('turn:measured', (payload) => {
+      measured.push(payload);
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(failed).toEqual([
+      { reason: 'empty', tier: 'cloud', userId: 'me' },
+      { reason: 'empty', tier: 'local', userId: 'me' },
+    ]);
+    expect(responded).toHaveLength(1);
+    expect(responded[0]?.text.trim()).not.toBe('');
+    expect(memory.saved.filter((entry) => entry.role === 'assistant')).toEqual([]);
+    expect(measured).toHaveLength(1);
+
+    dispose();
+  });
+});
+
 // Encontrado al medir la línea base con la app real: había varias copias del
 // cliente conectadas y no salía ninguna línea de «primer audio».
 describe('wireConversationFlow — primer audio con varios clientes', () => {

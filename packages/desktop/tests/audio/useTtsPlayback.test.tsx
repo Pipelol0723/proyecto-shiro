@@ -6,7 +6,7 @@
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import {
   EventBus,
@@ -689,5 +689,91 @@ describe('useTtsPlayback — primer audio (revisión de P-16)', () => {
     });
 
     expect(started).toEqual([{ audioId: 'b', userId: 'me' }]);
+  });
+});
+
+// IN-F: silenciar solo valía para los audios siguientes; la frase que ya
+// sonaba seguía hasta el final.
+describe('useTtsPlayback — silenciar corta lo que suena (IN-F)', () => {
+  // El silencio se guarda en localStorage: se borra pase lo que pase, para que
+  // un test que falle a medias no deje silenciados a los siguientes.
+  afterEach(() => {
+    window.localStorage.removeItem('shiro:tts:muted');
+  });
+
+  async function playing(options: { muted?: boolean } = {}) {
+    window.localStorage.removeItem('shiro:tts:muted');
+    const bus = makeBus();
+    const audio = makeFakeAudio();
+    const ended: EventMap['tts:audio-ended'][] = [];
+    bus.on('tts:audio-ended', (payload) => {
+      ended.push(payload);
+    });
+    const view = renderHook(
+      (props: { muted?: boolean }) =>
+        useTtsPlayback({
+          bus,
+          audioFactory: () => audio as unknown as HTMLAudioElement,
+          ...(props.muted !== undefined && { muted: props.muted }),
+        }),
+      { wrapper: wrap(bus), initialProps: options },
+    );
+    await act(async () => {
+      await bus.emit('tts:audio', {
+        url: '/audio/a.mp3',
+        audioId: 'a',
+        mimeType: 'audio/mpeg',
+        userId: 'me',
+      });
+    });
+    expect(audio.paused).toBe(false);
+    return { audio, ended, view };
+  }
+
+  it('al silenciar desde la interfaz, la frase se corta y el turno deja de «hablar»', async () => {
+    const { audio, ended, view } = await playing();
+
+    act(() => {
+      view.result.current.setMuted(true);
+    });
+
+    expect(audio.paused).toBe(true);
+    expect(audio.src).toBe('');
+    expect(view.result.current.audioElement).toBeNull();
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+  });
+
+  it('también si quien silencia es quien monta el reproductor', async () => {
+    const { audio, ended, view } = await playing({ muted: false });
+
+    view.rerender({ muted: true });
+
+    expect(audio.paused).toBe(true);
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+  });
+
+  it('quitar el silencio no reanuda la frase cortada ni vuelve a avisar', async () => {
+    const { audio, ended, view } = await playing();
+    act(() => {
+      view.result.current.setMuted(true);
+    });
+
+    act(() => {
+      view.result.current.setMuted(false);
+    });
+
+    expect(view.result.current.muted).toBe(false);
+    expect(audio.paused).toBe(true);
+    expect(view.result.current.audioElement).toBeNull();
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+  });
+
+  it('con una frase sonando y sin silencio, dejarlo como está no corta nada', async () => {
+    const { audio, ended, view } = await playing({ muted: false });
+
+    view.rerender({ muted: false });
+
+    expect(audio.paused).toBe(false);
+    expect(ended).toEqual([]);
   });
 });

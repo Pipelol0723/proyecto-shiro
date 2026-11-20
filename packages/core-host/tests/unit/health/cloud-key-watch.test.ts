@@ -122,6 +122,27 @@ describe('watchCloudKey', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  // IN-F: una respuesta sin texto es un fallo del turno, pero la nube contestó.
+  it('una respuesta vacía de la nube también borra el problema: la clave funcionó', async () => {
+    const { bus, onChange, watch } = setup();
+    await bus.emit('llm:failed', { reason: 'auth', tier: 'cloud', userId: 'me' });
+
+    await bus.emit('router:routed', { tier: 'cloud', userId: 'me' });
+    await bus.emit('llm:failed', { reason: 'empty', tier: 'cloud', userId: 'me' });
+
+    expect(watch.current()).toBeUndefined();
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('un «empty» fuera de un turno enrutado a la nube no borra nada', async () => {
+    const { bus, watch } = setup();
+    await bus.emit('llm:failed', { reason: 'quota', tier: 'cloud', userId: 'me' });
+
+    await bus.emit('llm:failed', { reason: 'empty', tier: 'cloud', userId: 'me' });
+
+    expect(watch.current()).toBe('quota');
+  });
+
   it('dispose deja de escuchar', async () => {
     const { bus, onChange, watch } = setup();
     watch.dispose();

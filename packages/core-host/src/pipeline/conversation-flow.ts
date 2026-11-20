@@ -260,6 +260,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           const llm = tier === 'local' ? modules.llmLocal : modules.llmCloud;
           response = await timing.measure('llm', () => llm.generate(llmRequest));
         }
+        assertHasText(response);
       } catch (err) {
         if (tier !== 'cloud') throw err;
         child.warn('LLM cloud falló — reintentando con local', { err });
@@ -270,6 +271,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         });
         effectiveTier = 'local';
         response = await timing.measure('llm', () => modules.llmLocal.generate(llmRequest));
+        assertHasText(response);
       }
 
       // 4. Emite la respuesta tipada. `LLMResponse.emotion` es opcional;
@@ -317,11 +319,14 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
       );
       await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, effectiveTier);
     } catch (err) {
-      child.error('error procesando turno, emitiendo fallback', { err });
+      const reason = classifyTurnFailure(err);
+      // Una respuesta sin texto es un caso esperable: aviso, sin traza.
+      if (reason === 'empty') child.warn('el modelo contestó sin texto, emitiendo fallback');
+      else child.error('error procesando turno, emitiendo fallback', { err });
       // Un fallo de la nube ya se anunció arriba y el turno siguió en local:
       // lo que llega aquí es del modelo local o de un paso anterior a él.
       await bus.emit('llm:failed', {
-        reason: classifyTurnFailure(err),
+        reason,
         tier: 'local',
         userId: payload.userId,
       });
@@ -356,6 +361,20 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
     unsubscribeFirstAudio();
     for (const u of unsubscribers) u();
   };
+}
+
+/**
+ * Una respuesta sin texto no se entrega: es un fallo del turno, con su motivo
+ * (`empty`). Pasa cuando el modelo llega al tope de tokens antes de escribir
+ * el texto, y a veces un modelo local contesta vacío sin más. Antes llegaba al
+ * chat una burbuja vacía, sin voz y sin aviso.
+ *
+ * Si quien falla es la nube, el turno sigue con el modelo local, como con
+ * cualquier otro fallo suyo.
+ */
+function assertHasText(response: LLMResponse): void {
+  if (response.text.trim() !== '') return;
+  throw Object.assign(new Error('el modelo contestó sin texto'), { failureReason: 'empty' });
 }
 
 /**
