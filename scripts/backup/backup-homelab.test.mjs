@@ -341,3 +341,12 @@ test('la memoria que el script copia por defecto es la del servidor de desarroll
   assert.ok(scriptDefault && hostDefault, 'se leen las dos rutas');
   assert.equal(fromScript, fromHost);
 });
+
+// Pasó en el CI de Windows: lanzado desde PowerShell 7, Windows PowerShell
+// hereda su lista de módulos y deja de reconocer las funciones que trae en un
+// módulo de script, como `Get-FileHash`. El hash se calcula con .NET. El job
+// `verify-windows` ejecuta estos tests desde PowerShell 7, así que es la
+// prueba de verdad; esto solo impide volver a la función.
+test('el script no depende de funciones que se pierden al lanzarlo desde PowerShell 7', () => {
+  assert.doesNotMatch(readFileSync(SCRIPT, 'utf8'), /Get-FileHash/);
+});
