@@ -42,6 +42,47 @@ import { LocalMemory } from './local-memory.js';
 /** Clave del WAL (tabla `meta`) donde se persiste el agente auto-provisionado. */
 const META_AGENT_ID = 'letta_agent_id';
 
+/**
+ * Cómo está el envío a Letta: cuántos turnos hay, cuántos faltan por enviar y
+ * qué agente está anotado. No cambia nada.
+ */
+export function inspectLettaSync(local: LocalMemory): {
+  total: number;
+  pending: number;
+  agentId: string | undefined;
+} {
+  const agentId = local.getMeta(META_AGENT_ID);
+  return {
+    total: local.stats().turns,
+    pending: local.pendingCount(),
+    agentId: agentId === '' ? undefined : agentId,
+  };
+}
+
+/**
+ * Prepara la memoria local para volver a llenar Letta desde cero (R-330): deja
+ * todos los turnos pendientes de enviar y olvida el agente anotado. En el
+ * siguiente arranque, el manager crea un agente nuevo y el drainer reenvía los
+ * turnos, por lotes.
+ *
+ * Hace falta porque los turnos ya enviados no se reenvían solos: si Letta se
+ * cambia por otro o se restaura vacío, el agente nuevo se queda sin ellos.
+ * Con un `agent_id` fijo en la configuración no se crea ningún agente: los
+ * turnos se reenvían a ese.
+ */
+export function reindexFromLocal(local: LocalMemory): {
+  total: number;
+  resent: number;
+  agentId: string | undefined;
+} {
+  const { turns, previous } = local.resetSync(META_AGENT_ID);
+  return {
+    total: local.stats().turns,
+    resent: turns,
+    agentId: previous === '' ? undefined : previous,
+  };
+}
+
 // ─── Schema de config ─────────────────────────────────────────────────
 
 export const MemoryManagerConfigSchema = z.object({

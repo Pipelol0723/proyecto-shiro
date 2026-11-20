@@ -11,6 +11,8 @@ import {
   MemoryManager,
   MemoryManagerConfigSchema,
   MemoryManagerError,
+  inspectLettaSync,
+  reindexFromLocal,
 } from '../../../../src/modules/memory/memory-manager.js';
 import { LocalMemory } from '../../../../src/modules/memory/local-memory.js';
 import { LettaMemory, type LettaClientLike } from '../../../../src/modules/memory/letta-memory.js';
@@ -560,5 +562,139 @@ describe('MemoryManager — arranque en segundo plano (revisión de P-13)', () =
     } finally {
       vi.restoreAllMocks();
     }
+  });
+});
+
+// P-11a (R-330): si Letta se cambia por otro, o se restaura vacío, los turnos
+// ya enviados no se vuelven a enviar solos. `reindex-memory` los deja
+// pendientes y olvida el agente, para que el siguiente arranque los reenvíe.
+describe('reindexar Letta desde la memoria local (P-11a)', () => {
+  function seeded(): LocalMemory {
+    const local = new LocalMemory({ dbPath: ':memory:' });
+    for (const id of ['t1', 't2', 't3']) local.save(makeEntry({ id }));
+    local.markSynced('t1');
+    local.markSynced('t2');
+    local.setMeta('letta_agent_id', 'agente-viejo');
+    return local;
+  }
+
+  it('dice cómo está el envío sin cambiar nada', () => {
+    const local = seeded();
+
+    expect(inspectLettaSync(local)).toEqual({ total: 3, pending: 1, agentId: 'agente-viejo' });
+    expect(local.pendingCount()).toBe(1);
+    local.close();
+  });
+
+  it('deja todo pendiente y olvida el agente', () => {
+    const local = seeded();
+
+    expect(reindexFromLocal(local)).toEqual({ total: 3, resent: 2, agentId: 'agente-viejo' });
+    expect(inspectLettaSync(local)).toEqual({ total: 3, pending: 3, agentId: undefined });
+    local.close();
+  });
+
+  describe('en el siguiente arranque', () => {
+    const ROLES = ['user', 'assistant', 'tool'] as const;
+    const AUTO = { base_url: 'http://localhost:8283', agent_id: '' };
+
+    /** Cinco turnos de los tres roles, guardados en desorden y ya enviados. */
+    function reindexed(): LocalMemory {
+      const local = new LocalMemory({ dbPath: ':memory:' });
+      for (const n of [3, 1, 5, 2, 4]) {
+        const id = `t${String(n)}`;
+        const role = ROLES[n % ROLES.length] ?? 'user';
+        local.save(makeEntry({ id, role, timestamp: `2026-11-0${String(n)}T10:00:00.000Z` }));
+        local.markSynced(id);
+      }
+      local.setMeta('letta_agent_id', 'agente-viejo');
+      reindexFromLocal(local);
+      return local;
+    }
+
+    function start(
+      local: LocalMemory,
+      lettaConfig = AUTO,
+    ): { manager: MemoryManager; letta: LettaMemory } {
+      const letta = makeLetta(lettaConfig);
+      vi.spyOn(letta, 'ping').mockResolvedValue(true);
+      const manager = new MemoryManager(
+        { ...BASE_CONFIG, letta: lettaConfig, drainer: { interval_ms: 60_000, batch_size: 2 } },
+        makeDeps(),
+        { local, letta },
+      );
+      return { manager, letta };
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('se crea un agente nuevo y se reenvían todos los turnos, de todos los roles y por orden', async () => {
+      const local = reindexed();
+      const { manager, letta } = start(local);
+      const provision = vi.spyOn(letta, 'provisionAgent').mockResolvedValue('agente-nuevo');
+      const save = vi.spyOn(letta, 'save').mockResolvedValue();
+
+      // Lotes de dos: hacen falta tres pasadas para los cinco turnos.
+      await manager.runDrainerOnce();
+      expect(local.pendingCount()).toBe(3);
+      await manager.runDrainerOnce();
+      await manager.runDrainerOnce();
+
+      expect(provision).toHaveBeenCalledOnce();
+      expect(local.getMeta('letta_agent_id')).toBe('agente-nuevo');
+      expect(save.mock.calls.map(([entry]) => entry.id)).toEqual(['t1', 't2', 't3', 't4', 't5']);
+      expect(new Set(save.mock.calls.map(([entry]) => entry.role))).toEqual(new Set(ROLES));
+      expect(local.pendingCount()).toBe(0);
+      await manager.stop();
+    });
+
+    it('si Letta falla a mitad, lo enviado queda marcado y el resto sigue pendiente', async () => {
+      const local = reindexed();
+      const { manager, letta } = start(local);
+      vi.spyOn(letta, 'provisionAgent').mockResolvedValue('agente-nuevo');
+      const save = vi
+        .spyOn(letta, 'save')
+        .mockResolvedValueOnce()
+        .mockRejectedValueOnce(new Error('Letta no contesta'))
+        .mockResolvedValue();
+
+      await manager.runDrainerOnce();
+      expect(local.pendingCount()).toBe(4);
+
+      // Las pasadas siguientes retoman donde se quedó: no se pierde ninguno.
+      await manager.runDrainerOnce();
+      await manager.runDrainerOnce();
+      expect(local.pendingCount()).toBe(0);
+      expect(save.mock.calls.map(([entry]) => entry.id)).toEqual([
+        't1',
+        't2',
+        't2',
+        't3',
+        't4',
+        't5',
+      ]);
+      await manager.stop();
+    });
+
+    it('con un agente fijado en la configuración no se crea ninguno: se reenvían a ese', async () => {
+      const local = reindexed();
+      const { manager, letta } = start(local, {
+        base_url: 'http://localhost:8283',
+        agent_id: 'agente-fijo',
+      });
+      const provision = vi.spyOn(letta, 'provisionAgent');
+      const setAgent = vi.spyOn(letta, 'setAgentId');
+      const save = vi.spyOn(letta, 'save').mockResolvedValue();
+
+      await manager.runDrainerOnce();
+
+      expect(provision).not.toHaveBeenCalled();
+      expect(setAgent).toHaveBeenCalledWith('agente-fijo');
+      expect(save).toHaveBeenCalledTimes(2);
+      expect(local.getMeta('letta_agent_id')).toBeUndefined();
+      await manager.stop();
+    });
   });
 });
