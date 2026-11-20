@@ -229,7 +229,7 @@ test('Letta: restaura aparte, compara, cambia las bases, reinicia y limpia', { s
     all,
   );
   assert.match(all, /-d letta_restaurada --no-owner/);
-  assert.match(all, /-v old=letta_antes_\d{8}t\d{6}z --single-transaction/);
+  assert.match(all, /-v new=letta_restaurada -v old=letta_antes_\d{8}t\d{6}z --single-transaction/);
   assert.match(output, /2 tablas, 3 filas: igual que en la copia/);
   assert.match(output, /La base anterior queda guardada como «letta_antes_/);
 });
@@ -328,4 +328,52 @@ test('si Letta falla, la memoria no se toca', { skip }, () => {
   assert.equal(code, 1, output);
   assert.equal(turnsIn(db), 7);
   assert.equal(existsSync(join(data, 'memory.db-wal')), true);
+});
+
+// ── Volver a la base anterior de Letta ──
+
+test(
+  'volver atrás en Letta: cambia la base en uso por la guardada, sin borrar ninguna',
+  { skip },
+  () => {
+    const saved = 'letta_antes_20261120t083005z';
+
+    const asked = run(['-LettaUndo', saved]);
+    assert.equal(asked.code, 0, asked.output);
+    assert.match(asked.output, /No se ha cambiado nada/);
+    assert.equal(
+      asked.docker.some((line) => /^(exec|restart) /.test(line)),
+      false,
+    );
+
+    const { code, output, docker } = run(['-LettaUndo', saved, '-Yes']);
+    assert.equal(code, 0, output);
+    const all = docker.join('\n');
+    assert.match(
+      all,
+      new RegExp(`-v new=${saved} -v old=letta_descartada_\\d{8}t\\d{6}z --single-transaction`),
+    );
+    assert.ok(all.indexOf('--single-transaction') < all.indexOf('restart letta-1'), all);
+    assert.doesNotMatch(all, /dropdb/);
+    assert.match(output, /queda guardada como «letta_descartada_/);
+  },
+);
+
+test(
+  'volver atrás solo acepta el nombre de una base guardada por la restauración',
+  { skip },
+  () => {
+    const { code, output, docker } = run(['-LettaUndo', 'postgres', '-Yes']);
+
+    assert.equal(code, 1, output);
+    assert.match(output, /letta_antes_/);
+    assert.deepEqual(docker, []);
+  },
+);
+
+test('sin copia y sin vuelta atrás, no hay nada que hacer', { skip }, () => {
+  const { code, output } = run(['-Memory', '-Yes']);
+
+  assert.equal(code, 1, output);
+  assert.match(output, /-Backup/);
 });
