@@ -131,6 +131,8 @@ export class MemoryManager implements IMemoryModule {
   private drainerTimer: ReturnType<typeof setInterval> | undefined;
   private drainerInFlight = false;
   private stopped = false;
+  /** `start()` está en marcha: su primer paso espera a Letta. */
+  private starting = false;
 
   constructor(rawConfig: unknown, deps: ModuleDeps, backends: MemoryManagerBackends = {}) {
     const parsed = MemoryManagerConfigSchema.safeParse(rawConfig);
@@ -160,16 +162,31 @@ export class MemoryManager implements IMemoryModule {
     if (this.stopped) {
       throw new MemoryManagerError('start() llamado tras stop()');
     }
-    if (this.drainerTimer !== undefined) {
+    // `starting` cubre el rato en que el temporizador aún no existe porque
+    // se está esperando a Letta: sin él, dos arranques seguidos dejaban dos
+    // drenados y uno ya no se podía parar.
+    if (this.drainerTimer !== undefined || this.starting) {
       this.logger.warn('start() llamado dos veces, ignorando segunda llamada');
       return;
     }
+    this.starting = true;
+    try {
+      await this.startDrainer();
+    } finally {
+      this.starting = false;
+    }
+  }
+
+  private async startDrainer(): Promise<void> {
     const { turns, bytes } = this.local.stats();
     this.logger.info(
       `memoria local: ${String(turns)} turnos, ${(bytes / 1_000_000).toFixed(1)} MB ` +
         `(esquema v${String(this.local.schemaVersion())})`,
     );
     await this.checkLetta();
+    // Quien arranca ya no espera a este ping: puede haber parado mientras
+    // tanto. Entonces no hay nada que drenar ni base abierta que consultar.
+    if (this.stopped) return;
     if (!this.lettaUp) {
       const pending = this.local.pendingCount();
       this.logger.warn(
@@ -349,11 +366,14 @@ export class MemoryManager implements IMemoryModule {
   private async checkLetta(): Promise<void> {
     const wasUp = this.lettaUp;
     let up = await this.letta.ping();
+    // Parado mientras se esperaba el ping: ya no hay nada que preparar.
+    if (this.stopped) return;
     // Si el servidor responde pero aún no resolvimos el agente, intentamos
     // provisionarlo ahora. Sin agente, Letta no es usable para reads/saves.
     if (up && !this.agentReady) {
       try {
         await this.ensureAgent();
+        if (this.stopped) return;
         this.agentReady = true;
         // Calienta el modelo de embeddings en background (no bloquea) para que
         // el primer searchSemantic real no pague el cold-start. Ver ADR 0018.
@@ -403,7 +423,9 @@ export class MemoryManager implements IMemoryModule {
     }
     const stored = this.local.getMeta(META_AGENT_ID);
     if (stored !== undefined && stored !== '') {
-      if (await this.letta.agentExists(stored)) {
+      const exists = await this.letta.agentExists(stored);
+      if (this.stopped) return;
+      if (exists) {
         this.letta.setAgentId(stored);
         this.logger.info(`agente Letta reutilizado desde el WAL: ${stored}`);
         return;
@@ -411,6 +433,15 @@ export class MemoryManager implements IMemoryModule {
       this.logger.warn(`agente Letta persistido ${stored} ya no existe; re-provisionando`);
     }
     const id = await this.letta.provisionAgent();
+    if (this.stopped) {
+      // La base ya está cerrada: no se puede guardar el id. Mejor decirlo que
+      // fallar al escribir y que parezca que Letta no contestó.
+      this.logger.warn(
+        `agente Letta ${id} creado, pero la memoria se paró antes de guardarlo: ` +
+          'el próximo arranque creará otro y este quedará sin usar',
+      );
+      return;
+    }
     this.local.setMeta(META_AGENT_ID, id);
     this.letta.setAgentId(id);
     this.logger.info(`agente Letta provisionado y persistido en el WAL: ${id}`);

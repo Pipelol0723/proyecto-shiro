@@ -8,7 +8,7 @@
  * Es el primer test "end-to-end real" del split cliente/server.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CharacterSchema,
   EventBus,
@@ -21,7 +21,9 @@ import {
 } from '@proyecto-shiro/core';
 import { WebSocket } from 'ws';
 import { parse as parseYaml } from 'yaml';
+import { MemoryManager } from '@proyecto-shiro/core/node';
 import { bootstrap, type BootstrapResult } from '../../src/bootstrap.js';
+import { WebSocketServerTransport } from '../../src/transports/websocket-server-transport.js';
 
 const FIXTURE_YAML = `
 version: 1
@@ -342,5 +344,93 @@ describe('core-host bootstrap end-to-end', () => {
 
     await cliente1.close();
     await cliente2.close();
+  });
+});
+
+// P-13 (R-059, R-089): el servidor atendía conexiones antes de poner los
+// manejadores, y el arranque esperaba a Letta. Un cliente que conectaba en
+// ese rato perdía el historial, el estado de los servicios y sus primeros
+// mensajes.
+describe('core-host bootstrap — arranque ordenado (P-13)', () => {
+  let result: BootstrapResult | null = null;
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    if (result) {
+      await result.shutdown();
+      result = null;
+    }
+  });
+
+  function start(port = 0): Promise<BootstrapResult> {
+    return bootstrap({
+      port,
+      config: loadFixtureConfig(),
+      character: FIXTURE_CHARACTER,
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+  }
+
+  it('empieza a atender al final, con los manejadores de conexión ya puestos', async () => {
+    const order: string[] = [];
+    const proto = WebSocketServerTransport.prototype;
+    const onConnection = proto.onConnection;
+    const acceptConnections = proto.acceptConnections;
+    vi.spyOn(proto, 'onConnection').mockImplementation(function (
+      this: WebSocketServerTransport,
+      handler,
+    ) {
+      order.push('onConnection');
+      onConnection.call(this, handler);
+    });
+    vi.spyOn(proto, 'acceptConnections').mockImplementation(function (
+      this: WebSocketServerTransport,
+    ) {
+      order.push('acceptConnections');
+      acceptConnections.call(this);
+    });
+
+    result = await start();
+
+    expect(order.filter((step) => step === 'onConnection').length).toBeGreaterThanOrEqual(2);
+    expect(order.at(-1)).toBe('acceptConnections');
+    expect(order.filter((step) => step === 'acceptConnections')).toHaveLength(1);
+  });
+
+  it(
+    'no espera a Letta: aunque la memoria tarde en arrancar, atiende y manda el estado',
+    { timeout: 20_000 },
+    async () => {
+      // El arranque de la memoria (el primer ping a Letta) no termina nunca.
+      vi.spyOn(MemoryManager.prototype, 'start').mockReturnValue(new Promise(() => undefined));
+
+      result = await start();
+
+      const transport = new WebSocketTransport({
+        url: `ws://localhost:${result.transport.port}/bus`,
+        logger: makeLogger(),
+        webSocketCtor: WebSocket as unknown as WebSocketCtor,
+      });
+      const bus = new EventBus<EventMap>({ logger: makeLogger(), transports: [transport] });
+      const reports: EventMap['system:health'][] = [];
+      bus.on('system:health', (report) => {
+        reports.push(report);
+      });
+      await waitFor(() => reports.length > 0, { timeoutMs: 10_000 });
+
+      expect(reports[0]?.services).toBeDefined();
+      await transport.close();
+    },
+  );
+
+  it('con el puerto ocupado falla enseguida, sin arrancar la memoria ni nada más', async () => {
+    result = await start();
+    const startMemory = vi.spyOn(MemoryManager.prototype, 'start');
+
+    // Una segunda copia en el mismo puerto: es la que tiene que apartarse.
+    await expect(start(result.transport.port)).rejects.toMatchObject({ code: 'EADDRINUSE' });
+
+    expect(startMemory).not.toHaveBeenCalled();
   });
 });

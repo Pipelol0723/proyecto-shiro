@@ -323,3 +323,11 @@ Enmienda (P-10 del plan de mejora; cierra R-072, R-095, R-096, R-175 y R-176), i
 - En el código y en los documentos sigue apareciendo «WAL» como nombre de `LocalMemory`: léase «registro local».
 
 **3. El esquema lleva versión.** `PRAGMA user_version` vale 1, que es el esquema que ya había. Al abrir una base anterior (v0) con turnos, se deja antes una copia junto al archivo (`memory.db.v0.bak`) y después se migra; si la copia no se puede hacer, no se migra. La copia se escribe aparte y se renombra al terminar, así que un `.bak` que existe está siempre entero. Una base de una versión posterior no se abre ni se toca: la versión se comprueba antes de cualquier escritura. El próximo cambio de esquema sube el número y añade su paso.
+
+## Nota 2026-11-20
+
+El arranque del core-host ya no espera a que la memoria termine de arrancar (P-13 del plan de mejora). El primer paso de `MemoryManager.start()` es un ping a Letta, que puede tardar decenas de segundos si Letta no contesta, y antes el servidor no atendía a nadie hasta que terminaba.
+
+- Mientras ese ping no termina, Letta cuenta como no disponible: no hay recuerdos por parecido y los turnos se guardan solo en SQLite. Cuando termina, el drenado los envía.
+- Lo reciente y el historial que se manda al conectar no dependen de eso: salen de SQLite (nota del 2026-11-19).
+- Si la memoria se para mientras arranca, no deja el drenado en marcha ni escribe en la base ya cerrada. Si en ese momento estaba creando el agente de Letta, el agente queda creado pero sin guardar, y se avisa en el log.

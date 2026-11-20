@@ -458,3 +458,97 @@ describe('MemoryManager', () => {
     });
   });
 });
+
+// P-13: el core-host ya no espera a que la memoria termine de arrancar (el
+// primer ping a Letta puede tardar), así que puede pararse a mitad.
+describe('MemoryManager — parada durante el arranque (P-13)', () => {
+  it('si se para mientras espera a Letta, el arranque termina sin fallar y sin dejar el drenado en marcha', async () => {
+    vi.useFakeTimers();
+    try {
+      const local = new LocalMemory({ dbPath: ':memory:' });
+      const letta = makeLetta();
+      const manager = new MemoryManager(BASE_CONFIG, makeDeps(), { local, letta });
+      let answer: (up: boolean) => void = () => undefined;
+      vi.spyOn(letta, 'ping').mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+      );
+
+      const starting = manager.start();
+      await manager.stop();
+      answer(false);
+
+      await expect(starting).resolves.toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+describe('MemoryManager — arranque en segundo plano (revisión de P-13)', () => {
+  it('dos arranques a la vez no dejan dos drenados', async () => {
+    vi.useFakeTimers();
+    try {
+      const local = new LocalMemory({ dbPath: ':memory:' });
+      const letta = makeLetta();
+      const manager = new MemoryManager(BASE_CONFIG, makeDeps(), { local, letta });
+      let answer: (up: boolean) => void = () => undefined;
+      vi.spyOn(letta, 'ping').mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+      );
+
+      const first = manager.start();
+      const second = manager.start();
+      answer(false);
+      await Promise.all([first, second]);
+
+      expect(vi.getTimerCount()).toBe(1);
+      await manager.stop();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('si se para mientras se crea el agente de Letta, no escribe en la base ya cerrada', async () => {
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const local = new LocalMemory({ dbPath: ':memory:' });
+      // Sin agente configurado: hay que crearlo.
+      const letta = makeLetta({ base_url: 'http://localhost:8283', agent_id: '' });
+      const manager = new MemoryManager(
+        { ...BASE_CONFIG, letta: { base_url: 'http://localhost:8283', agent_id: '' } },
+        makeDeps(),
+        { local, letta },
+      );
+      vi.spyOn(letta, 'ping').mockResolvedValue(true);
+      let created: (id: string) => void = () => undefined;
+      vi.spyOn(letta, 'provisionAgent').mockReturnValue(
+        new Promise<string>((resolve) => {
+          created = resolve;
+        }),
+      );
+
+      const starting = manager.start();
+      await Promise.resolve();
+      await Promise.resolve();
+      await manager.stop();
+      created('agente-nuevo');
+
+      await expect(starting).resolves.toBeUndefined();
+      const warnings = warn.mock.calls.map(([message]) => String(message));
+      // Ni un fallo disfrazado de «no se pudo provisionar»…
+      expect(warnings.filter((w) => w.includes('no se pudo provisionar'))).toEqual([]);
+      // …y queda dicho que el agente se creó y no se pudo guardar.
+      expect(warnings.filter((w) => w.includes('agente-nuevo'))).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+});

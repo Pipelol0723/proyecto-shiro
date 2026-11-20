@@ -18,6 +18,10 @@
  * El `ready()` espera al evento `listening` del servidor. Si quieres usar
  * un puerto efímero en tests, pasa `port: 0` y luego lee `transport.port`.
  *
+ * Con `deferConnections: true` el puerto se reserva igual, pero nadie es
+ * atendido (503) hasta `acceptConnections()`. Es lo que usa el arranque del
+ * core-host para no atender a medio preparar.
+ *
  * Ver ADR 0012 (split cliente/server) y ADR 0013 (protocolo).
  */
 
@@ -84,6 +88,15 @@ export interface WebSocketServerTransportOptions {
   path?: string;
   /** Logger padre. El transport crea un child con `module: 'WebSocketServerTransport'`. */
   logger: Logger;
+  /**
+   * Si es `true`, el puerto se reserva al construir pero no se atiende a
+   * nadie hasta `acceptConnections()`: mientras tanto, las conexiones y las
+   * peticiones HTTP reciben un 503 y el cliente reintenta. Sirve para
+   * registrar antes todos los manejadores. Reservar el puerto enseguida hace
+   * que una segunda copia del servidor falle al momento, sin haber tocado
+   * nada. Por defecto, `false`.
+   */
+  deferConnections?: boolean;
 }
 
 export class WebSocketServerTransport implements ITransport {
@@ -102,6 +115,8 @@ export class WebSocketServerTransport implements ITransport {
   private readonly clients = new Set<WebSocket>();
   private readonly logger: Logger;
   private readonly readyPromise: Promise<void>;
+  /** Si es `false`, conexiones y peticiones HTTP reciben un 503. */
+  private accepting: boolean;
   private readonly httpHandlers: HttpRequestHandler[] = [];
   private receiver: TransportReceiveHandler | undefined;
   private readonly connectionHandlers: (() => void | Promise<void>)[] = [];
@@ -113,6 +128,7 @@ export class WebSocketServerTransport implements ITransport {
       this.handleHttpRequest(req, res);
     });
     this.path = options.path ?? '/bus';
+    this.accepting = options.deferConnections !== true;
     // `noServer`: el upgrade lo decide `handleUpgrade` (path y `Origin`) antes
     // de que exista un WebSocket. La documentación de `ws` recomienda el
     // evento `upgrade` frente a `verifyClient`.
@@ -176,6 +192,12 @@ export class WebSocketServerTransport implements ITransport {
     socket.on('error', () => {
       socket.destroy();
     });
+    if (!this.accepting) {
+      // Aún no hay manejadores: mejor un rechazo limpio, que el cliente
+      // reintenta, que una conexión a un servidor a medio preparar.
+      rejectUpgrade(socket, 503);
+      return;
+    }
     const pathname = (req.url ?? '').split('?')[0];
     if (pathname !== this.path) {
       rejectUpgrade(socket, 400);
@@ -193,6 +215,12 @@ export class WebSocketServerTransport implements ITransport {
   }
 
   private handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+    if (!this.accepting) {
+      res.statusCode = 503;
+      res.setHeader('Retry-After', '1');
+      res.end('Service Unavailable');
+      return;
+    }
     for (const handler of this.httpHandlers) {
       try {
         if (handler(req, res)) return;
@@ -214,6 +242,14 @@ export class WebSocketServerTransport implements ITransport {
   /** Espera al evento `listening`. Resuelve cuando el server está vinculado. */
   ready(): Promise<void> {
     return this.readyPromise;
+  }
+
+  /**
+   * Empieza a atender conexiones y peticiones HTTP, si se construyó con
+   * `deferConnections: true`. Llamarlo otra vez no hace nada.
+   */
+  acceptConnections(): void {
+    this.accepting = true;
   }
 
   /**
@@ -302,7 +338,11 @@ export class WebSocketServerTransport implements ITransport {
     });
     await new Promise<void>((resolve, reject) => {
       this.httpServer.close((err) => {
-        if (err) reject(err);
+        // Un servidor que no llegó a escuchar (no se abrió el puerto, o
+        // estaba ocupado) no tiene nada que cerrar: no es un fallo.
+        const code = err !== undefined && 'code' in err ? err.code : undefined;
+        const notRunning = code === 'ERR_SERVER_NOT_RUNNING';
+        if (err && !notRunning) reject(err);
         else resolve();
       });
     });
