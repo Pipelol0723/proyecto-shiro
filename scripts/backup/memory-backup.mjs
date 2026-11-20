@@ -257,6 +257,63 @@ export async function verifyBackup(dir) {
 }
 
 /**
+ * El ensayo de restauración de la memoria: además de los hashes, abre la
+ * memoria copiada, le pasa la comprobación de SQLite y cuenta los turnos. Se
+ * abre en solo lectura: la carpeta de la copia no cambia.
+ *
+ * @param {string} dir
+ */
+export async function checkBackup(dir) {
+  const problems = await verifyBackup(dir);
+  if (problems.length > 0) throw new Error(`la copia no cuadra: ${problems.join('; ')}`);
+  const manifest = readManifest(dir);
+  const db = new Database(join(dir, 'memory.db'), { readonly: true, fileMustExist: true });
+  let memory;
+  try {
+    memory = inspectMemory(db);
+  } finally {
+    db.close();
+  }
+  if (memory.turns !== manifest.memory?.turns) {
+    throw new Error(
+      `la memoria copiada tiene ${String(memory.turns)} turnos y el manifiesto dice ${String(manifest.memory?.turns)}`,
+    );
+  }
+  const rows = manifest.letta?.rows;
+  return {
+    name: manifest.name,
+    complete: manifest.complete === true,
+    turns: memory.turns,
+    lettaImage: manifest.letta?.image ?? null,
+    lettaTables: rows ? Object.keys(rows).length : null,
+  };
+}
+
+/**
+ * Compara las filas por tabla que había al copiar con las que hay al
+ * restaurar. Devuelve lo que no coincide, tabla por tabla.
+ *
+ * @param {Record<string, number>} copied
+ * @param {Record<string, number>} restored
+ */
+export function compareRows(copied, restored) {
+  const problems = [];
+  for (const table of new Set([...Object.keys(copied), ...Object.keys(restored)])) {
+    const before = copied[table];
+    const after = restored[table];
+    if (before === after) continue;
+    if (before === undefined) {
+      problems.push(`${table}: no estaba en la copia y hay ${String(after)} al restaurar`);
+    } else if (after === undefined) {
+      problems.push(`${table}: ${String(before)} en la copia y no está al restaurar`);
+    } else {
+      problems.push(`${table}: ${String(before)} en la copia y ${String(after)} al restaurar`);
+    }
+  }
+  return problems.sort();
+}
+
+/**
  * Anota la copia en `last-backup.json`, al lado de la memoria. Una copia sin
  * el volcado de Letta también se anota, pero conserva la fecha de la última
  * completa: son dos avisos distintos.
@@ -305,6 +362,7 @@ async function main(argv) {
       'no-letta': { type: 'string' },
       'ollama-list': { type: 'string' },
       'allow-empty': { type: 'boolean', default: false },
+      rows: { type: 'string' },
     },
   });
   const root = new URL('../../', import.meta.url);
@@ -326,6 +384,21 @@ async function main(argv) {
   }
   if (command === 'mark') {
     return markLastBackup(need(values.db, 'db'), need(values.dir, 'dir'), new Date());
+  }
+  if (command === 'check') return JSON.stringify(await checkBackup(need(values.dir, 'dir')));
+  if (command === 'compare-rows') {
+    const copied = readManifest(need(values.dir, 'dir')).letta?.rows;
+    const restored = parseRowCounts(text(need(values.rows, 'rows')));
+    if (restored === null) throw new Error('no se pudieron contar las filas de la base restaurada');
+    if (!copied) {
+      return 'la copia no lleva el recuento de filas: se restauró, pero no hay con qué comparar';
+    }
+    const problems = compareRows(copied, restored);
+    if (problems.length > 0) {
+      throw new Error(`la base restaurada no coincide con la copia:\n${problems.join('\n')}`);
+    }
+    const total = Object.values(restored).reduce((sum, n) => sum + n, 0);
+    return `${String(Object.keys(restored).length)} tablas, ${String(total)} filas: igual que en la copia`;
   }
   if (command === 'create') {
     const problem = checkNode(
@@ -364,7 +437,9 @@ async function main(argv) {
     writeFileSync(join(out, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     return JSON.stringify({ name, turns: memory.turns, complete: manifest.complete });
   }
-  throw new Error('uso: memory-backup.mjs name | create | verify | rotate | mark');
+  throw new Error(
+    'uso: memory-backup.mjs name | create | verify | rotate | mark | check | compare-rows',
+  );
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
