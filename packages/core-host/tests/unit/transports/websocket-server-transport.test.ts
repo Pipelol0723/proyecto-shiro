@@ -401,52 +401,92 @@ describe('WebSocketServerTransport', () => {
   });
 });
 
-// P-13: quien arranca el servidor decide cuándo se abre el puerto, para
-// abrirlo con todo ya preparado.
-describe('WebSocketServerTransport — abrir el puerto cuando toca (P-13)', () => {
-  it('con autoListen: false no escucha hasta que se le dice', async () => {
+// P-13: el puerto se reserva enseguida (así una segunda copia del servidor
+// falla al momento), pero no se atiende a nadie hasta que quien arranca dice
+// que todo está en su sitio.
+describe('WebSocketServerTransport — no atender hasta estar listo (P-13)', () => {
+  /** Cómo acaba un intento de conexión: «open» o el código HTTP del rechazo. */
+  function connectOutcome(url: string): Promise<string> {
+    return new Promise((resolve) => {
+      const client = new WebSocket(url);
+      client.once('open', () => {
+        client.close();
+        resolve('open');
+      });
+      client.once('unexpected-response', (_req, res) => resolve(String(res.statusCode)));
+      client.once('error', (err: NodeJS.ErrnoException) => resolve(err.code ?? err.message));
+    });
+  }
+
+  it('con deferConnections reserva el puerto pero rechaza con 503 hasta acceptConnections()', async () => {
     const transport = new WebSocketServerTransport({
       port: 0,
       logger: makeLogger(),
-      autoListen: false,
+      deferConnections: true,
     });
     try {
-      await tick();
-      expect(() => transport.port).toThrow();
-
-      await transport.listen();
-
-      expect(transport.port).toBeGreaterThan(0);
-      // Pedirlo otra vez no hace nada, y `ready()` resuelve igual.
-      await transport.listen();
       await transport.ready();
+      const connections = vi.fn();
+      transport.onConnection(connections);
+      const url = `ws://127.0.0.1:${transport.port}/bus`;
+
+      expect(await connectOutcome(url)).toBe('503');
+      await tick(20);
+      expect(connections).not.toHaveBeenCalled();
+      expect(transport.clientCount).toBe(0);
+
+      transport.acceptConnections();
+
+      expect(await connectOutcome(url)).toBe('open');
+      await tick(20);
+      expect(connections).toHaveBeenCalledTimes(1);
     } finally {
       await transport.close();
     }
   });
 
-  it('cerrar uno que no llegó a escuchar no lanza', async () => {
+  it('las rutas HTTP también esperan', async () => {
     const transport = new WebSocketServerTransport({
       port: 0,
       logger: makeLogger(),
-      autoListen: false,
-    });
-
-    await expect(transport.close()).resolves.toBeUndefined();
-  });
-
-  it('si el puerto está ocupado, listen() rechaza con EADDRINUSE', async () => {
-    const first = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
-    await first.ready();
-    const second = new WebSocketServerTransport({
-      port: first.port,
-      logger: makeLogger(),
-      autoListen: false,
+      deferConnections: true,
     });
     try {
-      await expect(second.listen()).rejects.toMatchObject({ code: 'EADDRINUSE' });
+      await transport.ready();
+      const handler = vi.fn(() => false);
+      transport.onRequest(handler);
+      const url = `http://127.0.0.1:${transport.port}/audio/x.mp3`;
+
+      expect((await fetch(url)).status).toBe(503);
+      expect(handler).not.toHaveBeenCalled();
+
+      transport.acceptConnections();
+
+      expect((await fetch(url)).status).toBe(404);
+      expect(handler).toHaveBeenCalledTimes(1);
     } finally {
-      await second.close();
+      await transport.close();
+    }
+  });
+
+  it('sin deferConnections atiende desde el principio, como siempre', async () => {
+    const transport = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    try {
+      await transport.ready();
+      expect(await connectOutcome(`ws://127.0.0.1:${transport.port}/bus`)).toBe('open');
+    } finally {
+      await transport.close();
+    }
+  });
+
+  it('cerrar uno que no pudo vincular el puerto no lanza', async () => {
+    const first = new WebSocketServerTransport({ port: 0, logger: makeLogger() });
+    await first.ready();
+    const second = new WebSocketServerTransport({ port: first.port, logger: makeLogger() });
+    try {
+      await expect(second.ready()).rejects.toMatchObject({ code: 'EADDRINUSE' });
+      await expect(second.close()).resolves.toBeUndefined();
+    } finally {
       await first.close();
     }
   });

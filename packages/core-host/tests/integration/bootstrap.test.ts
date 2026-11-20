@@ -347,9 +347,10 @@ describe('core-host bootstrap end-to-end', () => {
   });
 });
 
-// P-13 (R-059, R-089): el puerto se abría antes de poner los manejadores, y
-// el arranque esperaba a Letta. Un cliente que conectaba en ese rato perdía
-// el historial, el estado de los servicios y sus primeros mensajes.
+// P-13 (R-059, R-089): el servidor atendía conexiones antes de poner los
+// manejadores, y el arranque esperaba a Letta. Un cliente que conectaba en
+// ese rato perdía el historial, el estado de los servicios y sus primeros
+// mensajes.
 describe('core-host bootstrap — arranque ordenado (P-13)', () => {
   let result: BootstrapResult | null = null;
 
@@ -361,9 +362,9 @@ describe('core-host bootstrap — arranque ordenado (P-13)', () => {
     }
   });
 
-  function start(): Promise<BootstrapResult> {
+  function start(port = 0): Promise<BootstrapResult> {
     return bootstrap({
-      port: 0,
+      port,
       config: loadFixtureConfig(),
       character: FIXTURE_CHARACTER,
       logger: makeLogger(),
@@ -371,11 +372,11 @@ describe('core-host bootstrap — arranque ordenado (P-13)', () => {
     });
   }
 
-  it('abre el puerto al final, con los manejadores de conexión ya puestos', async () => {
+  it('empieza a atender al final, con los manejadores de conexión ya puestos', async () => {
     const order: string[] = [];
     const proto = WebSocketServerTransport.prototype;
     const onConnection = proto.onConnection;
-    const listen = proto.listen;
+    const acceptConnections = proto.acceptConnections;
     vi.spyOn(proto, 'onConnection').mockImplementation(function (
       this: WebSocketServerTransport,
       handler,
@@ -383,16 +384,18 @@ describe('core-host bootstrap — arranque ordenado (P-13)', () => {
       order.push('onConnection');
       onConnection.call(this, handler);
     });
-    vi.spyOn(proto, 'listen').mockImplementation(function (this: WebSocketServerTransport) {
-      order.push('listen');
-      return listen.call(this);
+    vi.spyOn(proto, 'acceptConnections').mockImplementation(function (
+      this: WebSocketServerTransport,
+    ) {
+      order.push('acceptConnections');
+      acceptConnections.call(this);
     });
 
     result = await start();
 
     expect(order.filter((step) => step === 'onConnection').length).toBeGreaterThanOrEqual(2);
-    expect(order.at(-1)).toBe('listen');
-    expect(order.filter((step) => step === 'listen')).toHaveLength(1);
+    expect(order.at(-1)).toBe('acceptConnections');
+    expect(order.filter((step) => step === 'acceptConnections')).toHaveLength(1);
   });
 
   it(
@@ -420,4 +423,14 @@ describe('core-host bootstrap — arranque ordenado (P-13)', () => {
       await transport.close();
     },
   );
+
+  it('con el puerto ocupado falla enseguida, sin arrancar la memoria ni nada más', async () => {
+    result = await start();
+    const startMemory = vi.spyOn(MemoryManager.prototype, 'start');
+
+    // Una segunda copia en el mismo puerto: es la que tiene que apartarse.
+    await expect(start(result.transport.port)).rejects.toMatchObject({ code: 'EADDRINUSE' });
+
+    expect(startMemory).not.toHaveBeenCalled();
+  });
 });
