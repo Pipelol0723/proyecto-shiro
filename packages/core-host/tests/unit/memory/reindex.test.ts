@@ -97,6 +97,9 @@ describe('describeReindex', () => {
     expect(lines.join('\n')).toMatch(/3 turnos/);
     expect(lines.join('\n')).toMatch(/agente-viejo/);
     expect(lines.join('\n')).toMatch(/--yes/);
+    // Abrir la memoria puede migrarla: el ensayo no promete que no cambia nada.
+    expect(lines.join('\n')).not.toMatch(/No se ha cambiado nada/);
+    expect(lines.join('\n')).toMatch(/ningún turno/);
   });
 
   it('aplicado, dice qué pasará al arrancar', () => {
