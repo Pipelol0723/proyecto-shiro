@@ -107,19 +107,25 @@ export interface BootstrapResult {
  * Llama a esto desde `server.ts` (entry point real) o desde tests. La
  * `Promise` resuelve cuando el server está escuchando y el Orchestrator
  * ha emitido `bus:ready`.
+ *
+ * El puerto se abre al final, con todos los manejadores ya puestos (P-13):
+ * abriéndolo al principio, un cliente que conectaba durante el arranque se
+ * quedaba sin historial, sin el estado de los servicios y perdía sus
+ * primeros mensajes. Tampoco se espera a Letta para abrirlo.
  */
 export async function bootstrap(options: BootstrapOptions): Promise<BootstrapResult> {
   const logger = options.logger ?? new Logger();
   const child = logger.child({ module: 'bootstrap' });
 
-  // 1. Transport server-side (espera a que esté listening).
+  // 1. Transport server-side. Todavía no escucha: el puerto se abre al
+  //    final, cuando todo lo demás está en su sitio.
   const transport = new WebSocketServerTransport({
     port: options.port,
     host: options.host,
     path: options.path,
     logger,
+    autoListen: false,
   });
-  await transport.ready();
 
   // 2. EventBus inyectando el transport.
   const bus = new EventBus<EventMap>({
@@ -203,7 +209,12 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     quien controla el wiring; si en el futuro se permite swappear
   //     el slot memory por algo sin start/stop, este cast hay que revisarlo.
   const memoryManager = orchestrator.getModules().memory as MemoryManager;
-  await memoryManager.start();
+  // No se espera: su primer paso es un ping a Letta, que puede tardar decenas
+  // de segundos si no contesta. Lo reciente sale de SQLite y los turnos se
+  // guardan igual; el drenado hacia Letta empieza cuando el ping termine.
+  void memoryManager.start().catch((err: unknown) => {
+    child.warn('la memoria no pudo arrancar su sincronización con Letta', { err });
+  });
 
   // 4b'. WhisperSTT: healthcheck no bloqueante. Si el microservicio Python
   //      no responde (no arrancado, otro puerto, modelo aún cargando), el
@@ -469,6 +480,32 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     };
   }
 
+  const shutdown = async (): Promise<void> => {
+    disposeFlow();
+    disposeSelfDev();
+    unsubscribeHealth();
+    cloudKey.dispose();
+    unsubscribeSecrets();
+    audioCache?.stop();
+    await memoryManager.stop();
+    await orchestrator.shutdown();
+    await transport.close();
+    child.info('core-host apagado');
+  };
+
+  // Lo último: abrir el puerto. Quien conecte desde ahora encuentra todos
+  // los manejadores puestos.
+  try {
+    await transport.listen();
+  } catch (err) {
+    // Puerto ocupado u otro fallo al vincular: se suelta lo ya arrancado
+    // (temporizadores, la base de la memoria) y el error sigue su camino.
+    await shutdown().catch((shutdownErr: unknown) => {
+      child.warn('no se pudo soltar todo tras fallar al abrir el puerto', { err: shutdownErr });
+    });
+    throw err;
+  }
+
   child.info(
     `core-host listo en puerto ${transport.port}${options.path ?? '/bus'} (personaje: ${options.character.identity.name})`,
   );
@@ -480,17 +517,6 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
     logger,
     character: options.character,
     systemPrompt,
-    shutdown: async () => {
-      disposeFlow();
-      disposeSelfDev();
-      unsubscribeHealth();
-      cloudKey.dispose();
-      unsubscribeSecrets();
-      audioCache?.stop();
-      await memoryManager.stop();
-      await orchestrator.shutdown();
-      await transport.close();
-      child.info('core-host apagado');
-    },
+    shutdown,
   };
 }

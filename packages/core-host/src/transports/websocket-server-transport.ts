@@ -84,6 +84,12 @@ export interface WebSocketServerTransportOptions {
   path?: string;
   /** Logger padre. El transport crea un child con `module: 'WebSocketServerTransport'`. */
   logger: Logger;
+  /**
+   * Si es `false`, el puerto no se abre al construir: lo abre `listen()`.
+   * Sirve para registrar antes todos los manejadores y que ningún cliente
+   * entre con el servidor a medio preparar. Por defecto, `true`.
+   */
+  autoListen?: boolean;
 }
 
 export class WebSocketServerTransport implements ITransport {
@@ -102,6 +108,9 @@ export class WebSocketServerTransport implements ITransport {
   private readonly clients = new Set<WebSocket>();
   private readonly logger: Logger;
   private readonly readyPromise: Promise<void>;
+  private readonly listenOptions: { port: number; host: string };
+  /** Ya se pidió abrir el puerto (haya salido bien o no). */
+  private listenRequested = false;
   private readonly httpHandlers: HttpRequestHandler[] = [];
   private receiver: TransportReceiveHandler | undefined;
   private readonly connectionHandlers: (() => void | Promise<void>)[] = [];
@@ -113,6 +122,7 @@ export class WebSocketServerTransport implements ITransport {
       this.handleHttpRequest(req, res);
     });
     this.path = options.path ?? '/bus';
+    this.listenOptions = { port: options.port, host: options.host ?? DEFAULT_BIND_HOST };
     // `noServer`: el upgrade lo decide `handleUpgrade` (path y `Origin`) antes
     // de que exista un WebSocket. La documentación de `ws` recomienda el
     // evento `upgrade` frente a `verifyClient`.
@@ -140,8 +150,15 @@ export class WebSocketServerTransport implements ITransport {
       this.httpServer.on('error', (err) => {
         this.logger.debug('httpServer error (el de arranque se maneja vía ready())', { err });
       });
-      this.httpServer.listen(options.port, options.host ?? DEFAULT_BIND_HOST);
     });
+    if (options.autoListen !== false) {
+      this.startListening();
+    } else {
+      // Nadie espera todavía a `readyPromise`: si el puerto falla al abrirse,
+      // el rechazo llega a quien llame a `listen()`. Esto evita que antes de
+      // eso cuente como rechazo sin atender.
+      this.readyPromise.catch(() => undefined);
+    }
 
     // El EADDRINUSE al bindear llega por el 'error' del httpServer (arriba):
     // el rechazo de `readyPromise` lleva el fallo a quien hizo `ready()`, que
@@ -214,6 +231,22 @@ export class WebSocketServerTransport implements ITransport {
   /** Espera al evento `listening`. Resuelve cuando el server está vinculado. */
   ready(): Promise<void> {
     return this.readyPromise;
+  }
+
+  /**
+   * Abre el puerto, si no se abrió al construir (`autoListen: false`), y
+   * espera a que esté vinculado. Rechaza si no se puede (`EADDRINUSE`).
+   * Llamarlo otra vez no hace nada.
+   */
+  listen(): Promise<void> {
+    this.startListening();
+    return this.readyPromise;
+  }
+
+  private startListening(): void {
+    if (this.listenRequested) return;
+    this.listenRequested = true;
+    this.httpServer.listen(this.listenOptions.port, this.listenOptions.host);
   }
 
   /**
@@ -302,7 +335,11 @@ export class WebSocketServerTransport implements ITransport {
     });
     await new Promise<void>((resolve, reject) => {
       this.httpServer.close((err) => {
-        if (err) reject(err);
+        // Un servidor que no llegó a escuchar (no se abrió el puerto, o
+        // estaba ocupado) no tiene nada que cerrar: no es un fallo.
+        const code = err !== undefined && 'code' in err ? err.code : undefined;
+        const notRunning = code === 'ERR_SERVER_NOT_RUNNING';
+        if (err && !notRunning) reject(err);
         else resolve();
       });
     });

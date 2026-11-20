@@ -170,6 +170,9 @@ export class MemoryManager implements IMemoryModule {
         `(esquema v${String(this.local.schemaVersion())})`,
     );
     await this.checkLetta();
+    // Quien arranca ya no espera a este ping: puede haber parado mientras
+    // tanto. Entonces no hay nada que drenar ni base abierta que consultar.
+    if (this.stopped) return;
     if (!this.lettaUp) {
       const pending = this.local.pendingCount();
       this.logger.warn(
