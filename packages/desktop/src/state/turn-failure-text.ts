@@ -21,6 +21,7 @@ const CLOUD_TEXT: Record<TurnFailureReason, string> = {
   quota: 'La nube dice que llegué al límite de uso o que no queda saldo.',
   unavailable: 'No pude conectar con el modelo de la nube.',
   'model-missing': 'La nube no conoce el modelo que tengo configurado.',
+  empty: 'El modelo de la nube contestó sin texto: la respuesta llegó vacía o cortada.',
   unknown: 'El modelo de la nube falló.',
 };
 
@@ -35,6 +36,7 @@ const LOCAL_TEXT: Partial<Record<TurnFailureReason, string>> = {
   unavailable: 'No pude hablar con Ollama. Comprueba que está abierto.',
   'model-missing':
     'A Ollama le falta el modelo que tengo configurado. Descárgalo con «ollama pull» y vuelve a intentarlo.',
+  empty: 'El modelo local contestó sin texto y me quedé sin nada que decir. Vuelve a intentarlo.',
 };
 
 export function describeTurnFailure(failure: TurnFailure): string {
