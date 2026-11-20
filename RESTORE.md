@@ -102,7 +102,7 @@ Por qué no a mano. Al escribir este documento se ensayaron los pasos y se revis
 
 - **La memoria local.** Si al lado de la `memory.db` restaurada se queda un `memory.db-wal` de la memoria anterior, SQLite lo aplica encima: la app abre sin errores y enseña los turnos de antes, no los de la copia. Hay que apartar los tres archivos (`memory.db`, `memory.db-wal` y `memory.db-shm`) y comprobar que no queda ninguno antes de copiar.
 - **Letta.** Restaurar encima de la base en uso con `pg_restore --clean` termina con cientos de errores y la base sin tablas (probado el 2026-11-20 en un Letta temporal). Lo que funciona es restaurar en una base aparte, cambiarla por la que hay en una sola transacción y reiniciar Letta. Hecho a mano, una orden que falla no para a las siguientes.
-- **Las dos a la vez.** La memoria local anota qué turnos se han enviado ya a Letta. Si se restaura una memoria y un Letta de copias distintas, hay turnos que constan como enviados y que ese Letta no tiene: no se reenvían solos. Para eso está `reindex-memory`, más abajo.
+- **Las dos a la vez.** La memoria local anota qué turnos se han enviado ya a Letta. Si se restaura una memoria y un Letta de copias distintas, hay turnos que constan como enviados y que ese Letta no tiene: no se reenvían solos. Para eso está `reindex-memory`, más abajo. Con la memoria y el Letta de una misma copia no pasa: la copia saca primero la memoria, así que un turno enviado mientras se copiaba queda como pendiente y, al restaurar, se reenvía (puede quedar repetido en Letta, no perdido).
 
 Si necesitas restaurar antes de que exista la orden, pide ayuda con la copia delante y **no borres nada**: ni la memoria que hay, ni el volumen de Letta, ni las copias.
 

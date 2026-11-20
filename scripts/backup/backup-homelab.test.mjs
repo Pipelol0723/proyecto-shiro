@@ -74,11 +74,21 @@ if (command === 'ps') console.log((env.STUB_CONTAINERS ?? 'letta-1').split(',').
 if (command === 'inspect') console.log('letta/letta@sha256:de-pega');
 if (command === 'cp') {
   if (env.STUB_CP_FAIL) process.exit(1);
-  fs.writeFileSync(args[1], 'volcado de pega');
+  const atDump = fs.readFileSync(require('node:path').join(__dirname, 'memoria-al-volcar.txt'), 'utf8');
+  fs.writeFileSync(args[1], 'volcado de pega; memoria ya copiada al volcar: ' + atDump);
 }
 if (command === 'exec') {
   const script = args.join(' ');
-  if (script.includes('pg_dump') && env.STUB_DUMP_FAIL) process.exit(1);
+  if (script.includes('pg_dump')) {
+    if (env.STUB_DUMP_FAIL) process.exit(1);
+    const os = require('node:os');
+    const path = require('node:path');
+    const copied = fs
+      .readdirSync(os.tmpdir())
+      .filter((name) => name.startsWith('shiro-backup-2'))
+      .some((name) => fs.existsSync(path.join(os.tmpdir(), name, 'copia', 'memory.db')));
+    fs.writeFileSync(path.join(__dirname, 'memoria-al-volcar.txt'), String(copied));
+  }
   if (script.includes('psql')) console.log('agents=1\\nmessages=2');
 }
 `,
@@ -214,7 +224,13 @@ test('con Letta en marcha la copia es completa y lleva las filas por tabla', { s
     rows: { agents: 1, messages: 2 },
   });
   assert.deepEqual(await verifyBackup(dir), []);
-  assert.equal(readFileSync(join(dir, 'letta.dump'), 'utf8'), 'volcado de pega');
+  // La memoria se saca antes que el volcado: un turno que se envíe a Letta
+  // entre los dos pasos queda en la copia como pendiente, y al restaurar se
+  // reenvía. Al revés constaría como enviado sin estar en el volcado.
+  assert.equal(
+    readFileSync(join(dir, 'letta.dump'), 'utf8'),
+    'volcado de pega; memoria ya copiada al volcar: true',
+  );
 });
 
 test(

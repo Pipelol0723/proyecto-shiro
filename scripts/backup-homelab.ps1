@@ -3,8 +3,8 @@
   Copia de seguridad de la memoria de Shiro (P-11a; apartado 8.1 del plan de mejora).
 
 .DESCRIPTION
-  Saca una instantánea de memory.db y, si Letta está en marcha, un volcado de
-  su Postgres. Escribe un manifiesto con los hashes, lo envía todo a una
+  Saca una instantánea de memory.db y después, si Letta está en marcha, un
+  volcado de su Postgres. Escribe un manifiesto con los hashes, lo envía todo a una
   carpeta con fecha en el destino, comprueba allí los hashes, anota la fecha en
   last-backup.json (al lado de memory.db) y conserva las últimas copias.
 
@@ -280,8 +280,15 @@ function Invoke-Backup {
   $script:tmp = Join-Path ([System.IO.Path]::GetTempPath()) "shiro-backup-$name"
   $copy = Join-Path $script:tmp 'copia'
   New-Item -ItemType Directory -Path $copy | Out-Null
-  $createArgs = @('create', '--db', $MemoryDb, '--out', $copy, '--name', $name)
-  if ($AllowEmpty) { $createArgs += '--allow-empty' }
+  # La memoria va antes que el volcado de Letta: un turno que se envíe a
+  # Letta entre los dos pasos queda en la copia como pendiente, y al restaurar
+  # se reenvía. Al revés constaría como enviado sin estar en el volcado. Lo
+  # que se diga después de la instantánea no entra en la memoria copiada.
+  Write-Step 'sacando la instantánea de la memoria'
+  $snapshotArgs = @('snapshot', '--db', $MemoryDb, '--out', $copy)
+  if ($AllowEmpty) { $snapshotArgs += '--allow-empty' }
+  Invoke-Helper @snapshotArgs | Out-Null
+  $createArgs = @('create', '--out', $copy, '--name', $name)
 
   $letta = Get-LettaPart $copy
   if ($letta.Reason) { $createArgs += @('--no-letta', $letta.Reason) }
@@ -297,7 +304,6 @@ function Invoke-Backup {
     }
   }
 
-  Write-Step 'sacando la instantánea de la memoria'
   $summary = "$(Invoke-Helper @createArgs)" | ConvertFrom-Json
   $manifestFile = Join-Path $copy 'manifest.json'
   $manifest = Get-Content -LiteralPath $manifestFile -Raw -Encoding UTF8 | ConvertFrom-Json
