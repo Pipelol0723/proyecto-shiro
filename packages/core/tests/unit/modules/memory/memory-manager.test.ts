@@ -123,6 +123,16 @@ describe('MemoryManager', () => {
       ).toThrow(MemoryManagerError);
     });
 
+    it('dice en qué archivo guarda la memoria local, para quien la copia', () => {
+      const withPath = new MemoryManager(
+        { ...BASE_CONFIG, local: { db_path: './datos/memoria.db' } },
+        makeDeps(),
+        { local, letta },
+      );
+
+      expect(withPath.getLocalDbPath()).toBe('./datos/memoria.db');
+    });
+
     it('expone id determinista por user_id', () => {
       expect(manager.id).toBe(`memory:manager:${USER}`);
     });

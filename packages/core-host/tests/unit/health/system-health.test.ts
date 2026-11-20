@@ -273,6 +273,21 @@ describe('checkSystemHealth', () => {
     const report = await checkSystemHealth({ ...targets, fetchImpl: makeFetch(() => 200) });
     expect('geminiVoice' in report).toBe(false);
   });
+
+  // P-11a: la fecha de la última copia de seguridad viaja en el informe.
+  it('incluye lastBackup cuando se le pasa, y lo omite si no hay copia conocida', async () => {
+    const lastBackup = { at: '2026-11-19T10:00:00.000Z', complete: false, lastCompleteAt: null };
+
+    const withBackup = await checkSystemHealth({
+      ...targets,
+      lastBackup,
+      fetchImpl: makeFetch(() => 200),
+    });
+    const without = await checkSystemHealth({ ...targets, fetchImpl: makeFetch(() => 200) });
+
+    expect(withBackup.lastBackup).toEqual(lastBackup);
+    expect('lastBackup' in without).toBe(false);
+  });
 });
 
 describe('checkSystemHealth — vivo frente a listo', () => {
