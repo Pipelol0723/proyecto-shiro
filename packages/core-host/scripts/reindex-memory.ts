@@ -18,11 +18,20 @@ import { describeReindex, reindexMemory } from '../src/memory/reindex.js';
 const DEFAULT_DB_PATH = './data/memory.db';
 const DEFAULT_PORT = 9876;
 
-/** ¿Hay algo escuchando en el puerto del `core-host`? */
+/**
+ * ¿Hay algo escuchando donde escucha el `core-host`? Mira el puerto y la
+ * dirección de las mismas variables que el servidor (`npm run` carga el
+ * mismo `.env`). Si el puerto lo ocupa otro programa también se niega: es
+ * el lado seguro.
+ */
 function isAppRunning(): Promise<boolean> {
   const port = Number(process.env.SHIRO_HOST_PORT ?? DEFAULT_PORT);
+  const bind = process.env.SHIRO_BIND_HOST;
+  // Escuchando en todas las interfaces, se llega por la local.
+  const host =
+    bind === undefined || bind === '' || bind === '0.0.0.0' || bind === '::' ? '127.0.0.1' : bind;
   return new Promise((resolve) => {
-    const socket = connect({ host: '127.0.0.1', port });
+    const socket = connect({ host, port });
     const done = (running: boolean): void => {
       socket.destroy();
       resolve(running);

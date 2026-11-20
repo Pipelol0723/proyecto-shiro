@@ -110,7 +110,7 @@ Si necesitas restaurar antes de que exista la orden, pide ayuda con la copia del
 
 La memoria local guarda todos los turnos, así que Letta se puede volver a llenar desde ella. Hace falta cuando Letta está vacío o es otro (uno nuevo, o uno restaurado de una copia de otra fecha): los turnos que ya constan como enviados no se reenvían solos.
 
-Con **Shiro cerrado**, esto dice lo que haría, sin cambiar nada: cuántos turnos hay, cuántos constan como enviados y qué agente de Letta está anotado.
+Con **Shiro cerrado**, esto dice lo que haría, sin tocar ningún turno: cuántos turnos hay, cuántos constan como enviados y qué agente de Letta está anotado.
 
 ```powershell
 npm run reindex-memory
@@ -128,6 +128,7 @@ npm run reindex-memory -- --yes
 - Si la configuración fija un agente (`letta.agent_id`), no se crea ninguno: los turnos se reenvían a ese.
 - Por defecto actúa sobre la memoria de desarrollo. Para otra, con la ruta completa: `npm run reindex-memory -- --db <ruta de memory.db> --yes`.
 - Con Shiro en marcha no hace nada y lo dice: el servidor tiene el agente en uso.
+- Abrir la memoria la deja en el esquema actual, como hace Shiro al arrancar: si era de una versión anterior, la migra y guarda al lado una copia previa. Pasa también cuando solo se pregunta qué haría.
 
 ## Si la imagen de Letta no trajera `pg_dump`
 

@@ -530,7 +530,7 @@ cp -r docs/design/chibi-prototype/test-model/assets \
 | `npm run audit:prod`                            | Audit de producción: falla con high o critical              |
 | `npm run backup`                                | Copia de seguridad de la memoria ([RESTORE.md](RESTORE.md)) |
 | `npm run backup:check`                          | Ensayo de restauración de una copia                         |
-| `npm run reindex-memory`                        | Vuelve a llenar Letta desde la memoria local                |
+| `npm run reindex-memory`                        | Prepara la memoria local para volver a llenar Letta         |
 | `npm run agents:sync`                           | Regenera AGENTS.md desde los bloques de CLAUDE.md           |
 | `npm run agents:check`                          | Falla si AGENTS.md no coincide con CLAUDE.md                |
 

@@ -9,6 +9,10 @@
  *
  * No borra ningún turno ni toca Letta: solo cambia, en la memoria local, la
  * marca de «ya enviado» y el agente anotado.
+ *
+ * Abrir la memoria la deja en el esquema actual, como hace Shiro al arrancar:
+ * si era de una versión anterior, la migra y guarda al lado una copia previa.
+ * Eso pasa también en el ensayo (sin `apply`), que por lo demás no escribe.
  */
 
 import { existsSync } from 'node:fs';
@@ -62,7 +66,7 @@ export function describeReindex(report: ReindexReport): string[] {
     return [
       `La memoria tiene ${String(report.total)} turnos; ${String(report.toResend)} constan como ya enviados a Letta.`,
       `Agente de Letta anotado: ${agent}.`,
-      'No se ha cambiado nada. Para dejarlos todos pendientes y olvidar el agente, repite con --yes.',
+      'No se ha tocado ningún turno ni el agente. Para dejarlos todos pendientes y olvidar el agente, repite con --yes.',
     ];
   }
   return [
