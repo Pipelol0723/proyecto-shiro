@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +14,9 @@ import Database from 'better-sqlite3';
 import {
   BACKUP_NAME,
   backupName,
+  checkBackup,
   checkNode,
+  compareRows,
   lettaImageFromCompose,
   markLastBackup,
   parseCopies,
@@ -328,4 +331,91 @@ test('la rotación por la línea de comandos lee las copias por la entrada', () 
   assert.equal(cli(['rotate', '--keep', '2'], lines.join('\r\n')).out, '20261102T000000Z');
   assert.deepEqual(cli(['rotate', '--keep', '2'], ''), { code: 0, out: '', err: '' });
   assert.equal(cli(['rotate', '--keep', '0'], lines.join('\n')).code, 1);
+});
+
+// ── El ensayo de restauración ──
+
+test('el ensayo abre la memoria copiada y cuenta los turnos, no solo mira los hashes', async () => {
+  openMemory(join(work, 'ensayo.db'), 4).close();
+  const out = join(work, 'ensayo-copia');
+  cli([...createArgs('ensayo.db', 'ensayo-copia'), '--no-letta', 'x']);
+
+  assert.deepEqual(await checkBackup(out), {
+    name: '20261120T083005Z',
+    complete: false,
+    turns: 4,
+    lettaImage: lettaImageFromCompose(
+      readFileSync(new URL('../../docker-compose.yml', import.meta.url), 'utf8'),
+    ),
+    lettaTables: null,
+  });
+  assert.equal(JSON.parse(cli(['check', '--dir', out]).out).turns, 4);
+
+  // Un manifiesto que dice otra cosa que la memoria que acompaña.
+  const manifestFile = join(out, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+  writeFileSync(manifestFile, JSON.stringify({ ...manifest, memory: { turns: 9 } }));
+  await assert.rejects(checkBackup(out), /tiene 4 turnos y el manifiesto dice 9/);
+  const failed = cli(['check', '--dir', out]);
+  assert.equal(failed.code, 1);
+
+  // Y un archivo cambiado después de copiar.
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  appendFileSync(join(out, 'memory.db'), 'x');
+  await assert.rejects(checkBackup(out), /memory\.db no coincide/);
+});
+
+test('el ensayo no deja nada nuevo en la carpeta de la copia', async () => {
+  openMemory(join(work, 'ensayo2.db')).close();
+  const out = join(work, 'ensayo2-copia');
+  cli([...createArgs('ensayo2.db', 'ensayo2-copia'), '--no-letta', 'x']);
+  const before = readdirSync(out).sort();
+
+  await checkBackup(out);
+
+  assert.deepEqual(readdirSync(out).sort(), before);
+});
+
+test('las filas de Letta al restaurar se comparan tabla por tabla con las de la copia', () => {
+  const copied = { agents: 2, messages: 40, blocks: 3 };
+
+  assert.deepEqual(compareRows(copied, { agents: 2, messages: 40, blocks: 3 }), []);
+  assert.deepEqual(compareRows(copied, { agents: 2, messages: 39, extra: 1 }), [
+    'blocks: 3 en la copia y no está al restaurar',
+    'extra: no estaba en la copia y hay 1 al restaurar',
+    'messages: 40 en la copia y 39 al restaurar',
+  ]);
+});
+
+test('comparar por la línea de comandos: iguales, distintas y una copia sin recuento', () => {
+  const out = join(work, 'comparar-copia');
+  openMemory(join(work, 'comparar.db')).close();
+  mkdirSync(out);
+  writeFileSync(join(out, 'letta.dump'), 'volcado de prueba');
+  writeFileSync(join(work, 'filas-copia.txt'), 'agents=1\nmessages=42\n');
+  writeFileSync(join(work, 'filas-otras.txt'), 'agents=1\nmessages=41\n');
+  cli([
+    ...createArgs('comparar.db', 'comparar-copia'),
+    '--letta-rows',
+    join(work, 'filas-copia.txt'),
+  ]);
+
+  const same = cli(['compare-rows', '--dir', out, '--rows', join(work, 'filas-copia.txt')]);
+  assert.deepEqual(same, { code: 0, out: '2 tablas, 43 filas: igual que en la copia', err: '' });
+
+  const different = cli(['compare-rows', '--dir', out, '--rows', join(work, 'filas-otras.txt')]);
+  assert.equal(different.code, 1);
+  assert.match(different.err, /messages: 42 en la copia y 41 al restaurar/);
+
+  const unreadable = cli(['compare-rows', '--dir', out, '--rows', join(work, 'ollama.txt')]);
+  assert.equal(unreadable.code, 1);
+  assert.match(unreadable.err, /no se pudieron contar/);
+
+  const plain = join(work, 'comparar-sin-recuento');
+  mkdirSync(plain);
+  writeFileSync(join(plain, 'letta.dump'), 'volcado de prueba');
+  cli(createArgs('comparar.db', 'comparar-sin-recuento'));
+  const none = cli(['compare-rows', '--dir', plain, '--rows', join(work, 'filas-copia.txt')]);
+  assert.equal(none.code, 0);
+  assert.match(none.out, /no lleva el recuento/);
 });
