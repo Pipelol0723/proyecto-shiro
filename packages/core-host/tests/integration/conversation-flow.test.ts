@@ -1239,3 +1239,44 @@ describe('wireConversationFlow — tiempos del turno (revisión de P-16)', () =>
     info.mockRestore();
   });
 });
+
+// Encontrado al medir la línea base con la app real: había varias copias del
+// cliente conectadas y no salía ninguna línea de «primer audio».
+describe('wireConversationFlow — primer audio con varios clientes', () => {
+  it('un cliente que no reproduce y «termina» al instante no impide contar el de otro', async () => {
+    const info = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => undefined);
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const cache = new AudioCache();
+    const tts: ITTSModule = {
+      id: 'tts:mock',
+      synthesize: () => Promise.resolve({ audio: Buffer.from([1]), mimeType: 'audio/mpeg' }),
+    };
+    const audios: EventMap['tts:audio'][] = [];
+    bus.on('tts:audio', (payload) => {
+      audios.push(payload);
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({ tts }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+      audioCache: cache,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+    const audioId = audios[0]?.audioId ?? '';
+    // Una copia silenciada (o a la que el navegador no deja reproducir) da
+    // el audio por terminado nada más recibirlo.
+    await bus.emit('tts:audio-ended', { audioId, userId: 'me' });
+    // Otra copia sí lo reproduce.
+    await bus.emit('tts:audio-started', { audioId, userId: 'me' });
+
+    const lines = info.mock.calls.map(([message]) => String(message));
+    expect(lines.filter((line) => line.includes('primer audio'))).toHaveLength(1);
+
+    cache.stop();
+    dispose();
+    info.mockRestore();
+  });
+});
