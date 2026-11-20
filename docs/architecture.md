@@ -290,7 +290,7 @@ sequenceDiagram
     TTS-->>Client: bytes
     Client->>Speaker: HTMLAudioElement.play()
     Client->>Bus: emit("tts:audio-started", { audioId })
-    Note over LLM: log: latencia hasta el primer audio
+    Note over LLM: log: latencia hasta el primer audio<br/>(ver docs/latencia-base.md)
     Avatar->>Speaker: lip sync sincronizado
     Speaker->>User: voz + animación
     Client->>Bus: emit("tts:audio-ended", { audioId })
