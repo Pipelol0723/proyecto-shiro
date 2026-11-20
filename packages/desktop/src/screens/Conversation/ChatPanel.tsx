@@ -5,13 +5,35 @@
  * indicando tier/latencia/emoción si están disponibles.
  */
 
-import type { CompanionMessage } from '../../state/companion-reducer';
+import type { CompanionMessage, TurnStages } from '../../state/companion-reducer';
 import styles from './ChatPanel.module.css';
 
 export interface ChatPanelProps {
   history: readonly CompanionMessage[];
   open: boolean;
   onToggle: () => void;
+}
+
+/** Nombre de cada etapa del turno, en el orden en que ocurren. */
+const STAGE_LABELS: [keyof TurnStages, string][] = [
+  ['route', 'elegir modelo'],
+  ['context', 'memoria'],
+  ['llm', 'respuesta'],
+  ['persist', 'guardar'],
+  ['tts', 'voz'],
+];
+
+/** El desglose del turno para el texto emergente: «elegir modelo 120 ms · memoria 35 ms · …». */
+function describeStages(stages: TurnStages | undefined, totalMs: number): string {
+  const intro = 'Tiempo hasta tener lista la voz de la respuesta';
+  if (stages === undefined) return intro;
+  const parts = STAGE_LABELS.filter(([stage]) => stages[stage] !== undefined).map(
+    ([stage, label]) => `${label} ${String(stages[stage])} ms`,
+  );
+  // Lo que no es de ninguna etapa, para que la suma cuadre con el total.
+  const measured = STAGE_LABELS.reduce((sum, [stage]) => sum + (stages[stage] ?? 0), 0);
+  if (totalMs > measured) parts.push(`resto ${String(totalMs - measured)} ms`);
+  return parts.length === 0 ? intro : `${intro}: ${parts.join(' · ')}`;
 }
 
 export function ChatPanel({ history, open, onToggle }: ChatPanelProps): JSX.Element {
@@ -39,7 +61,14 @@ export function ChatPanel({ history, open, onToggle }: ChatPanelProps): JSX.Elem
                 <span className={styles.role}>{msg.role === 'user' ? 'Tú' : 'Shiro'}</span>
                 {msg.tier && <span className={styles.tag}>{msg.tier}</span>}
                 {msg.latencyMs !== undefined && (
-                  <span className={styles.tag}>{msg.latencyMs}ms</span>
+                  <span className={styles.tag} title="Tiempo hasta tener el texto de la respuesta">
+                    {msg.latencyMs}ms
+                  </span>
+                )}
+                {msg.voiceReadyMs !== undefined && (
+                  <span className={styles.tag} title={describeStages(msg.stages, msg.voiceReadyMs)}>
+                    voz {msg.voiceReadyMs}ms
+                  </span>
                 )}
                 {msg.emotion && msg.role === 'shiro' && (
                   <span className={styles.tag}>{msg.emotion}</span>

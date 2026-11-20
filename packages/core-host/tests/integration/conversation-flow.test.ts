@@ -26,6 +26,7 @@ import type {
   MemoryEntry,
 } from '@proyecto-shiro/core';
 import { wireConversationFlow } from '../../src/pipeline/conversation-flow.js';
+import { AudioCache } from '../../src/audio/audio-cache.js';
 
 function makeLogger(): Logger {
   return new Logger('error', { module: 'flow-test' });
@@ -966,5 +967,275 @@ describe('wireConversationFlow', () => {
 
       dispose();
     });
+  });
+});
+
+// P-16 (R-134, R-135): antes solo había `latencyMs`, que se cortaba al tener
+// el texto. Ahora cada turno dice cuánto tardó cada etapa, voz incluida.
+describe('wireConversationFlow — tiempos del turno', () => {
+  function run(modules: LoadedModules): {
+    bus: EventBus<EventMap>;
+    measured: EventMap['turn:measured'][];
+    order: string[];
+    dispose: () => void;
+  } {
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const measured: EventMap['turn:measured'][] = [];
+    const order: string[] = [];
+    bus.on('llm:responded', () => {
+      order.push('llm:responded');
+    });
+    bus.on('turn:measured', (payload) => {
+      measured.push(payload);
+      order.push('turn:measured');
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules,
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+    return { bus, measured, order, dispose };
+  }
+
+  it('al acabar emite cuánto tardó cada etapa, con el id del mensaje que abrió el turno', async () => {
+    const memory = makeMemory();
+    const { bus, measured, order, dispose } = run(makeModules({ memory }));
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(measured).toHaveLength(1);
+    const [timing] = measured;
+    expect(timing?.userId).toBe('me');
+    expect(timing?.tier).toBe('local');
+    expect(timing?.turnId).toBe(memory.saved.find((entry) => entry.role === 'user')?.id);
+    expect(Object.keys(timing?.stages ?? {})).toEqual([
+      'route',
+      'context',
+      'llm',
+      'persist',
+      'tts',
+    ]);
+    for (const ms of Object.values(timing?.stages ?? {})) {
+      expect(Number.isInteger(ms)).toBe(true);
+      expect(ms).toBeGreaterThanOrEqual(0);
+    }
+    expect(timing?.totalMs).toBeGreaterThanOrEqual(0);
+    // Va al final: incluye lo que tarda la voz, que viene después del texto.
+    expect(order).toEqual(['llm:responded', 'turn:measured']);
+
+    dispose();
+  });
+
+  it('el tiempo de una etapa lenta sale en esa etapa', async () => {
+    const memory = makeMemory({ recentDelayMs: 60 });
+    const { bus, measured, dispose } = run(makeModules({ memory }));
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    const stages = measured[0]?.stages;
+    expect(stages?.context).toBeGreaterThanOrEqual(50);
+    expect(stages?.route).toBeLessThan(stages?.context ?? 0);
+    expect(measured[0]?.totalMs).toBeGreaterThanOrEqual(stages?.context ?? 0);
+
+    dispose();
+  });
+
+  it('si el turno falla, emite igualmente lo que llegó a medir', async () => {
+    const { bus, measured, dispose } = run(
+      makeModules({ llmLocal: makeLLM('llm:roto', { fail: true }) }),
+    );
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(measured).toHaveLength(1);
+    expect(measured[0]?.tier).toBe('local');
+    expect(measured[0]?.stages.llm).toBeDefined();
+    expect(measured[0]?.stages.tts).toBeDefined();
+    // No llegó a guardar ninguna respuesta.
+    expect(measured[0]?.stages.persist).toBeUndefined();
+
+    dispose();
+  });
+});
+
+describe('wireConversationFlow — primer audio', () => {
+  it('cuando el cliente dice que la voz empezó a sonar, deja en el log cuánto tardó', async () => {
+    const info = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => undefined);
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const cache = new AudioCache();
+    const tts: ITTSModule = {
+      id: 'tts:mock',
+      synthesize: () => Promise.resolve({ audio: Buffer.from([1]), mimeType: 'audio/mpeg' }),
+    };
+    const audios: EventMap['tts:audio'][] = [];
+    bus.on('tts:audio', (payload) => {
+      audios.push(payload);
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({ tts }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+      audioCache: cache,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+    const audioId = audios[0]?.audioId ?? '';
+    const firstAudioLines = (): string[] =>
+      info.mock.calls.map(([message]) => String(message)).filter((m) => m.includes('primer audio'));
+    expect(firstAudioLines()).toEqual([]);
+
+    await bus.emit('tts:audio-started', { audioId, userId: 'me' });
+    // Repetido, o de un audio que no es de ningún turno: no cuenta.
+    await bus.emit('tts:audio-started', { audioId, userId: 'me' });
+    await bus.emit('tts:audio-started', { audioId: 'otro', userId: 'me' });
+
+    expect(firstAudioLines()).toHaveLength(1);
+    expect(firstAudioLines()[0]).toMatch(/primer audio a los \d+ ms/);
+
+    cache.stop();
+    dispose();
+    info.mockRestore();
+  });
+});
+
+describe('wireConversationFlow — tiempos del turno (revisión de P-16)', () => {
+  it('llm:responded lleva el id del turno, el mismo que turn:measured', async () => {
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const memory = makeMemory();
+    const responded: EventMap['llm:responded'][] = [];
+    const measured: EventMap['turn:measured'][] = [];
+    bus.on('llm:responded', (payload) => {
+      responded.push(payload);
+    });
+    bus.on('turn:measured', (payload) => {
+      measured.push(payload);
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({ memory }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    const turnId = memory.saved.find((entry) => entry.role === 'user')?.id;
+    expect(turnId).toBeDefined();
+    expect(responded[0]?.turnId).toBe(turnId);
+    expect(measured[0]?.turnId).toBe(turnId);
+
+    dispose();
+  });
+
+  it('si la nube falla y responde el local, «llm» suma los dos intentos y el orden no cambia', async () => {
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const order: string[] = [];
+    const measured: EventMap['turn:measured'][] = [];
+    for (const name of ['llm:failed', 'llm:responded'] as const) {
+      bus.on(name, () => {
+        order.push(name);
+      });
+    }
+    bus.on('turn:measured', (payload) => {
+      measured.push(payload);
+      order.push('turn:measured');
+    });
+    const slow = (ms: number, fail: boolean): ILLMModule => ({
+      id: fail ? 'llm:nube' : 'llm:local',
+      generate: async () => {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+        if (fail) throw new Error('sin clave');
+        return { text: 'hola', emotion: 'neutral', tokensUsed: 1 };
+      },
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({
+        router: makeRouter({ tier: 'cloud' }),
+        llmCloud: slow(40, true),
+        llmLocal: slow(40, false),
+      }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(order).toEqual(['llm:failed', 'llm:responded', 'turn:measured']);
+    expect(measured[0]?.tier).toBe('local');
+    expect(measured[0]?.stages.llm).toBeGreaterThanOrEqual(70);
+
+    dispose();
+  });
+
+  it('un audio cancelado ya no cuenta como primer audio', async () => {
+    const info = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => undefined);
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const cache = new AudioCache();
+    const tts: ITTSModule = {
+      id: 'tts:mock',
+      synthesize: () => Promise.resolve({ audio: Buffer.from([1]), mimeType: 'audio/mpeg' }),
+    };
+    const audios: EventMap['tts:audio'][] = [];
+    bus.on('tts:audio', (payload) => {
+      audios.push(payload);
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({ tts }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+      audioCache: cache,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+    const audioId = audios[0]?.audioId ?? '';
+    await bus.emit('tts:cancel', { audioId, userId: 'me' });
+    await bus.emit('tts:audio-started', { audioId, userId: 'me' });
+
+    const lines = info.mock.calls.map(([message]) => String(message));
+    expect(lines.filter((line) => line.includes('primer audio'))).toEqual([]);
+
+    cache.stop();
+    dispose();
+    info.mockRestore();
+  });
+
+  it('el audio queda apuntado antes de emitirse: un cliente inmediato también cuenta', async () => {
+    const info = vi.spyOn(Logger.prototype, 'info').mockImplementation(() => undefined);
+    const bus = new EventBus<EventMap>({ logger: makeLogger() });
+    const cache = new AudioCache();
+    const tts: ITTSModule = {
+      id: 'tts:mock',
+      synthesize: () => Promise.resolve({ audio: Buffer.from([1]), mimeType: 'audio/mpeg' }),
+    };
+    // Un cliente en el mismo proceso que «suena» en cuanto recibe el audio.
+    bus.on('tts:audio', (payload) => {
+      void bus.emit('tts:audio-started', { audioId: payload.audioId, userId: payload.userId });
+    });
+    const dispose = wireConversationFlow({
+      bus,
+      modules: makeModules({ tts }),
+      systemPrompt: 'Eres Shiro.',
+      logger: makeLogger(),
+      simulationSpeed: 0,
+      audioCache: cache,
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    const lines = info.mock.calls.map(([message]) => String(message));
+    expect(lines.filter((line) => line.includes('primer audio'))).toHaveLength(1);
+
+    cache.stop();
+    dispose();
+    info.mockRestore();
   });
 });

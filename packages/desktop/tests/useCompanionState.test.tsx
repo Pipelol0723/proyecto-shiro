@@ -311,3 +311,39 @@ describe('useCompanionState — llm:failed', () => {
     expect(result.current[0].turnFailures).toEqual([{ reason: 'unavailable', tier: 'local' }]);
   });
 });
+
+describe('useCompanionState — tiempos del turno (P-16)', () => {
+  it('los tiempos de turn:measured acaban en la respuesta de ese mismo turno', async () => {
+    const bus = makeBus();
+    const { result } = renderHook(() => useCompanionState(), { wrapper: wrap(bus) });
+
+    await act(async () => {
+      await bus.emit('llm:responded', {
+        text: 'respuesta A',
+        emotion: 'neutral',
+        userId: 'me',
+        tier: 'local',
+        latencyMs: 900,
+        turnId: 'a',
+      });
+      await bus.emit('llm:responded', {
+        text: 'respuesta B',
+        emotion: 'neutral',
+        userId: 'me',
+        tier: 'local',
+        latencyMs: 300,
+        turnId: 'b',
+      });
+      await bus.emit('turn:measured', {
+        userId: 'me',
+        turnId: 'a',
+        tier: 'local',
+        stages: { llm: 900, tts: 500 },
+        totalMs: 1_400,
+      });
+    });
+
+    const [state] = result.current;
+    expect(state.history.map((message) => message.voiceReadyMs)).toEqual([1_400, undefined]);
+  });
+});

@@ -203,6 +203,12 @@ export interface EventMap {
     tier: 'local' | 'cloud';
     /** ms desde user:message hasta esta emisión. */
     latencyMs: number;
+    /**
+     * Id del turno: el del mensaje del usuario que lo abrió. Es el mismo que
+     * lleva `turn:measured`, para saber de qué respuesta son sus tiempos. No
+     * lo llevan las respuestas que no vienen de un turno (un anuncio).
+     */
+    turnId?: string;
   };
 
   /**
@@ -212,6 +218,25 @@ export interface EventMap {
    * nota del 2026-11-14 en ADR 0016.
    */
   'llm:failed': { reason: TurnFailureReason; tier: 'local' | 'cloud'; userId: string };
+
+  // ─── Tiempos del turno ──────────────────────────────────────────────
+  /**
+   * Cuánto tardó cada etapa de un turno, en milisegundos. Lo emite el
+   * core-host al final, cuando la voz de la respuesta ya está sintetizada:
+   * `latencyMs` de `llm:responded` se corta antes, al tener el texto.
+   *
+   * `stages` lleva solo las etapas que ocurrieron (si el turno falla antes
+   * de guardar la respuesta, no hay `persist`). `totalMs` va desde que
+   * llegó `user:message` hasta que el audio quedó listo para pedirse.
+   * `turnId` es el id del mensaje del usuario que abrió el turno.
+   */
+  'turn:measured': {
+    userId: string;
+    turnId: string;
+    tier: 'local' | 'cloud';
+    stages: { route?: number; context?: number; llm?: number; persist?: number; tts?: number };
+    totalMs: number;
+  };
 
   // ─── TTS (salida de voz) ────────────────────────────────────────────
   /**
@@ -240,6 +265,12 @@ export interface EventMap {
    * id paran el audio. Ver ADR 0020, decisión 4.
    */
   'tts:cancel': { audioId: string; userId: string };
+  /**
+   * El cliente empezó a reproducir el audio: la voz ya se oye. El core-host
+   * lo usa para registrar la latencia hasta el primer audio (P-16). Solo lo
+   * emite un cliente que reproduce: uno silenciado no lo manda.
+   */
+  'tts:audio-started': { audioId: string; userId: string };
   /**
    * El cliente terminó de reproducir el audio. La UI quita subtítulos y
    * el avatar vuelve a idle. El cliente lo emite cuando el

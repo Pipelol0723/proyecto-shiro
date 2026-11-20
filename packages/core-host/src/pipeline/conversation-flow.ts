@@ -44,6 +44,7 @@ import type {
 } from '@proyecto-shiro/core';
 import type { AudioCache } from '../audio/audio-cache.js';
 import { buildToolDefs, makeToolExecutor } from './tool-loop.js';
+import { TurnTiming, formatTurnTiming } from './turn-timing.js';
 import { createApprovalGate } from './approval-gate.js';
 
 export interface MemoryReadsConfig {
@@ -87,6 +88,9 @@ export interface WireConversationFlowOptions {
    */
   audioCache?: AudioCache;
 }
+
+/** Cuántos audios se recuerdan a la espera de que un cliente diga que suenan. */
+const MAX_PENDING_FIRST_AUDIO = 20;
 
 const FALLBACK_RESPONSE = 'Algo salió mal procesando tu mensaje. ¿Lo intentas de nuevo?';
 const MIN_SIMULATED_TTS_MS = 2_200;
@@ -135,8 +139,41 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
     );
   }
 
+  // Audios emitidos de los que aún no se sabe cuándo empezaron a sonar. El
+  // cliente lo dice con `tts:audio-started` y aquí queda en el log la
+  // latencia hasta el primer audio, que es la que nota quien escucha.
+  const awaitingFirstAudio = new Map<string, { turnId: string; timing: TurnTiming }>();
+  const trackFirstAudio = (audioId: string, turnId: string, timing: TurnTiming): void => {
+    awaitingFirstAudio.set(audioId, { turnId, timing });
+    // Un cliente silenciado nunca avisa: lo más antiguo se olvida.
+    for (const stale of awaitingFirstAudio.keys()) {
+      if (awaitingFirstAudio.size <= MAX_PENDING_FIRST_AUDIO) break;
+      awaitingFirstAudio.delete(stale);
+    }
+  };
+  const unsubscribeFirstAudio = bus.on('tts:audio-started', (payload) => {
+    const pending = awaitingFirstAudio.get(payload.audioId);
+    if (pending === undefined) return;
+    awaitingFirstAudio.delete(payload.audioId);
+    child.info(
+      `turno ${pending.turnId}: primer audio a los ${String(pending.timing.elapsedMs())} ms`,
+    );
+  });
+  // Un audio cancelado o terminado ya no va a «empezar a sonar».
+  const forgetAudio = (payload: { audioId?: string }): void => {
+    if (payload.audioId !== undefined) awaitingFirstAudio.delete(payload.audioId);
+  };
+  unsubscribers.push(bus.on('tts:cancel', forgetAudio), bus.on('tts:audio-ended', forgetAudio));
+
   const unsubscribe = bus.on('user:message', async (payload) => {
     const startTime = Date.now();
+    // Cuánto tarda cada etapa (P-16). `startTime` sigue para `latencyMs`.
+    const timing = new TurnTiming();
+    // El audio se apunta antes de emitirse: así cuenta también el aviso de
+    // un cliente que empiece a sonar al instante.
+    const onAudio = (audioId: string): void => {
+      trackFirstAudio(audioId, userEntryId, timing);
+    };
 
     // 0. Persistir el user msg al WAL — fire-and-forget. `local.save`
     //    dentro del MemoryManager es síncrono, así que SQLite ya tiene
@@ -159,21 +196,18 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
 
     try {
       // 1. Router decide el tier.
-      const tier = await modules.router.route({
-        text: payload.text,
-        userId: payload.userId,
-      });
+      const tier = await timing.measure('route', () =>
+        modules.router.route({
+          text: payload.text,
+          userId: payload.userId,
+        }),
+      );
       await bus.emit('router:routed', { tier, userId: payload.userId });
 
       // 2. Lectura de memoria con timeout. Si tarda demasiado o devuelve
       //    vacío, procedemos sin contexto.
-      const context = await fetchContext(
-        modules.memory,
-        payload.text,
-        payload.userId,
-        userEntryId,
-        memoryReads,
-        child,
+      const context = await timing.measure('context', () =>
+        fetchContext(modules.memory, payload.text, payload.userId, userEntryId, memoryReads, child),
       );
 
       // 3. LLM correspondiente responde. Si el tier es cloud y el slot cloud
@@ -199,23 +233,27 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           typeof modules.llmCloud.generateWithTools === 'function' &&
           modules.tools.list().length > 0
         ) {
-          response = await modules.llmCloud.generateWithTools(llmRequest, {
-            tools: buildToolDefs(modules.tools),
-            executeTool: makeToolExecutor(
-              modules.tools,
-              { logger: child, userId: payload.userId },
-              child,
-              approvalGate,
-              // Persiste cada acción como turno `tool` (ADR 0022 §6).
-              // Fire-and-forget vía el WAL, igual que user/assistant.
-              (entry) => {
-                void persistEntry(modules.memory, child, entry);
-              },
-            ),
-          });
+          const generateWithTools = modules.llmCloud.generateWithTools.bind(modules.llmCloud);
+          // El tiempo de las tools y de sus aprobaciones cuenta como «llm».
+          response = await timing.measure('llm', () =>
+            generateWithTools(llmRequest, {
+              tools: buildToolDefs(modules.tools),
+              executeTool: makeToolExecutor(
+                modules.tools,
+                { logger: child, userId: payload.userId },
+                child,
+                approvalGate,
+                // Persiste cada acción como turno `tool` (ADR 0022 §6).
+                // Fire-and-forget vía el WAL, igual que user/assistant.
+                (entry) => {
+                  void persistEntry(modules.memory, child, entry);
+                },
+              ),
+            }),
+          );
         } else {
           const llm = tier === 'local' ? modules.llmLocal : modules.llmCloud;
-          response = await llm.generate(llmRequest);
+          response = await timing.measure('llm', () => llm.generate(llmRequest));
         }
       } catch (err) {
         if (tier !== 'cloud') throw err;
@@ -226,7 +264,7 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
           userId: payload.userId,
         });
         effectiveTier = 'local';
-        response = await modules.llmLocal.generate(llmRequest);
+        response = await timing.measure('llm', () => modules.llmLocal.generate(llmRequest));
       }
 
       // 4. Emite la respuesta tipada. `LLMResponse.emotion` es opcional;
@@ -239,32 +277,40 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         userId: payload.userId,
         tier: effectiveTier,
         latencyMs,
+        turnId: userEntryId,
       });
       child.debug(`turno completo en ${latencyMs}ms (tier=${effectiveTier})`);
 
       // 5. Persistir el assistant reply al WAL.
-      await persistEntry(modules.memory, child, {
-        id: randomUUID(),
-        role: 'assistant',
-        text: response.text,
-        timestamp: new Date().toISOString(),
-        userId: payload.userId,
-        metadata: { emotion, tier: effectiveTier, latencyMs },
-      });
+      const reply = response;
+      await timing.measure('persist', () =>
+        persistEntry(modules.memory, child, {
+          id: randomUUID(),
+          role: 'assistant',
+          text: reply.text,
+          timestamp: new Date().toISOString(),
+          userId: payload.userId,
+          metadata: { emotion, tier: effectiveTier, latencyMs },
+        }),
+      );
 
       // 6. TTS: sintetiza, cachea, emite tts:audio (cliente reproduce y
       //    emitirá tts:audio-ended cuando termine). Si el cache no está
       //    configurado (tests legacy), cae al simulador.
-      await dispatchTTS(
-        bus,
-        modules.tts,
-        audioCache,
-        response.text,
-        emotion,
-        payload.userId,
-        simulationSpeed,
-        child,
+      await timing.measure('tts', () =>
+        dispatchTTS(
+          bus,
+          modules.tts,
+          audioCache,
+          reply.text,
+          emotion,
+          payload.userId,
+          simulationSpeed,
+          child,
+          onAudio,
+        ),
       );
+      await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, effectiveTier);
     } catch (err) {
       child.error('error procesando turno, emitiendo fallback', { err });
       // Un fallo de la nube ya se anunció arriba y el turno siguió en local:
@@ -281,24 +327,54 @@ export function wireConversationFlow(options: WireConversationFlowOptions): () =
         userId: payload.userId,
         tier: 'local',
         latencyMs,
+        turnId: userEntryId,
       });
-      await dispatchTTS(
-        bus,
-        modules.tts,
-        audioCache,
-        FALLBACK_RESPONSE,
-        'neutral',
-        payload.userId,
-        simulationSpeed,
-        child,
+      await timing.measure('tts', () =>
+        dispatchTTS(
+          bus,
+          modules.tts,
+          audioCache,
+          FALLBACK_RESPONSE,
+          'neutral',
+          payload.userId,
+          simulationSpeed,
+          child,
+          onAudio,
+        ),
       );
+      await reportTurnTiming(bus, child, timing, userEntryId, payload.userId, 'local');
     }
   });
 
   return () => {
     unsubscribe();
+    unsubscribeFirstAudio();
     for (const u of unsubscribers) u();
   };
+}
+
+/**
+ * Deja en el log una línea con los tiempos del turno y los emite por el bus
+ * (`turn:measured`). Va al final del turno, con la voz ya sintetizada.
+ */
+async function reportTurnTiming(
+  bus: IEventBus<EventMap>,
+  logger: Logger,
+  timing: TurnTiming,
+  turnId: string,
+  userId: string,
+  tier: 'local' | 'cloud',
+): Promise<void> {
+  // Medir no puede estropear un turno que ya se entregó: si algo falla aquí,
+  // se queda en un aviso.
+  try {
+    const stages = timing.stages();
+    const totalMs = timing.elapsedMs();
+    logger.info(`turno ${turnId} (${tier}): ${formatTurnTiming(stages, totalMs)}`);
+    await bus.emit('turn:measured', { userId, turnId, tier, stages, totalMs });
+  } catch (err) {
+    logger.warn('no se pudieron anotar los tiempos del turno', { err });
+  }
 }
 
 /**
@@ -452,6 +528,9 @@ function formatContext(recent: readonly MemoryEntry[], semantic: readonly Memory
  * delay proporcional al texto — así el resto del estado del cliente
  * (Orbe que vuelve a idle, subtítulos) se desbloquea aunque no haya audio.
  *
+ * `onAudio` recibe el `audioId` justo antes de emitirlo, para quien quiera
+ * seguirle la pista (la latencia hasta el primer audio).
+ *
  * Exportado para que el reporte hablado de self-dev (ADR 0023) reuse la misma
  * cadena TTS: el bootstrap lo llama desde el callback `announce`.
  */
@@ -464,6 +543,7 @@ export async function dispatchTTS(
   userId: string,
   simulationSpeed: number,
   logger: Logger,
+  onAudio?: (audioId: string) => void,
 ): Promise<void> {
   if (audioCache === undefined) {
     // Camino legacy: simula `tts:audio-ended` tras un delay. Permite
@@ -474,6 +554,12 @@ export async function dispatchTTS(
   try {
     const { audio, mimeType } = await tts.synthesize({ text, emotion });
     const { audioId, relativeUrl } = audioCache.put(audio, mimeType);
+    try {
+      onAudio?.(audioId);
+    } catch (err) {
+      // Quien sigue el audio no puede dejar al turno sin voz.
+      logger.warn('onAudio falló — el audio se emite igualmente', { err });
+    }
     await bus.emit('tts:audio', {
       url: relativeUrl,
       audioId,
