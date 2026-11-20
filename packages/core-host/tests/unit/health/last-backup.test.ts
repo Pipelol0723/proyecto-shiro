@@ -58,6 +58,8 @@ describe('readLastBackup', () => {
   it.each([
     ['un archivo roto', '{ roto'],
     ['una fecha que no es una fecha', { at: 'ayer', complete: true, lastCompleteAt: null }],
+    ['una fecha que no está en ISO', { at: 'Nov 5 2026', complete: true, lastCompleteAt: null }],
+    ['un número suelto como fecha', { at: '1', complete: true, lastCompleteAt: null }],
     ['sin saber si es completa', { at: '2026-11-19T10:00:00.000Z' }],
     ['algo que no es un objeto', '[]'],
   ])('%s no se da por una copia', (_label, record) => {
@@ -75,6 +77,15 @@ describe('backupNotice', () => {
   it('sin ninguna copia, avisa', () => {
     expect(backupNotice(undefined, NOW)).toMatchObject({ level: 'warn' });
     expect(backupNotice(undefined, NOW)?.message).toMatch(/npm run backup/);
+  });
+
+  // La app instalada no tiene el repositorio al lado: el aviso dice dónde se
+  // explica, no solo una orden que allí no existe.
+  it('los avisos dicen dónde se explica cómo hacer la copia', () => {
+    const old = { at: daysAgo(40), complete: true, lastCompleteAt: daysAgo(40) };
+
+    expect(backupNotice(undefined, NOW)?.message).toMatch(/RESTORE\.md/);
+    expect(backupNotice(old, NOW)?.message).toMatch(/RESTORE\.md/);
   });
 
   it(`avisa cuando la última copia tiene ${String(BACKUP_WARN_DAYS)} días o más`, () => {
@@ -96,10 +107,17 @@ describe('backupNotice', () => {
     expect(backupNotice(stale, NOW)?.message).toMatch(/hace 30 días/);
   });
 
-  it('una fecha del futuro (reloj cambiado) no avisa', () => {
-    const future = { at: daysAgo(-2), complete: true, lastCompleteAt: daysAgo(-2) };
+  it('una fecha de dentro de unas horas (relojes desajustados) no avisa', () => {
+    const soon = { at: daysAgo(-0.5), complete: true, lastCompleteAt: daysAgo(-0.5) };
 
-    expect(backupNotice(future, NOW)).toBeUndefined();
+    expect(backupNotice(soon, NOW)).toBeUndefined();
+  });
+
+  it('una fecha de dentro de varios días no se cree: callaría el aviso hasta entonces', () => {
+    const future = { at: daysAgo(-30), complete: true, lastCompleteAt: daysAgo(-30) };
+
+    expect(backupNotice(future, NOW)).toMatchObject({ level: 'warn' });
+    expect(backupNotice(future, NOW)?.message).toMatch(/futuro/);
   });
 });
 
