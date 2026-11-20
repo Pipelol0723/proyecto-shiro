@@ -346,6 +346,46 @@ export function markLastBackup(dbPath, dir, now) {
   return file;
 }
 
+/**
+ * La instantánea de la memoria en la carpeta de la copia. Va antes que el
+ * volcado de Letta: un turno que se envíe entre los dos pasos queda aquí como
+ * pendiente y, al restaurar, se reenvía. Al revés constaría como enviado sin
+ * estar en el volcado, y Letta se quedaría sin él.
+ *
+ * @param {string} dbPath
+ * @param {string} out
+ * @param {{ 'allow-empty'?: boolean }} options
+ */
+async function takeSnapshot(dbPath, out, options) {
+  const problem = checkNode(
+    process.versions.node,
+    readFileSync(new URL('../../.node-version', import.meta.url), 'utf8'),
+  );
+  if (problem !== null) throw new Error(problem);
+  mkdirSync(out, { recursive: true });
+  const memory = await snapshotMemory(dbPath, join(out, 'memory.db'));
+  if (memory.turns === 0 && !options['allow-empty']) {
+    rmSync(join(out, 'memory.db'), { force: true });
+    throw new Error(
+      'la memoria no tiene ningún turno: ¿es la base correcta? No se da por copiada ' +
+        '(con --allow-empty se copia igual)',
+    );
+  }
+  return memory;
+}
+
+/** Lo que hay en una instantánea ya sacada. @param {string} out */
+function readSnapshot(out) {
+  const file = join(out, 'memory.db');
+  if (!existsSync(file)) throw new Error('falta la instantánea de la memoria en la copia');
+  const db = new Database(file, { readonly: true, fileMustExist: true });
+  try {
+    return inspectMemory(db);
+  } finally {
+    db.close();
+  }
+}
+
 /** @param {string[]} argv */
 async function main(argv) {
   const [command, ...rest] = argv;
@@ -400,6 +440,10 @@ async function main(argv) {
     const total = Object.values(restored).reduce((sum, n) => sum + n, 0);
     return `${String(Object.keys(restored).length)} tablas, ${String(total)} filas: igual que en la copia`;
   }
+  if (command === 'snapshot') {
+    const out = need(values.out, 'out');
+    return JSON.stringify(await takeSnapshot(need(values.db, 'db'), out, values));
+  }
   if (command === 'create') {
     const problem = checkNode(
       process.versions.node,
@@ -408,15 +452,9 @@ async function main(argv) {
     if (problem !== null) throw new Error(problem);
     const out = need(values.out, 'out');
     const name = need(values.name, 'name');
-    mkdirSync(out, { recursive: true });
-    const memory = await snapshotMemory(need(values.db, 'db'), join(out, 'memory.db'));
-    if (memory.turns === 0 && !values['allow-empty']) {
-      rmSync(join(out, 'memory.db'), { force: true });
-      throw new Error(
-        'la memoria no tiene ningún turno: ¿es la base correcta? No se da por copiada ' +
-          '(con --allow-empty se copia igual)',
-      );
-    }
+    // Sin `--db`, la instantánea ya está en la carpeta (orden `snapshot`).
+    const memory =
+      values.db === undefined ? readSnapshot(out) : await takeSnapshot(values.db, out, values);
     const pinned = lettaImageFromCompose(readFileSync(new URL('docker-compose.yml', root), 'utf8'));
     const skipped = values['no-letta'];
     const manifest = await buildManifest({
@@ -438,7 +476,7 @@ async function main(argv) {
     return JSON.stringify({ name, turns: memory.turns, complete: manifest.complete });
   }
   throw new Error(
-    'uso: memory-backup.mjs name | create | verify | rotate | mark | check | compare-rows',
+    'uso: memory-backup.mjs name | snapshot | create | verify | rotate | mark | check | compare-rows',
   );
 }
 
