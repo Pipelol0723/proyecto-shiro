@@ -331,3 +331,20 @@ El arranque del core-host ya no espera a que la memoria termine de arrancar (P-1
 - Mientras ese ping no termina, Letta cuenta como no disponible: no hay recuerdos por parecido y los turnos se guardan solo en SQLite. Cuando termina, el drenado los envía.
 - Lo reciente y el historial que se manda al conectar no dependen de eso: salen de SQLite (nota del 2026-11-19).
 - Si la memoria se para mientras arranca, no deja el drenado en marcha ni escribe en la base ya cerrada. Si en ese momento estaba creando el agente de Letta, el agente queda creado pero sin guardar, y se avisa en el log.
+
+## Nota 2026-11-20 (2) — volver a llenar Letta desde la memoria local
+
+- Los turnos ya enviados a Letta no se reenvían solos. Si Letta se cambia por
+  otro, o se restaura vacío, el manager crea un agente nuevo (ADR 0018) y ese
+  agente se queda sin el historial (R-330).
+- `npm run reindex-memory` lo arregla desde la memoria local, que guarda todos
+  los turnos: los deja todos como pendientes de enviar y olvida el agente
+  anotado. En el siguiente arranque se crea un agente y el drainer los reenvía
+  por lotes. No borra ningún turno ni toca Letta.
+- Sin `--yes` solo dice lo que haría. Con el `core-host` en marcha no hace
+  nada: el servidor tiene el agente en uso.
+- No es automático a propósito: reenviar todo el historial porque un día no se
+  encontró el agente (por ejemplo, apuntando a otro Letta por error) duplicaría
+  la memoria sin que nadie lo pidiera.
+- Es la última pieza de P-11a del [plan de mejora](../plan-mejora-2026-11.md);
+  el procedimiento completo está en [`RESTORE.md`](../../RESTORE.md).
