@@ -458,3 +458,32 @@ describe('MemoryManager', () => {
     });
   });
 });
+
+// P-13: el core-host ya no espera a que la memoria termine de arrancar (el
+// primer ping a Letta puede tardar), así que puede pararse a mitad.
+describe('MemoryManager — parada durante el arranque (P-13)', () => {
+  it('si se para mientras espera a Letta, el arranque termina sin fallar y sin dejar el drenado en marcha', async () => {
+    vi.useFakeTimers();
+    try {
+      const local = new LocalMemory({ dbPath: ':memory:' });
+      const letta = makeLetta();
+      const manager = new MemoryManager(BASE_CONFIG, makeDeps(), { local, letta });
+      let answer: (up: boolean) => void = () => undefined;
+      vi.spyOn(letta, 'ping').mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+      );
+
+      const starting = manager.start();
+      await manager.stop();
+      answer(false);
+
+      await expect(starting).resolves.toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
+  });
+});
