@@ -466,3 +466,30 @@ test('el manifiesto sin instantánea previa falla, y la instantánea de una memo
     0,
   );
 });
+
+test('el manifiesto no acepta una memoria que no sea la instantánea recién sacada', () => {
+  openMemory(join(work, 'marca.db'), 2).close();
+  const out = join(work, 'marca-copia');
+  const args = ['create', '--out', out, '--name', '20261120T083005Z', '--no-letta', 'x'];
+
+  // Una memory.db que alguien dejó en la carpeta, sin pasar por `snapshot`.
+  mkdirSync(out);
+  openMemory(join(out, 'memory.db'), 9).close();
+  const stray = cli(args);
+  assert.equal(stray.code, 1);
+  assert.match(stray.err, /falta la instantánea/);
+
+  // La instantánea de verdad, y otra memoria puesta encima después.
+  assert.equal(cli(['snapshot', '--db', join(work, 'marca.db'), '--out', out]).code, 0);
+  rmSync(join(out, 'memory.db'));
+  openMemory(join(out, 'memory.db'), 9).close();
+  const swapped = cli(args);
+  assert.equal(swapped.code, 1);
+  assert.match(swapped.err, /no es la instantánea/);
+
+  // Y con la instantánea intacta: el manifiesto sale y la marca no viaja con la copia.
+  assert.equal(cli(['snapshot', '--db', join(work, 'marca.db'), '--out', out]).code, 0);
+  const created = cli(args);
+  assert.equal(created.code, 0, created.err);
+  assert.deepEqual(readdirSync(out).sort(), ['manifest.json', 'memory.db']);
+});
