@@ -20,7 +20,8 @@
   `letta_antes_<fecha>`. No restaura encima de la base en uso: eso la deja sin
   tablas.
 
-  Nada se borra: lo anterior queda apartado, y RESTORE.md dice cómo volver.
+  Nada se borra: lo anterior queda apartado. Para volver a la base anterior
+  de Letta, -LettaUndo <nombre con el que quedó guardada>.
 
   Códigos de salida: 0 hecho (o, sin -Yes, dicho lo que haría); 1 error.
 
@@ -33,7 +34,7 @@
 [CmdletBinding()]
 param(
   # Carpeta de la copia: la que tiene manifest.json.
-  [Parameter(Mandatory = $true)][string]$Backup,
+  [string]$Backup,
   [switch]$Memory,
   [switch]$Letta,
   # Dónde va la memoria. Por defecto, la de desarrollo (packages/core-host/data).
@@ -41,6 +42,9 @@ param(
   # Restaura la memoria de la app instalada, no la de desarrollo.
   [switch]$Installed,
   [string]$LettaContainer,
+  # Vuelve a la base de Letta que la restauración dejó guardada
+  # (letta_antes_<fecha>). La que está en uso se guarda a su vez.
+  [string]$LettaUndo,
   # Sin esto no se cambia nada.
   [switch]$Yes,
   # Cuánto se espera a que Letta vuelva tras reiniciarlo.
@@ -144,6 +148,38 @@ function Get-LettaRows([string]$Container, [string]$Database) {
   return @($lines)
 }
 
+# Cambia la base que usa Letta por otra, en una sola transacción (o entero, o
+# nada), y reinicia Letta para que la abra. La que había queda guardada.
+function Switch-LettaDatabase([string]$Container, [string]$New, [string]$Old) {
+  $sql = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($lettaSwapSql))
+  $swapped = $false
+  # Si Letta abre una conexión entre dos pasos, el cambio no entra: se repite.
+  foreach ($attempt in 1, 2, 3) {
+    & docker exec $Container sh -c ("echo $sql | base64 -d | " +
+      'psql -U $POSTGRES_USER -d postgres -v ON_ERROR_STOP=1 -v db=$POSTGRES_DB -v new=' + $New +
+      ' -v old=' + $Old + ' --single-transaction -f -') | Out-Null
+    if ($LASTEXITCODE -eq 0) { $swapped = $true; break }
+    Start-Sleep -Seconds 2
+  }
+  if (-not $swapped) {
+    throw "no se pudo cambiar la base de Letta por «$New». La base en uso no se ha tocado, y «$New» sigue donde estaba"
+  }
+
+  Write-Step 'reiniciando Letta'
+  & docker restart $Container | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "no se pudo reiniciar Letta: reinícialo a mano (docker restart $Container)" }
+  $deadline = (Get-Date).AddSeconds($StartTimeoutSeconds)
+  while ($true) {
+    Invoke-Quiet { docker exec $Container sh -c 'pg_isready -U $POSTGRES_USER -d $POSTGRES_DB' } | Out-Null
+    if ($LASTEXITCODE -eq 0) { break }
+    if ((Get-Date) -gt $deadline) {
+      Write-Step "AVISO: Letta no responde todavía tras $StartTimeoutSeconds segundos; mira «docker logs $Container»"
+      break
+    }
+    Start-Sleep -Seconds 2
+  }
+}
+
 function Restore-Letta([string]$Container, [string]$Stamp, $Summary) {
   $inside = '/tmp/shiro-restore.dump'
   $old = "letta_antes_$($Stamp.ToLower())"
@@ -170,36 +206,8 @@ function Restore-Letta([string]$Container, [string]$Stamp, $Summary) {
       throw "$($_.Exception.Message). La base de Letta en uso no se ha tocado"
     }
 
-    # 2. Se cambia una base por otra, en una sola transacción: o entero, o nada.
-    #    Si Letta abre una conexión entre dos pasos, se repite.
-    $sql = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($lettaSwapSql))
-    $swapped = $false
-    foreach ($attempt in 1, 2, 3) {
-      & docker exec $Container sh -c ("echo $sql | base64 -d | " +
-        'psql -U $POSTGRES_USER -d postgres -v ON_ERROR_STOP=1 -v db=$POSTGRES_DB -v old=' + $old +
-        ' --single-transaction -f -') | Out-Null
-      if ($LASTEXITCODE -eq 0) { $swapped = $true; break }
-      Start-Sleep -Seconds 2
-    }
-    if (-not $swapped) {
-      throw ('no se pudo cambiar la base de Letta por la restaurada. La base en uso no se ha tocado; ' +
-        'la restaurada queda en «letta_restaurada»')
-    }
-
-    # 3. Letta se reinicia para abrir la base restaurada.
-    Write-Step 'reiniciando Letta'
-    & docker restart $Container | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "no se pudo reiniciar Letta: reinícialo a mano (docker restart $Container)" }
-    $deadline = (Get-Date).AddSeconds($StartTimeoutSeconds)
-    while ($true) {
-      Invoke-Quiet { docker exec $Container sh -c 'pg_isready -U $POSTGRES_USER -d $POSTGRES_DB' } | Out-Null
-      if ($LASTEXITCODE -eq 0) { break }
-      if ((Get-Date) -gt $deadline) {
-        Write-Step "AVISO: Letta no responde todavía tras $StartTimeoutSeconds segundos; mira «docker logs $Container»"
-        break
-      }
-      Start-Sleep -Seconds 2
-    }
+    # 2. Se cambia la base en uso por la restaurada y se reinicia Letta.
+    Switch-LettaDatabase $Container 'letta_restaurada' $old
     Write-Step "Letta restaurado. La base anterior queda guardada como «$old»"
   } finally {
     Invoke-Quiet { docker exec $Container rm -f $inside } | Out-Null
@@ -242,7 +250,32 @@ function Restore-Memory([string]$Stamp, $Manifest) {
   else { Write-Step 'memoria restaurada. No había ninguna antes' }
 }
 
+# Vuelve a una base de Letta que la restauración dejó guardada. La que está en
+# uso se guarda a su vez: tampoco aquí se borra nada.
+function Undo-Letta {
+  if ($LettaUndo -notmatch '^letta_antes_\d{8}t\d{6}z$') {
+    throw 'con -LettaUndo va el nombre de la base guardada: letta_antes_<fecha>, tal como lo dijo la restauración'
+  }
+  if (Test-ShiroRunning) { throw 'Shiro está en marcha: ciérralo antes' }
+  $stamp = "$(Invoke-Helper name)".Trim().ToLower()
+  $container = @($LettaContainer | Where-Object { $_ })
+  if ($container.Count -eq 0) {
+    $container = @(Invoke-Quiet { docker ps --filter 'label=com.docker.compose.service=letta' --format '{{.Names}}' } |
+        Where-Object { $_ })
+  }
+  if ($container.Count -ne 1) { throw 'hace falta un contenedor de Letta en marcha, y solo uno (o -LettaContainer)' }
+  Write-Step "Letta: volver a la base «$LettaUndo» y guardar la de ahora como «letta_descartada_$stamp»"
+  if (-not $Yes) {
+    Write-Step 'No se ha cambiado nada. Para hacerlo, repite con -Yes'
+    return
+  }
+  Switch-LettaDatabase $container[0] $LettaUndo "letta_descartada_$stamp"
+  Write-Step "Letta vuelve a usar la base de antes. La que estaba en uso queda guardada como «letta_descartada_$stamp»"
+}
+
 function Invoke-Restore {
+  if ($LettaUndo) { Undo-Letta; return }
+  if (-not $Backup) { throw 'falta la copia: -Backup <carpeta de la copia>' }
   if (-not $Memory -and -not $Letta) { throw 'di qué restaurar: -Memory, -Letta o los dos' }
 
   $summary = "$(Invoke-Helper check --dir $Backup)" | ConvertFrom-Json
