@@ -125,6 +125,23 @@ export function parseOllamaList(text) {
     .map(([name, id]) => ({ name, id }));
 }
 
+/**
+ * Filas por tabla del Postgres de Letta, de líneas `tabla=n`. Van en el
+ * manifiesto para comparar al restaurar: un volcado no se puede contar sin
+ * restaurarlo.
+ *
+ * @param {string} text
+ */
+export function parseRowCounts(text) {
+  /** @type {Record<string, number>} */
+  const rows = {};
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^(\w+)=(\d+)$/.exec(line.trim());
+    if (match?.[1] !== undefined) rows[match[1]] = Number(match[2]);
+  }
+  return rows;
+}
+
 /** La imagen de Letta fijada en `docker-compose.yml`. @param {string} text */
 export function lettaImageFromCompose(text) {
   return /^\s*image:\s*(letta\/letta\S*)\s*$/m.exec(text)?.[1] ?? null;
@@ -149,7 +166,8 @@ export function planRotation(names, keep) {
 /**
  * @param {{ dir: string, name: string, createdAt: string,
  *   memory: Awaited<ReturnType<typeof snapshotMemory>>,
- *   letta: { included: boolean, image: string | null, reason?: string },
+ *   letta: { included: boolean, image: string | null, reason?: string,
+ *     rows?: Record<string, number> | null },
  *   ollama: { name: string | undefined, id: string | undefined }[] | null }} input
  */
 export async function buildManifest({ dir, name, createdAt, memory, letta, ollama }) {
@@ -195,6 +213,7 @@ async function main(argv) {
       'letta-image': { type: 'string' },
       'no-letta': { type: 'string' },
       'ollama-list': { type: 'string' },
+      'letta-rows': { type: 'string' },
     },
   });
   const root = new URL('../../', import.meta.url);
@@ -232,7 +251,14 @@ async function main(argv) {
       memory,
       letta:
         skipped === undefined
-          ? { included: true, image: values['letta-image'] ?? pinned }
+          ? {
+              included: true,
+              image: values['letta-image'] ?? pinned,
+              rows:
+                values['letta-rows'] === undefined
+                  ? null
+                  : parseRowCounts(readFileSync(values['letta-rows'], 'utf8')),
+            }
           : { included: false, image: pinned, reason: skipped },
       ollama:
         values['ollama-list'] === undefined

@@ -22,6 +22,7 @@ import {
   checkNode,
   lettaImageFromCompose,
   parseOllamaList,
+  parseRowCounts,
   planRotation,
   snapshotMemory,
   verifyBackup,
@@ -113,6 +114,11 @@ test('lee los modelos de «ollama list» y la imagen de Letta del compose', () =
   assert.match(lettaImageFromCompose(compose) ?? '', /^letta\/letta@sha256:[0-9a-f]{64}$/);
 });
 
+test('lee los recuentos por tabla de Letta y descarta lo que no es un recuento', () => {
+  const text = 'agents=1\r\nmessages=42\n\nERROR: algo\nsin_numero=\n';
+  assert.deepEqual(parseRowCounts(text), { agents: 1, messages: 42 });
+});
+
 test('crear, comprobar y anotar una copia sin el volcado de Letta', async () => {
   const out = join(work, 'copia-sin-letta');
   openMemory(join(work, 'origen.db'), 5).close();
@@ -171,6 +177,7 @@ test('con el volcado de Letta la copia es completa, y un archivo cambiado se det
     'x',
   ]);
   writeFileSync(join(out, 'letta.dump'), 'volcado de prueba');
+  writeFileSync(join(work, 'filas.txt'), 'agents=1\nmessages=42\n');
   const created = JSON.parse(
     cli([
       'create',
@@ -182,10 +189,18 @@ test('con el volcado de Letta la copia es completa, y un archivo cambiado se det
       '20261121T083005Z',
       '--letta-image',
       'letta/letta@sha256:abc',
+      '--letta-rows',
+      join(work, 'filas.txt'),
     ]),
   );
   assert.equal(created.complete, true);
   assert.deepEqual(await verifyBackup(out), []);
+  const manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.deepEqual(manifest.letta, {
+    included: true,
+    image: 'letta/letta@sha256:abc',
+    rows: { agents: 1, messages: 42 },
+  });
 
   appendFileSync(join(out, 'letta.dump'), '!');
   assert.deepEqual(await verifyBackup(out), ['letta.dump no coincide']);
