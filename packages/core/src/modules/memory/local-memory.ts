@@ -325,6 +325,23 @@ export class LocalMemory {
     this.stmtSetMeta.run(key, value);
   }
 
+  /**
+   * Deja todos los turnos como pendientes de enviar y olvida un valor de
+   * `meta`, en una sola transacción. Es la base de `reindex-memory`: los
+   * turnos no se tocan, solo la marca de que ya se enviaron. Devuelve cuántos
+   * estaban enviados y el valor que se olvida.
+   */
+  resetSync(metaKey: string): { turns: number; previous: string | undefined } {
+    return this.db.transaction(() => {
+      const previous = this.getMeta(metaKey);
+      const result = this.db
+        .prepare(`UPDATE messages SET synced_at = NULL WHERE synced_at IS NOT NULL`)
+        .run();
+      this.db.prepare(`DELETE FROM meta WHERE key = ?`).run(metaKey);
+      return { turns: result.changes, previous };
+    })();
+  }
+
   /** Versión del esquema de la base abierta (`PRAGMA user_version`). */
   schemaVersion(): number {
     return this.db.pragma('user_version', { simple: true }) as number;
