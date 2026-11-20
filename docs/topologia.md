@@ -46,6 +46,8 @@ El procedimiento está en [`RESTORE.md`](../RESTORE.md). Resumen:
 - `npm run backup` copia la memoria local y, si Letta está en marcha, su volcado. El destino es una carpeta de otra unidad u otro equipo por SSH.
 - La carpeta de las copias es propia y dedicada. Cuando el script la crea en otro equipo, la deja legible solo para el usuario que copia; una carpeta local, o una que ya existía, se queda con los permisos que tenga. Se conservan las 7 copias más nuevas y, además, la última completa.
 - El `core-host` avisa al arrancar si no hay copia o si la última tiene 14 días o más, y lo lleva en el informe de salud (`lastBackup`).
+- `npm run backup:restore` pone una copia en el sitio de la memoria local, del Letta en uso o de los dos. No borra nada: lo anterior queda apartado, y sabe volver atrás.
+- `npm run reindex-memory` prepara la memoria local para volver a llenar Letta desde ella, cuando Letta es otro o está vacío.
 
 ## Ensayos de restauración
 
