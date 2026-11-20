@@ -23,6 +23,7 @@
     "verify": "npm run build -w @proyecto-shiro/core && npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run test:scripts && npm run agents:check",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "voices": "node scripts/gemini-voices.mjs",
+    "backup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-homelab.ps1",
     "agents:sync": "node scripts/sync-agents-md.mjs",
     "agents:check": "node scripts/sync-agents-md.mjs --check",
     "audit:prod": "node scripts/audit-prod.mjs",
