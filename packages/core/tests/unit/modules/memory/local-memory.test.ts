@@ -732,3 +732,34 @@ describe('LocalMemory — la copia previa a la migración (revisión de P-10)', 
     });
   });
 });
+
+// P-11a: para volver a llenar Letta desde la memoria local, todos los turnos
+// vuelven a quedar pendientes y se olvida el agente anotado.
+describe('LocalMemory — reiniciar el envío (P-11a)', () => {
+  it('deja todos los turnos pendientes y olvida la clave, de una vez', () => {
+    const memory = new LocalMemory({ dbPath: ':memory:' });
+    for (const id of ['a', 'b', 'c']) memory.save(makeEntry({ id }));
+    memory.markSynced('a');
+    memory.markSynced('b');
+    memory.setMeta('letta_agent_id', 'agente-viejo');
+    memory.setMeta('otra', 'se queda');
+
+    expect(memory.resetSync('letta_agent_id')).toEqual({ turns: 2, previous: 'agente-viejo' });
+
+    expect(memory.pendingCount()).toBe(3);
+    expect(memory.getMeta('letta_agent_id')).toBeUndefined();
+    expect(memory.getMeta('otra')).toBe('se queda');
+    // Los turnos siguen ahí: solo cambia si se han enviado.
+    expect(memory.stats().turns).toBe(3);
+    memory.close();
+  });
+
+  it('repetirlo no cambia nada', () => {
+    const memory = new LocalMemory({ dbPath: ':memory:' });
+    memory.save(makeEntry({ id: 'a' }));
+    memory.resetSync('letta_agent_id');
+
+    expect(memory.resetSync('letta_agent_id')).toEqual({ turns: 0, previous: undefined });
+    memory.close();
+  });
+});

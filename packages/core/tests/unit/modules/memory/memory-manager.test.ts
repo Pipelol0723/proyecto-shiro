@@ -11,6 +11,8 @@ import {
   MemoryManager,
   MemoryManagerConfigSchema,
   MemoryManagerError,
+  inspectLettaSync,
+  reindexFromLocal,
 } from '../../../../src/modules/memory/memory-manager.js';
 import { LocalMemory } from '../../../../src/modules/memory/local-memory.js';
 import { LettaMemory, type LettaClientLike } from '../../../../src/modules/memory/letta-memory.js';
@@ -560,5 +562,58 @@ describe('MemoryManager — arranque en segundo plano (revisión de P-13)', () =
     } finally {
       vi.restoreAllMocks();
     }
+  });
+});
+
+// P-11a (R-330): si Letta se cambia por otro, o se restaura vacío, los turnos
+// ya enviados no se vuelven a enviar solos. `reindex-memory` los deja
+// pendientes y olvida el agente, para que el siguiente arranque los reenvíe.
+describe('reindexar Letta desde la memoria local (P-11a)', () => {
+  function seeded(): LocalMemory {
+    const local = new LocalMemory({ dbPath: ':memory:' });
+    for (const id of ['t1', 't2', 't3']) local.save(makeEntry({ id }));
+    local.markSynced('t1');
+    local.markSynced('t2');
+    local.setMeta('letta_agent_id', 'agente-viejo');
+    return local;
+  }
+
+  it('dice cómo está el envío sin cambiar nada', () => {
+    const local = seeded();
+
+    expect(inspectLettaSync(local)).toEqual({ total: 3, pending: 1, agentId: 'agente-viejo' });
+    expect(local.pendingCount()).toBe(1);
+    local.close();
+  });
+
+  it('deja todo pendiente y olvida el agente', () => {
+    const local = seeded();
+
+    expect(reindexFromLocal(local)).toEqual({ total: 3, resent: 2, agentId: 'agente-viejo' });
+    expect(inspectLettaSync(local)).toEqual({ total: 3, pending: 3, agentId: undefined });
+    local.close();
+  });
+
+  it('en el siguiente arranque se crea un agente nuevo y se reenvían todos los turnos', async () => {
+    const local = seeded();
+    reindexFromLocal(local);
+    const letta = makeLetta({ base_url: 'http://localhost:8283', agent_id: '' });
+    vi.spyOn(letta, 'ping').mockResolvedValue(true);
+    const provision = vi.spyOn(letta, 'provisionAgent').mockResolvedValue('agente-nuevo');
+    const save = vi.spyOn(letta, 'save').mockResolvedValue();
+    const manager = new MemoryManager(
+      { ...BASE_CONFIG, letta: { base_url: 'http://localhost:8283', agent_id: '' } },
+      makeDeps(),
+      { local, letta },
+    );
+
+    await manager.runDrainerOnce();
+
+    expect(provision).toHaveBeenCalledOnce();
+    expect(local.getMeta('letta_agent_id')).toBe('agente-nuevo');
+    expect(save.mock.calls.map(([entry]) => entry.id)).toEqual(['t1', 't2', 't3']);
+    expect(local.pendingCount()).toBe(0);
+    await manager.stop();
+    vi.restoreAllMocks();
   });
 });
