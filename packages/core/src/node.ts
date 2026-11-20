@@ -32,6 +32,8 @@ export {
   MemoryManager,
   MemoryManagerConfigSchema,
   MemoryManagerError,
+  inspectLettaSync,
+  reindexFromLocal,
 } from './modules/memory/memory-manager.js';
 export type {
   MemoryManagerConfig,
