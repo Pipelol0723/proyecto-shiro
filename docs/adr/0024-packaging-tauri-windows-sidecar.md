@@ -312,7 +312,8 @@ CONTRIBUTING.md               ← setup de signing key (nuevo)
   `npm run backup` escribe al lado de `memory.db`. Falta si no se ha hecho
   ninguna copia. Solo lleva fechas: no dice dónde está la copia.
 - Al arrancar, el `core-host` avisa en el log si no hay ninguna copia anotada
-  o si la última tiene 14 días o más. Una copia que no se hace es el riesgo;
+  o si la última tiene 14 días o más. Con copia reciente pero sin una completa
+  reciente deja una nota, sin alarmar. Una copia que no se hace es el riesgo;
   que el aviso salga solo es la mitigación (P-11a del
   [plan de mejora](../plan-mejora-2026-11.md), apartado 8.1).
 - La interfaz todavía no lo enseña: llega con el chip de estado (RD-7) y la

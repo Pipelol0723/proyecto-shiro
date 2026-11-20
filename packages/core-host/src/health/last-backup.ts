@@ -20,14 +20,22 @@ export const BACKUP_WARN_DAYS = 14;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Dónde se explica cómo hacer la copia; la app instalada no tiene `npm` al lado. */
+const HOW_TO = 'cómo hacerla: RESTORE.md del repositorio (`npm run backup`)';
+
 /** Aviso sobre la copia de seguridad, con el nivel de log que le toca. */
 export interface BackupNotice {
   level: 'warn' | 'info';
   message: string;
 }
 
+/** Una fecha como las que escribe el script: ISO 8601, no cualquier texto que `Date` entienda. */
 function isDate(value: unknown): value is string {
-  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) &&
+    !Number.isNaN(Date.parse(value))
+  );
 }
 
 /**
@@ -67,15 +75,22 @@ export function backupNotice(
   if (info === undefined) {
     return {
       level: 'warn',
-      message:
-        'no hay ninguna copia de seguridad de la memoria anotada: haz una con `npm run backup`',
+      message: `no hay ninguna copia de seguridad de la memoria anotada; ${HOW_TO}`,
     };
   }
   const days = daysSince(info.at, now);
+  // Un día de margen para relojes desajustados. Más allá, la fecha no se
+  // cree: una anotación del mes que viene callaría el aviso hasta entonces.
+  if (days < -1) {
+    return {
+      level: 'warn',
+      message: `la última copia de seguridad de la memoria tiene una fecha del futuro (${info.at}): revisa el reloj y haz otra; ${HOW_TO}`,
+    };
+  }
   if (days >= BACKUP_WARN_DAYS) {
     return {
       level: 'warn',
-      message: `la última copia de seguridad de la memoria es de hace ${String(days)} días: haz otra con \`npm run backup\``,
+      message: `la última copia de seguridad de la memoria es de hace ${String(days)} días; ${HOW_TO}`,
     };
   }
   if (info.lastCompleteAt === null) {
