@@ -35,15 +35,58 @@ function makeMemory(/** @type {string} */ folder, turns = 1) {
   return path;
 }
 
-/** @param {string[]} args */
-function run(args) {
-  const result = spawnSync(
-    'powershell',
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-SkipLetta', ...args],
-    { encoding: 'utf8' },
-  );
+/**
+ * Ejecuta el script. Sin `env` se salta Letta; con él, usa el `docker` de pega.
+ *
+ * @param {string[]} args
+ * @param {Record<string, string>} [env]
+ */
+function run(args, env) {
+  const base = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT];
+  const result = spawnSync('powershell', [...base, ...(env ? [] : ['-SkipLetta']), ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+  });
   return { code: result.status, output: `${result.stdout}${result.stderr}` };
 }
+
+/** La única copia que hay en una carpeta de destino, con su manifiesto. */
+function onlyCopy(/** @type {string} */ destination) {
+  const names = readdirSync(destination);
+  assert.equal(names.length, 1, names.join(', '));
+  const dir = join(destination, names[0] ?? '');
+  return { dir, manifest: JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) };
+}
+
+/**
+ * Un `docker` de pega, delante en el PATH: contesta como el de verdad a lo
+ * que el script le pide, y falla donde le digan las variables `STUB_*`.
+ */
+const stubDir = join(work, 'docker-de-pega');
+mkdirSync(stubDir);
+writeFileSync(join(stubDir, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n');
+writeFileSync(
+  join(stubDir, 'docker.js'),
+  `const fs = require('node:fs');
+const [command, ...args] = process.argv.slice(2);
+const env = process.env;
+if (command === 'ps') console.log((env.STUB_CONTAINERS ?? 'letta-1').split(',').join('\\n'));
+if (command === 'inspect') console.log('letta/letta@sha256:de-pega');
+if (command === 'cp') {
+  if (env.STUB_CP_FAIL) process.exit(1);
+  fs.writeFileSync(args[1], 'volcado de pega');
+}
+if (command === 'exec') {
+  const script = args.join(' ');
+  if (script.includes('pg_dump') && env.STUB_DUMP_FAIL) process.exit(1);
+  if (script.includes('psql')) console.log('agents=1\\nmessages=2');
+}
+`,
+);
+const withDocker = (/** @type {Record<string, string>} */ extra = {}) => ({
+  PATH: `${stubDir};${process.env.PATH ?? ''}`,
+  ...extra,
+});
 
 test('el script lleva la marca BOM: sin ella Windows PowerShell 5.1 estropea las tildes', () => {
   assert.deepEqual([...readFileSync(SCRIPT).subarray(0, 3)], [0xef, 0xbb, 0xbf]);
@@ -151,4 +194,150 @@ test('sin la base de la memoria es un error', { skip }, () => {
 
   assert.equal(code, 1, output);
   assert.match(output, /no existe la base/);
+});
+
+// ── Lo que pidió la revisión del segundo agente ──
+
+test('con Letta en marcha la copia es completa y lleva las filas por tabla', { skip }, async () => {
+  const db = makeMemory('con-letta');
+  const destination = join(work, 'con-letta-destino');
+  mkdirSync(destination);
+
+  const { code, output } = run(['-MemoryDb', db, '-Destination', destination], withDocker());
+
+  assert.equal(code, 0, output);
+  const { dir, manifest } = onlyCopy(destination);
+  assert.equal(manifest.complete, true);
+  assert.deepEqual(manifest.letta, {
+    included: true,
+    image: 'letta/letta@sha256:de-pega',
+    rows: { agents: 1, messages: 2 },
+  });
+  assert.deepEqual(await verifyBackup(dir), []);
+  assert.equal(readFileSync(join(dir, 'letta.dump'), 'utf8'), 'volcado de pega');
+});
+
+test(
+  'si el volcado de Letta falla, la memoria se copia igual y la copia queda parcial',
+  { skip },
+  () => {
+    const db = makeMemory('letta-falla');
+    const destination = join(work, 'letta-falla-destino');
+    mkdirSync(destination);
+    const args = ['-MemoryDb', db, '-Destination', destination];
+
+    const strict = run([...args, '-RequireLetta'], withDocker({ STUB_CP_FAIL: '1' }));
+    assert.equal(strict.code, 1, strict.output);
+    assert.deepEqual(readdirSync(destination), [], 'con -RequireLetta no se copia nada');
+
+    const { code, output } = run(args, withDocker({ STUB_CP_FAIL: '1' }));
+    assert.equal(code, 0, output);
+    const { dir, manifest } = onlyCopy(destination);
+    assert.equal(manifest.complete, false);
+    assert.match(manifest.letta.reason, /el volcado de Letta falló/);
+    assert.deepEqual(readdirSync(dir).sort(), ['manifest.json', 'memory.db']);
+  },
+);
+
+test('con dos contenedores de Letta no elige uno a ciegas', { skip }, () => {
+  const db = makeMemory('dos-lettas');
+  const destination = join(work, 'dos-lettas-destino');
+  mkdirSync(destination);
+
+  const { code, output } = run(
+    ['-MemoryDb', db, '-Destination', destination],
+    withDocker({ STUB_CONTAINERS: 'letta-a,letta-b' }),
+  );
+
+  assert.equal(code, 0, output);
+  const { manifest } = onlyCopy(destination);
+  assert.equal(manifest.complete, false);
+  assert.match(manifest.letta.reason, /-LettaContainer/);
+});
+
+test(
+  'la copia recién hecha no se retira aunque en el destino haya otras con fecha posterior',
+  { skip },
+  () => {
+    const db = makeMemory('reloj');
+    const destination = join(work, 'reloj-destino');
+    for (const later of ['29990101T000000Z', '29990102T000000Z']) {
+      mkdirSync(join(destination, later), { recursive: true });
+      writeFileSync(join(destination, later, 'manifest.json'), JSON.stringify({ complete: true }));
+    }
+
+    const { code, output } = run(['-MemoryDb', db, '-Destination', destination, '-Keep', '2']);
+
+    assert.equal(code, 0, output);
+    const record = JSON.parse(readFileSync(join(work, 'reloj', 'last-backup.json'), 'utf8'));
+    assert.ok(existsSync(join(destination, record.name)), 'la copia anotada sigue en el destino');
+  },
+);
+
+test('una carpeta de destino con espacios y comillas simples', { skip }, async () => {
+  const db = makeMemory('raro');
+  const destination = join(work, "des tino's");
+
+  const { code, output } = run([
+    '-MemoryDb',
+    db,
+    '-Destination',
+    destination,
+    '-CreateDestination',
+  ]);
+
+  assert.equal(code, 0, output);
+  assert.deepEqual(await verifyBackup(onlyCopy(destination).dir), []);
+});
+
+test('pedir que no se conserve ninguna copia falla antes de tocar nada', { skip }, () => {
+  const db = makeMemory('keep-cero');
+  const destination = join(work, 'keep-cero-destino');
+  mkdirSync(join(destination, '20250101T000000Z'), { recursive: true });
+
+  const { code, output } = run(['-MemoryDb', db, '-Destination', destination, '-Keep', '0']);
+
+  assert.equal(code, 1, output);
+  assert.deepEqual(readdirSync(destination), ['20250101T000000Z']);
+  assert.equal(existsSync(join(work, 'keep-cero', 'last-backup.json')), false);
+});
+
+test('con -Installed copia la memoria de la app instalada', { skip }, () => {
+  const tauri = JSON.parse(
+    readFileSync(
+      new URL('../../packages/desktop/src-tauri/tauri.conf.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  const db = makeMemory(join('appdata', tauri.identifier, 'data'));
+  const destination = join(work, 'instalada-destino');
+  mkdirSync(destination);
+
+  const result = spawnSync(
+    'powershell',
+    [
+      ...['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-SkipLetta'],
+      ...['-Installed', '-Destination', destination],
+    ],
+    { encoding: 'utf8', env: { ...process.env, LOCALAPPDATA: join(work, 'appdata') } },
+  );
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.equal(onlyCopy(destination).manifest.memory.turns, 1);
+  assert.ok(existsSync(join(db, '..', 'last-backup.json')));
+});
+
+// El servidor busca la anotación al lado de su memoria; el script la escribe
+// al lado de la que copia. En desarrollo tienen que ser el mismo archivo.
+test('la memoria que el script copia por defecto es la del servidor de desarrollo', () => {
+  const script = readFileSync(SCRIPT, 'utf8');
+  const config = readFileSync(new URL('../../config/modules.config.yaml', import.meta.url), 'utf8');
+  const scriptDefault = /\$MemoryDb = Join-Path \$PSScriptRoot '([^']+)'/.exec(script)?.[1];
+  const hostDefault = /db_path:\s*'([^']+)'/.exec(config)?.[1];
+
+  // `npm run dev` arranca el servidor en packages/core-host.
+  const fromScript = join('scripts', (scriptDefault ?? '').replaceAll('\\', '/'));
+  const fromHost = join('packages', 'core-host', hostDefault ?? '');
+  assert.ok(scriptDefault && hostDefault, 'se leen las dos rutas');
+  assert.equal(fromScript, fromHost);
 });
