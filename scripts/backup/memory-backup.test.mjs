@@ -407,7 +407,15 @@ test('comparar por la línea de comandos: iguales, distintas y una copia sin rec
   assert.equal(different.code, 1);
   assert.match(different.err, /messages: 42 en la copia y 41 al restaurar/);
 
-  const unreadable = cli(['compare-rows', '--dir', out, '--rows', join(work, 'ollama.txt')]);
+  // Un texto que no trae ningún recuento (un error de psql, por ejemplo).
+  writeFileSync(join(work, 'filas-ilegibles.txt'), 'psql: error: connection refused');
+  const unreadable = cli([
+    'compare-rows',
+    '--dir',
+    out,
+    '--rows',
+    join(work, 'filas-ilegibles.txt'),
+  ]);
   assert.equal(unreadable.code, 1);
   assert.match(unreadable.err, /no se pudieron contar/);
 
