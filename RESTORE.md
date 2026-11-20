@@ -102,9 +102,32 @@ Por qué no a mano. Al escribir este documento se ensayaron los pasos y se revis
 
 - **La memoria local.** Si al lado de la `memory.db` restaurada se queda un `memory.db-wal` de la memoria anterior, SQLite lo aplica encima: la app abre sin errores y enseña los turnos de antes, no los de la copia. Hay que apartar los tres archivos (`memory.db`, `memory.db-wal` y `memory.db-shm`) y comprobar que no queda ninguno antes de copiar.
 - **Letta.** Restaurar encima de la base en uso con `pg_restore --clean` termina con cientos de errores y la base sin tablas (probado el 2026-11-20 en un Letta temporal). Lo que funciona es restaurar en una base aparte, cambiarla por la que hay en una sola transacción y reiniciar Letta. Hecho a mano, una orden que falla no para a las siguientes.
-- **Las dos a la vez.** La memoria local anota qué turnos se han enviado ya a Letta. Si se restaura una memoria y un Letta de copias distintas, hay turnos que constan como enviados y que ese Letta no tiene: no se reenvían solos.
+- **Las dos a la vez.** La memoria local anota qué turnos se han enviado ya a Letta. Si se restaura una memoria y un Letta de copias distintas, hay turnos que constan como enviados y que ese Letta no tiene: no se reenvían solos. Para eso está `reindex-memory`, más abajo.
 
 Si necesitas restaurar antes de que exista la orden, pide ayuda con la copia delante y **no borres nada**: ni la memoria que hay, ni el volumen de Letta, ni las copias.
+
+## Volver a llenar Letta desde la memoria local
+
+La memoria local guarda todos los turnos, así que Letta se puede volver a llenar desde ella. Hace falta cuando Letta está vacío o es otro (uno nuevo, o uno restaurado de una copia de otra fecha): los turnos que ya constan como enviados no se reenvían solos.
+
+Con **Shiro cerrado**, esto dice lo que haría, sin cambiar nada: cuántos turnos hay, cuántos constan como enviados y qué agente de Letta está anotado.
+
+```powershell
+npm run reindex-memory
+```
+
+Y esto lo hace:
+
+```powershell
+npm run reindex-memory -- --yes
+```
+
+- Deja todos los turnos como pendientes de enviar y olvida el agente anotado. No borra ningún turno ni toca Letta.
+- Al arrancar Shiro con Letta en marcha se crea un agente nuevo y los turnos se reenvían por lotes. Con muchos turnos tarda un rato.
+- El agente anterior, si sigue en Letta, se queda sin usar.
+- Si la configuración fija un agente (`letta.agent_id`), no se crea ninguno: los turnos se reenvían a ese.
+- Por defecto actúa sobre la memoria de desarrollo. Para otra, con la ruta completa: `npm run reindex-memory -- --db <ruta de memory.db> --yes`.
+- Con Shiro en marcha no hace nada y lo dice: el servidor tiene el agente en uso.
 
 ## Si la imagen de Letta no trajera `pg_dump`
 
