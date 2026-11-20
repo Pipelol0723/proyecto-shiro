@@ -427,3 +427,42 @@ test('comparar por la línea de comandos: iguales, distintas y una copia sin rec
   assert.equal(none.code, 0);
   assert.match(none.out, /no lleva el recuento/);
 });
+
+// ── La memoria se saca antes que el volcado de Letta ──
+
+test('la instantánea y el manifiesto se pueden hacer en dos pasos', () => {
+  openMemory(join(work, 'dos-pasos.db'), 4).close();
+  const out = join(work, 'dos-pasos-copia');
+
+  const snapshot = cli(['snapshot', '--db', join(work, 'dos-pasos.db'), '--out', out]);
+  assert.equal(snapshot.code, 0, snapshot.err);
+  assert.equal(JSON.parse(snapshot.out).turns, 4);
+  assert.equal(existsSync(join(out, 'manifest.json')), false, 'el manifiesto llega después');
+
+  // Entre los dos pasos, el script de PowerShell deja aquí el volcado de Letta.
+  writeFileSync(join(out, 'letta.dump'), 'volcado de prueba');
+  const created = cli(['create', '--out', out, '--name', '20261120T083005Z']);
+  assert.deepEqual(JSON.parse(created.out), {
+    name: '20261120T083005Z',
+    turns: 4,
+    complete: true,
+  });
+  assert.deepEqual(cli(['verify', '--dir', out]), { code: 0, out: 'ok', err: '' });
+});
+
+test('el manifiesto sin instantánea previa falla, y la instantánea de una memoria vacía también', () => {
+  const missing = cli(['create', '--out', join(work, 'sin-instantanea'), '--name', 'n']);
+  assert.equal(missing.code, 1);
+  assert.match(missing.err, /falta la instantánea/);
+
+  openMemory(join(work, 'vacia2.db'), 0).close();
+  const out = join(work, 'vacia2-copia');
+  const refused = cli(['snapshot', '--db', join(work, 'vacia2.db'), '--out', out]);
+  assert.equal(refused.code, 1);
+  assert.match(refused.err, /no tiene ningún turno/);
+  assert.equal(existsSync(join(out, 'memory.db')), false);
+  assert.equal(
+    cli(['snapshot', '--db', join(work, 'vacia2.db'), '--out', out, '--allow-empty']).code,
+    0,
+  );
+});

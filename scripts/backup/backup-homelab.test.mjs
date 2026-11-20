@@ -74,7 +74,8 @@ if (command === 'ps') console.log((env.STUB_CONTAINERS ?? 'letta-1').split(',').
 if (command === 'inspect') console.log('letta/letta@sha256:de-pega');
 if (command === 'cp') {
   if (env.STUB_CP_FAIL) process.exit(1);
-  fs.writeFileSync(args[1], 'volcado de pega');
+  const memory = require('node:path').join(require('node:path').dirname(args[1]), 'memory.db');
+  fs.writeFileSync(args[1], 'volcado de pega; memoria ya copiada: ' + fs.existsSync(memory));
 }
 if (command === 'exec') {
   const script = args.join(' ');
@@ -214,7 +215,13 @@ test('con Letta en marcha la copia es completa y lleva las filas por tabla', { s
     rows: { agents: 1, messages: 2 },
   });
   assert.deepEqual(await verifyBackup(dir), []);
-  assert.equal(readFileSync(join(dir, 'letta.dump'), 'utf8'), 'volcado de pega');
+  // La memoria se saca antes que el volcado: un turno que se envíe a Letta
+  // entre los dos pasos queda en la copia como pendiente, y al restaurar se
+  // reenvía. Al revés constaría como enviado sin estar en el volcado.
+  assert.equal(
+    readFileSync(join(dir, 'letta.dump'), 'utf8'),
+    'volcado de pega; memoria ya copiada: true',
+  );
 });
 
 test(
