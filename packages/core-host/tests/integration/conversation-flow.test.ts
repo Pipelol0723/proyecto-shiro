@@ -1304,6 +1304,35 @@ describe('wireConversationFlow — respuesta vacía', () => {
 
     dispose();
   });
+
+  it('si la nube y el local contestan sin texto, salen los dos avisos y un solo mensaje de fallo', async () => {
+    const memory = makeMemory();
+    const { bus, failed, responded, dispose } = run(
+      makeModules({
+        memory,
+        router: makeRouter({ tier: 'cloud' }),
+        llmCloud: empty('llm:nube', ''),
+        llmLocal: empty('llm:local', '\n'),
+      }),
+    );
+    const measured: EventMap['turn:measured'][] = [];
+    bus.on('turn:measured', (payload) => {
+      measured.push(payload);
+    });
+
+    await bus.emit('user:message', { text: 'hola', userId: 'me' });
+
+    expect(failed).toEqual([
+      { reason: 'empty', tier: 'cloud', userId: 'me' },
+      { reason: 'empty', tier: 'local', userId: 'me' },
+    ]);
+    expect(responded).toHaveLength(1);
+    expect(responded[0]?.text.trim()).not.toBe('');
+    expect(memory.saved.filter((entry) => entry.role === 'assistant')).toEqual([]);
+    expect(measured).toHaveLength(1);
+
+    dispose();
+  });
 });
 
 // Encontrado al medir la línea base con la app real: había varias copias del

@@ -6,7 +6,7 @@
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import {
   EventBus,
@@ -695,6 +695,12 @@ describe('useTtsPlayback — primer audio (revisión de P-16)', () => {
 // IN-F: silenciar solo valía para los audios siguientes; la frase que ya
 // sonaba seguía hasta el final.
 describe('useTtsPlayback — silenciar corta lo que suena (IN-F)', () => {
+  // El silencio se guarda en localStorage: se borra pase lo que pase, para que
+  // un test que falle a medias no deje silenciados a los siguientes.
+  afterEach(() => {
+    window.localStorage.removeItem('shiro:tts:muted');
+  });
+
   async function playing(options: { muted?: boolean } = {}) {
     window.localStorage.removeItem('shiro:tts:muted');
     const bus = makeBus();
@@ -735,7 +741,6 @@ describe('useTtsPlayback — silenciar corta lo que suena (IN-F)', () => {
     expect(audio.src).toBe('');
     expect(view.result.current.audioElement).toBeNull();
     expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
-    window.localStorage.removeItem('shiro:tts:muted');
   });
 
   it('también si quien silencia es quien monta el reproductor', async () => {
@@ -747,12 +752,26 @@ describe('useTtsPlayback — silenciar corta lo que suena (IN-F)', () => {
     expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
   });
 
-  it('quitar el silencio no corta nada', async () => {
+  it('quitar el silencio no reanuda la frase cortada ni vuelve a avisar', async () => {
     const { audio, ended, view } = await playing();
+    act(() => {
+      view.result.current.setMuted(true);
+    });
 
     act(() => {
       view.result.current.setMuted(false);
     });
+
+    expect(view.result.current.muted).toBe(false);
+    expect(audio.paused).toBe(true);
+    expect(view.result.current.audioElement).toBeNull();
+    expect(ended).toEqual([{ userId: 'me', audioId: 'a' }]);
+  });
+
+  it('con una frase sonando y sin silencio, dejarlo como está no corta nada', async () => {
+    const { audio, ended, view } = await playing({ muted: false });
+
+    view.rerender({ muted: false });
 
     expect(audio.paused).toBe(false);
     expect(ended).toEqual([]);
