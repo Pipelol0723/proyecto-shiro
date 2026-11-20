@@ -40,30 +40,11 @@ El chat enseña lo mismo: junto a cada respuesta, el tiempo hasta el texto y el 
 
 Con el modelo ya cargado.
 
-| Turno   | Respuesta (caracteres) | `route` | `context` | `llm` | `persist` | `tts` | `total` | Primer audio |
-| ------- | ---------------------: | ------: | --------: | ----: | --------: | ----: | ------: | -----------: |
-| 1       |                     34 |     890 |         1 |  2372 |         1 |   703 |    3968 |         4005 |
-| 2       |                    227 |     901 |         1 |  3313 |         0 |  1398 |    5614 |         5629 |
-| 3       |                    302 |     901 |         2 |  3526 |         0 |  2286 |    6717 |         6733 |
-| 4       |                    247 |    1041 |         2 |  3355 |         0 |  1862 |    6261 |         6282 |
-| 5       |                    180 |    1024 |         1 |  3068 |         0 |  1281 |    5375 |         5394 |
-| Mediana |                    227 |     901 |         1 |  3313 |         0 |  1398 |    5614 |         5629 |
+| Turno | Respuesta (caracteres) | `route` | `context` | `llm` | `persist` | `tts` | `resto` | `total` |
+| ------: | --------: | ----: | --------: | ----: | ------: | ------: |
+| 2013 | 2 | 11555 | 39 | 808 | 40 | 14457 |
 
-Tiempos en milisegundos.
-
-**Desde que envías el mensaje hasta que oyes la voz pasan entre 4 y 7 segundos; la mediana es 5,6 s.**
-
-Una tanda anterior con las mismas frases dio totales de 3608, 6689, 5746, 5599 y 5849 ms: la medida se repite.
-
-## Arranque en frío
-
-El primer turno tras arrancar Ollama, con el modelo sin cargar:
-
-| `route` | `context` | `llm` | `persist` | `tts` | `total` |
-| ------: | --------: | ----: | --------: | ----: | ------: |
-|    2013 |         2 | 11555 |        39 |   808 |   14457 |
-
-- Cargar el modelo cuesta unos 9 segundos más en `llm`.
+- Cargar el modelo cuesta unos 8 segundos más en `llm` que la mediana en caliente (11,6 s frente a 3,3 s).
 - El clasificador agotó su plazo de 2 s (`route` = 2013) y el turno se decidió con la regla de respaldo.
 - Solo pasa una vez: después el modelo se queda cargado 30 minutos.
 
@@ -76,10 +57,10 @@ Con la mediana de la línea base:
 | Generar la respuesta |  3,3 s |            59 % |
 | Sintetizar la voz    |  1,4 s |            25 % |
 | Elegir modelo        |  0,9 s |            16 % |
-| Memoria y guardar    |   2 ms |             0 % |
+| Memoria y guardar    |   1 ms |             0 % |
 
 - **La respuesta del modelo local es lo que más pesa**, y crece con su longitud: 2,4 s para 34 caracteres, 3,5 s para 302.
-- **Elegir modelo cuesta casi un segundo en cada turno**, aunque la respuesta sea una frase. Es una llamada entera al modelo solo para decidir. El atajo para mensajes cortos (P-36) se la ahorraría a la mayoría de los turnos.
+- **Elegir modelo cuesta casi un segundo en cada turno**, aunque la respuesta sea una frase. Es una llamada entera al modelo solo para decidir. El atajo para mensajes cortos (P-36) se la ahorraría a mensajes como los cinco de esta medición; cuántos turnos reales son así no está medido.
 - **La voz crece con la longitud de la respuesta**: 0,7 s para una frase, 2,3 s para un párrafo.
 - **La memoria local y el guardado no cuentan**: 1 o 2 ms.
 - **Del audio listo a la voz sonando hay entre 15 y 40 ms**: descargar y empezar a reproducir, en local, es despreciable.
@@ -99,15 +80,20 @@ Misma tanda cambiando solo el modelo de voz a `eleven_flash_v2_5` (en el YAML: `
 
 Las respuestas de los turnos 1, 3, 4 y 5 tuvieron la misma longitud en las dos tandas, así que esos cuatro se comparan directamente. La del turno 2 fue distinta.
 
-- **Con respuestas largas, la voz rápida tarda la mitad**: 1,1 s frente a 2,3 s para 302 caracteres.
+- **Con respuestas largas, la voz rápida tarda entre la mitad y dos tercios**: 1,1 s frente a 2,3 s para 302 caracteres, 1,0 s frente a 1,9 s para 247 y 0,8 s frente a 1,3 s para 180.
 - **Con una frase corta no hay diferencia**: las dos rondan los 0,7 o 0,8 s, que es lo que cuesta la llamada en sí.
 - **Hubo un caso lento** (turno 2, 2,3 s). Con cinco turnos no se puede saber si es habitual.
-- **En el total del turno ahorra en torno a medio segundo** en respuestas de más de 150 caracteres.
+- **En esos tres turnos comparables la voz tardó entre 0,4 y 1,2 s menos** (0,9 s de mediana). Si lo demás no cambia, eso es lo que baja el total del turno.
+- Son tres comparaciones: bastan para ver la tendencia, no para dar una cifra.
+- El README menciona también `eleven_turbo_v2_5` como opción de menor latencia. No se ha medido.
 
 **No se ha evaluado cómo suena.** La medición fue sin escuchar. Antes de cambiar el modelo por defecto hay que oír las dos voces con el mismo texto.
 
 ## Lo que esta medición no cubre
 
+- **Son pocos datos**: cinco turnos por tanda, un solo arranque en frío, una máquina y un rato. La red y el proveedor de voz varían y eso no está controlado.
+- **Qué alarga `llm`**: crece con la longitud de la respuesta, pero el turno más corto fue también el primero de cada tanda. El contexto sí era igual en todos: los 10 turnos recientes, llenos desde el principio.
+- **Con varias copias del cliente abiertas**, el primer audio es el de la primera que empieza a sonar, no necesariamente la que escuchas.
 - **La entrada por voz**: el tiempo de transcribir con Whisper no está medido ni forma parte de las etapas.
 - **Letta encendido**: con recuerdos parecidos, `context` deja de ser 1 ms. Su plazo es de 1,5 s.
 - **El modelo de la nube**: ningún turno fue a Claude.
