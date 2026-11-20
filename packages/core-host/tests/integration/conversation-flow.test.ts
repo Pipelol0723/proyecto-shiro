@@ -1303,6 +1303,8 @@ describe('wireConversationFlow — respuesta vacía', () => {
     expect(responded[0]).toMatchObject({ text: 'aquí estoy', tier: 'local' });
 
     dispose();
+  });
+});
 
 // Encontrado al medir la línea base con la app real: había varias copias del
 // cliente conectadas y no salía ninguna línea de «primer audio».
