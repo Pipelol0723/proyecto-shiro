@@ -14,6 +14,7 @@
 
 import type {
   GeminiVoiceStatus,
+  LastBackupInfo,
   Logger,
   ModulesConfig,
   ServiceReadiness,
@@ -158,6 +159,8 @@ export interface CheckSystemHealthOptions extends Omit<HealthTargets, 'ollamaMod
   geminiVoice?: GeminiVoiceStatus;
   /** Lo que se sabe de la clave de la nube por los turnos (`watchCloudKey`). */
   cloudIssue?: ServiceReadiness['cloud'];
+  /** Última copia de seguridad de la memoria (`readLastBackup`). */
+  lastBackup?: LastBackupInfo;
 }
 
 /**
@@ -197,6 +200,7 @@ export async function checkSystemHealth(
     secrets: readSecretPresence(),
     ...(options.geminiVoice !== undefined && { geminiVoice: options.geminiVoice }),
     ...(Object.keys(readiness).length > 0 && { readiness }),
+    ...(options.lastBackup !== undefined && { lastBackup: options.lastBackup }),
     checkedAt: new Date().toISOString(),
   };
 }

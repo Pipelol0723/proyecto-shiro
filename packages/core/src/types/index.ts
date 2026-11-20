@@ -11,6 +11,7 @@ export type {
   EventMap,
   EventName,
   GeminiVoiceStatus,
+  LastBackupInfo,
   ServiceReadiness,
   ServiceStatus,
   SystemHealthReport,

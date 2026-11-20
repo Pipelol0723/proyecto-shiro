@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { Logger } from '@proyecto-shiro/core';
 import {
   BACKUP_WARN_DAYS,
@@ -106,8 +106,8 @@ describe('backupNotice', () => {
 describe('logBackupNotice', () => {
   function spies(): {
     logger: Logger;
-    warn: ReturnType<typeof vi.fn>;
-    info: ReturnType<typeof vi.fn>;
+    warn: MockInstance;
+    info: MockInstance;
   } {
     const logger = new Logger('error', { module: 'test' });
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);

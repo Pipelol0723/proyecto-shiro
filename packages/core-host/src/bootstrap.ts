@@ -64,6 +64,7 @@ import { createAudioRouteHandler } from './audio/audio-route.js';
 import { buildTtsChain } from './tts/build-tts-chain.js';
 import { FileTtsUsageCounter } from './tts/tts-usage-counter.js';
 import { checkGeminiVoice, resolveGeminiVoiceTarget } from './health/gemini-voice-check.js';
+import { logBackupNotice, readLastBackup } from './health/last-backup.js';
 import { checkSystemHealth, resolveHealthTargets } from './health/system-health.js';
 import { watchCloudKey, type CloudKeyIssue } from './health/cloud-key-watch.js';
 import { saveSecretsEnv, SECRET_FIELD_TO_ENV, type ManagedKey } from './secrets/secrets-file.js';
@@ -274,16 +275,23 @@ export async function bootstrap(options: BootstrapOptions): Promise<BootstrapRes
   //     y en respuesta a `system:health-check`. Nunca expone el valor de
   //     las keys, solo su presencia.
   const healthTargets = resolveHealthTargets(options.config);
+  // La última copia de seguridad se anota al lado de la memoria local. Al
+  // arrancar se avisa si es vieja o no hay ninguna; el informe lleva la fecha.
+  const memoryDbPath = memoryManager.getLocalDbPath();
+  logBackupNotice(child, memoryDbPath, new Date());
   // Lo que se sabe de la clave de la nube por los turnos (ver más abajo).
   let cloudIssue: CloudKeyIssue | undefined;
   const checkAndEmitHealth = (): void => {
     void (async (): Promise<void> => {
       try {
+        // Se relee en cada informe: la copia se hace con la app en marcha.
+        const lastBackup = readLastBackup(memoryDbPath);
         const report = await checkSystemHealth({
           ...healthTargets,
           logger,
           ...(geminiVoice !== undefined && { geminiVoice }),
           ...(cloudIssue !== undefined && { cloudIssue }),
+          ...(lastBackup !== undefined && { lastBackup }),
         });
         await bus.emit('system:health', report);
       } catch (err) {
