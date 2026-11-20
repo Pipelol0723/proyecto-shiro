@@ -9,27 +9,32 @@
   Antes de tocar nada comprueba la copia (archivos, memoria y turnos) y que
   Shiro está cerrado.
 
-  La memoria local: aparta la que hay (memory.db y sus dos archivos de al
-  lado) a una carpeta `antes-<fecha>`, comprueba que no queda ninguno y copia
-  la de la copia. Si quedara al lado un archivo de la memoria anterior,
-  SQLite lo aplicaría encima de la restaurada.
+  La memoria local: aparta la que hay (el archivo y sus dos archivos de al
+  lado, `-wal` y `-shm`) a una carpeta `antes-<fecha>`, comprueba que no queda
+  ninguno y copia la de la copia. Si quedara al lado un archivo de la memoria
+  anterior, SQLite lo aplicaría encima de la restaurada. Si la copia no se
+  puede poner, la memoria que había vuelve a su sitio.
 
   Letta: restaura el volcado en una base aparte del Letta en marcha, compara
   las filas con las de la copia, cambia esa base por la que hay en una sola
-  transacción y reinicia Letta. La base anterior queda guardada con el nombre
-  `letta_antes_<fecha>`. No restaura encima de la base en uso: eso la deja sin
-  tablas.
+  transacción, comprueba que el cambio se hizo y reinicia Letta. La base
+  anterior queda guardada con el nombre `letta_antes_<fecha>`. No restaura
+  encima de la base en uso: eso la deja sin tablas.
 
   Nada se borra: lo anterior queda apartado. Para volver a la base anterior
   de Letta, -LettaUndo <nombre con el que quedó guardada>.
 
-  Códigos de salida: 0 hecho (o, sin -Yes, dicho lo que haría); 1 error.
+  Códigos de salida: 0 hecho (o, sin -Yes, dicho lo que haría); 1 error, o
+  hecho con un aviso que hay que mirar.
 
 .EXAMPLE
   npm run backup:restore -- -Backup E:\shiro-backup\20261120T083005Z -Memory -Letta
 
 .EXAMPLE
   npm run backup:restore -- -Backup E:\shiro-backup\20261120T083005Z -Memory -Letta -Yes
+
+.EXAMPLE
+  npm run backup:restore -- -LettaUndo letta_antes_20261120t083005z -Yes
 #>
 [CmdletBinding()]
 param(
@@ -41,6 +46,7 @@ param(
   [string]$MemoryDb,
   # Restaura la memoria de la app instalada, no la de desarrollo.
   [switch]$Installed,
+  # El contenedor de Letta, si hay más de uno.
   [string]$LettaContainer,
   # Vuelve a la base de Letta que la restauración dejó guardada
   # (letta_antes_<fecha>). La que está en uso se guarda a su vez.
@@ -57,7 +63,6 @@ $ErrorActionPreference = 'Stop'
 $helper = Join-Path $PSScriptRoot 'backup\memory-backup.mjs'
 $lettaRowsSql = Join-Path $PSScriptRoot 'backup\letta-rows.sql'
 $lettaSwapSql = Join-Path $PSScriptRoot 'backup\letta-swap.sql'
-$memoryFiles = 'memory.db', 'memory.db-wal', 'memory.db-shm'
 if ($Installed) {
   $tauri = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\packages\desktop\src-tauri\tauri.conf.json') -Raw -Encoding UTF8 |
     ConvertFrom-Json
@@ -66,6 +71,8 @@ if ($Installed) {
   $MemoryDb = Join-Path $PSScriptRoot '..\packages\core-host\data\memory.db'
 }
 $script:rowsFile = $null
+$script:warnings = @()
+$script:lettaOld = $null
 
 function Write-Step([string]$Message) { Write-Host "[restaurar] $Message" }
 
@@ -92,19 +99,10 @@ function Get-Sha256([string]$Path) {
   }
 }
 
-# ¿Hay un core-host escuchando? El puerto sale de la misma variable que usa el
-# servidor, o del `.env` de la raíz si está ahí (solo se lee esa línea).
-function Test-ShiroRunning {
-  $port = $env:SHIRO_HOST_PORT
-  $envFile = Join-Path $PSScriptRoot '..\.env'
-  if (-not $port -and (Test-Path -LiteralPath $envFile)) {
-    $line = Select-String -LiteralPath $envFile -Pattern '^\s*SHIRO_HOST_PORT\s*=\s*(\d+)' | Select-Object -First 1
-    if ($line) { $port = $line.Matches[0].Groups[1].Value }
-  }
-  if (-not $port) { $port = 9876 }
+function Test-Port([string]$HostName, [int]$Port) {
   $client = New-Object System.Net.Sockets.TcpClient
   try {
-    $pending = $client.BeginConnect('127.0.0.1', [int]$port, $null, $null)
+    $pending = $client.BeginConnect($HostName, $Port, $null, $null)
     if (-not $pending.AsyncWaitHandle.WaitOne(1500)) { return $false }
     $client.EndConnect($pending)
     return $true
@@ -115,11 +113,33 @@ function Test-ShiroRunning {
   }
 }
 
-# El contenedor de Letta en marcha: uno y solo uno, y de la imagen de la copia.
+# ¿Hay un core-host escuchando? El puerto sale de la misma variable que usa el
+# servidor, o del `.env` de la raíz si está ahí (solo se lee esa línea). La app
+# instalada usa siempre el 9876, así que con -Installed se mira también ese.
+function Test-ShiroRunning {
+  $ports = @()
+  $configured = $env:SHIRO_HOST_PORT
+  $envFile = Join-Path $PSScriptRoot '..\.env'
+  if (-not $configured -and (Test-Path -LiteralPath $envFile)) {
+    $line = Select-String -LiteralPath $envFile -Pattern '^\s*SHIRO_HOST_PORT\s*=\s*"?(\d+)' | Select-Object -First 1
+    if ($line) { $configured = $line.Matches[0].Groups[1].Value }
+  }
+  if ($configured) { $ports += [int]$configured } else { $ports += 9876 }
+  if ($Installed -and $ports -notcontains 9876) { $ports += 9876 }
+  foreach ($port in $ports) {
+    foreach ($address in '127.0.0.1', '::1') {
+      if (Test-Port $address $port) { return $true }
+    }
+  }
+  return $false
+}
+
+# El contenedor de Letta en marcha: uno y solo uno. Con `$Image`, además, de
+# esa imagen.
 function Get-LettaContainer([string]$Image) {
+  if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'hace falta Docker para restaurar Letta' }
   $found = @($LettaContainer | Where-Object { $_ })
   if ($found.Count -eq 0) {
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'hace falta Docker para restaurar Letta' }
     $found = @(Invoke-Quiet { docker ps --filter 'label=com.docker.compose.service=letta' --format '{{.Names}}' } |
         Where-Object { $_ })
   }
@@ -128,8 +148,8 @@ function Get-LettaContainer([string]$Image) {
     throw "hay más de un contenedor de Letta ($($found -join ', ')): indica cuál con -LettaContainer"
   }
   $running = "$(Invoke-Quiet { docker inspect --format '{{.Config.Image}}' $found[0] })".Trim()
-  if ($LASTEXITCODE -ne 0) { throw "no se encuentra el contenedor $($found[0])" }
-  if ($running -ne $Image) {
+  if ($LASTEXITCODE -ne 0 -or -not $running) { throw "no se encuentra el contenedor $($found[0])" }
+  if ($Image -and $running -ne $Image) {
     throw ("el Letta en marcha es de otra imagen que el de la copia ($running frente a $Image). " +
       'Restaurar el volcado en otra versión no es seguro: usa la misma imagen, o restaura solo la memoria ' +
       'y rellena Letta con «npm run reindex-memory -- --yes»')
@@ -137,32 +157,45 @@ function Get-LettaContainer([string]$Image) {
   return $found[0]
 }
 
-# Las filas por tabla de una base del contenedor, como en la copia.
-function Get-LettaRows([string]$Container, [string]$Database) {
-  $sql = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($lettaRowsSql))
+# Ejecuta SQL en una base del contenedor y devuelve sus líneas, o $null si
+# falló. El SQL viaja en base64 dentro de la orden: por una tubería, Windows
+# PowerShell le pone delante una marca BOM. El usuario y la base los resuelve
+# el intérprete del contenedor (van entre comillas simples).
+function Invoke-LettaSql([string]$Container, [string]$Database, [string]$Sql, [string[]]$Options) {
+  $encoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Sql))
   $lines = Invoke-Quiet {
-    docker exec $Container sh -c ("echo $sql | base64 -d | " +
-      'psql -U $POSTGRES_USER -d ' + $Database + ' -At -v ON_ERROR_STOP=1 -f -')
+    docker exec $Container sh -c ("echo $encoded | base64 -d | " + 'psql -U $POSTGRES_USER -d ' + $Database +
+      ' -At -v ON_ERROR_STOP=1 ' + ($Options -join ' ') + ' -f -')
   }
-  if ($LASTEXITCODE -ne 0) { throw 'no se pudieron contar las filas de la base restaurada' }
-  return @($lines)
+  if ($LASTEXITCODE -ne 0) { return $null }
+  return @($lines | Where-Object { $_ })
+}
+
+# ¿Existe esa base en el Postgres de Letta? Si no se puede saber, cuenta como no.
+function Test-LettaDatabase([string]$Container, [string]$Name) {
+  $rows = Invoke-LettaSql $Container 'postgres' "SELECT count(*) FROM pg_database WHERE datname = :'name';" @("-v name=$Name")
+  return ((@($rows) -join '').Trim() -eq '1')
 }
 
 # Cambia la base que usa Letta por otra, en una sola transacción (o entero, o
 # nada), y reinicia Letta para que la abra. La que había queda guardada.
 function Switch-LettaDatabase([string]$Container, [string]$New, [string]$Old) {
-  $sql = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($lettaSwapSql))
+  $sql = [System.IO.File]::ReadAllText($lettaSwapSql)
+  $options = @('-v db=$POSTGRES_DB', "-v new=$New", "-v old=$Old", '--single-transaction')
   $swapped = $false
   # Si Letta abre una conexión entre dos pasos, el cambio no entra: se repite.
   foreach ($attempt in 1, 2, 3) {
-    & docker exec $Container sh -c ("echo $sql | base64 -d | " +
-      'psql -U $POSTGRES_USER -d postgres -v ON_ERROR_STOP=1 -v db=$POSTGRES_DB -v new=' + $New +
-      ' -v old=' + $Old + ' --single-transaction -f -') | Out-Null
-    if ($LASTEXITCODE -eq 0) { $swapped = $true; break }
+    Invoke-LettaSql $Container 'postgres' $sql $options | Out-Null
+    # Lo que diga psql no basta: lo que cuenta es cómo quedaron las bases.
+    if ((Test-LettaDatabase $Container $Old) -and -not (Test-LettaDatabase $Container $New)) {
+      $swapped = $true
+      break
+    }
     Start-Sleep -Seconds 2
   }
   if (-not $swapped) {
-    throw "no se pudo cambiar la base de Letta por «$New». La base en uso no se ha tocado, y «$New» sigue donde estaba"
+    throw ("no se pudo cambiar la base de Letta por «$New». La base en uso no se ha tocado, y «$New» sigue ahí " +
+      '(al repetir la restauración se vuelve a crear)')
   }
 
   Write-Step 'reiniciando Letta'
@@ -176,7 +209,7 @@ function Switch-LettaDatabase([string]$Container, [string]$New, [string]$Old) {
     Invoke-Quiet { docker exec $Container sh -c 'pg_isready -U $POSTGRES_USER -d $POSTGRES_DB' } | Out-Null
     if ($LASTEXITCODE -eq 0) { break }
     if ((Get-Date) -gt $deadline) {
-      Write-Step "AVISO: Letta no responde todavía tras $StartTimeoutSeconds segundos; mira «docker logs $Container»"
+      $script:warnings += "Letta no responde tras $StartTimeoutSeconds segundos de reiniciarlo: mira «docker logs $Container»"
       break
     }
     Start-Sleep -Seconds 2
@@ -196,12 +229,16 @@ function Restore-Letta([string]$Container, [string]$Stamp, $Summary) {
         'createdb -U $POSTGRES_USER letta_restaurada && ' +
         'pg_restore -U $POSTGRES_USER -d letta_restaurada --no-owner ' + $inside) | Out-Host
       if ($LASTEXITCODE -ne 0) { throw 'pg_restore falló: el volcado no se restaura' }
+
+      # Sin tablas no es una restauración, lleve o no la copia su recuento.
+      $rows = @(Invoke-LettaSql $Container 'letta_restaurada' ([System.IO.File]::ReadAllText($lettaRowsSql)) @())
+      if ($rows.Count -eq 0) { throw 'la base restaurada sale sin tablas' }
       if ($null -ne $Summary.lettaTables) {
         $script:rowsFile = Join-Path ([System.IO.Path]::GetTempPath()) "shiro-restore-$PID-filas.txt"
-        [System.IO.File]::WriteAllLines($script:rowsFile, [string[]](Get-LettaRows $Container 'letta_restaurada'))
+        [System.IO.File]::WriteAllLines($script:rowsFile, [string[]]$rows)
         Write-Step "Letta restaurado aparte: $(Invoke-Helper compare-rows --dir $Backup --rows $script:rowsFile)"
       } else {
-        Write-Step 'la copia no lleva el recuento de filas: se restaura sin poder comparar'
+        Write-Step "Letta restaurado aparte: $($rows.Count) tablas. La copia no lleva el recuento de filas: no se puede comparar"
       }
     } catch {
       # Lo restaurado a medias no se queda: la base en uso sigue como estaba.
@@ -211,6 +248,7 @@ function Restore-Letta([string]$Container, [string]$Stamp, $Summary) {
 
     # 2. Se cambia la base en uso por la restaurada y se reinicia Letta.
     Switch-LettaDatabase $Container 'letta_restaurada' $old
+    $script:lettaOld = $old
     Write-Step "Letta restaurado. La base anterior queda guardada como «$old»"
   } finally {
     Invoke-Quiet { docker exec $Container rm -f $inside } | Out-Null
@@ -219,40 +257,50 @@ function Restore-Letta([string]$Container, [string]$Stamp, $Summary) {
 
 function Restore-Memory([string]$Stamp, $Manifest) {
   $dataDir = Split-Path -Parent $MemoryDb
+  # Los tres archivos de una memoria de SQLite, se llame como se llame.
+  $leaf = Split-Path -Leaf $MemoryDb
+  $files = $leaf, "$leaf-wal", "$leaf-shm"
   if (-not (Test-Path -LiteralPath $dataDir)) { New-Item -ItemType Directory -Path $dataDir | Out-Null }
-  $present = @($memoryFiles | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) })
+  $present = @($files | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) })
   $aside = Join-Path $dataDir "antes-$Stamp"
+
+  # Devuelve a su sitio lo que se haya apartado: la memoria anterior no se
+  # queda partida entre dos carpetas, ni la carpeta de datos sin memoria.
+  $moved = @()
+  $putBack = {
+    foreach ($name in $moved) { Move-Item -LiteralPath (Join-Path $aside $name) -Destination $dataDir }
+    if ((Test-Path -LiteralPath $aside) -and -not (Get-ChildItem -LiteralPath $aside -Force)) {
+      Remove-Item -LiteralPath $aside -Force
+    }
+  }
+
   if ($present.Count -gt 0) {
     if (Test-Path -LiteralPath $aside) { throw "ya existe ${aside}: no se aparta nada encima" }
     New-Item -ItemType Directory -Path $aside | Out-Null
-    $moved = @()
     try {
       foreach ($name in $present) {
         Move-Item -LiteralPath (Join-Path $dataDir $name) -Destination $aside
         $moved += $name
       }
     } catch {
-      # Si uno no se deja mover, los que ya se movieron vuelven a su sitio: la
-      # memoria anterior no se queda partida entre dos carpetas.
-      foreach ($name in $moved) { Move-Item -LiteralPath (Join-Path $aside $name) -Destination $dataDir }
-      Remove-Item -LiteralPath $aside -Force -ErrorAction SilentlyContinue
-      throw "no se pudo apartar la memoria que hay ($($_.Exception.Message)). No se ha cambiado nada"
+      $reason = $_.Exception.Message
+      & $putBack
+      throw "no se pudo apartar la memoria que hay ($reason). No se ha cambiado nada"
     }
   }
-  # Ninguno de los tres puede quedar al lado de la memoria restaurada.
-  $left = @($memoryFiles | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) })
-  if ($left.Count -gt 0) { throw "siguen en la carpeta: $($left -join ', '). No se ha copiado nada" }
 
-  $where = if ($present.Count -gt 0) { "La anterior está en $aside" } else { 'No había ninguna antes' }
   try {
+    # Ninguno de los tres puede quedar al lado de la memoria restaurada.
+    $left = @($files | Where-Object { Test-Path -LiteralPath (Join-Path $dataDir $_) })
+    if ($left.Count -gt 0) { throw "siguen en la carpeta: $($left -join ', ')" }
     Copy-Item -LiteralPath (Join-Path $Backup 'memory.db') -Destination $MemoryDb
+    $expected = ($Manifest.files | Where-Object { $_.name -eq 'memory.db' }).sha256
+    if ((Get-Sha256 $MemoryDb) -ne $expected) { throw 'la memoria no llegó igual que en la copia' }
   } catch {
-    throw "no se pudo copiar la memoria de la copia ($($_.Exception.Message)). $where"
-  }
-  $expected = ($Manifest.files | Where-Object { $_.name -eq 'memory.db' }).sha256
-  if ((Get-Sha256 $MemoryDb) -ne $expected) {
-    Remove-Item -LiteralPath $MemoryDb -Force
-    throw "la memoria no llegó igual que en la copia y se ha retirado. $where"
+    $reason = $_.Exception.Message
+    Remove-Item -LiteralPath $MemoryDb -Force -ErrorAction SilentlyContinue
+    & $putBack
+    throw "no se pudo poner la memoria de la copia ($reason). La memoria que había sigue en su sitio"
   }
   if ($present.Count -gt 0) { Write-Step "memoria restaurada. La anterior queda en $aside" }
   else { Write-Step 'memoria restaurada. No había ninguna antes' }
@@ -261,24 +309,22 @@ function Restore-Memory([string]$Stamp, $Manifest) {
 # Vuelve a una base de Letta que la restauración dejó guardada. La que está en
 # uso se guarda a su vez: tampoco aquí se borra nada.
 function Undo-Letta {
-  if ($LettaUndo -notmatch '^letta_antes_\d{8}t\d{6}z$') {
+  if ($Backup -or $Memory -or $Letta) { throw 'con -LettaUndo va solo el nombre de la base guardada: sin -Backup, -Memory ni -Letta' }
+  # Sin distinguir mayúsculas no vale: el nombre va tal cual a Postgres.
+  if ($LettaUndo -cnotmatch '^letta_antes_\d{8}t\d{6}z\z') {
     throw 'con -LettaUndo va el nombre de la base guardada: letta_antes_<fecha>, tal como lo dijo la restauración'
   }
   if (Test-ShiroRunning) { throw 'Shiro está en marcha: ciérralo antes' }
-  $stamp = "$(Invoke-Helper name)".Trim().ToLower()
-  $container = @($LettaContainer | Where-Object { $_ })
-  if ($container.Count -eq 0) {
-    $container = @(Invoke-Quiet { docker ps --filter 'label=com.docker.compose.service=letta' --format '{{.Names}}' } |
-        Where-Object { $_ })
-  }
-  if ($container.Count -ne 1) { throw 'hace falta un contenedor de Letta en marcha, y solo uno (o -LettaContainer)' }
-  Write-Step "Letta: volver a la base «$LettaUndo» y guardar la de ahora como «letta_descartada_$stamp»"
+  $container = Get-LettaContainer ''
+  if (-not (Test-LettaDatabase $container $LettaUndo)) { throw "no existe la base guardada «$LettaUndo» en ese Letta" }
+  Write-Step "Letta: volver a la base «$LettaUndo». La que está en uso se guarda como «letta_descartada_<fecha>»"
   if (-not $Yes) {
     Write-Step 'No se ha cambiado nada. Para hacerlo, repite con -Yes'
     return
   }
-  Switch-LettaDatabase $container[0] $LettaUndo "letta_descartada_$stamp"
-  Write-Step "Letta vuelve a usar la base de antes. La que estaba en uso queda guardada como «letta_descartada_$stamp»"
+  $discarded = "letta_descartada_$("$(Invoke-Helper name)".Trim().ToLower())"
+  Switch-LettaDatabase $container $LettaUndo $discarded
+  Write-Step "Letta vuelve a usar la base de antes. La que estaba en uso queda guardada como «$discarded»"
 }
 
 function Invoke-Restore {
@@ -293,21 +339,29 @@ function Invoke-Restore {
   if ($Letta -and -not $summary.complete) { throw 'la copia no lleva el volcado de Letta: no hay nada de Letta que restaurar' }
   if (Test-ShiroRunning) { throw 'Shiro está en marcha: ciérralo antes de restaurar' }
 
-  $stamp = "$(Invoke-Helper name)".Trim()
-  if ($stamp -notmatch '^\d{8}T\d{6}Z$') { throw "fecha inesperada: $stamp" }
   $container = $null
   if ($Letta) { $container = Get-LettaContainer $summary.lettaImage }
 
-  if ($Letta) { Write-Step "Letta: restaurar el volcado en el contenedor $container y guardar la base de ahora como «letta_antes_$($stamp.ToLower())»" }
-  if ($Memory) { Write-Step "memoria: poner la de la copia en $MemoryDb y apartar la que hay a «antes-$stamp»" }
+  if ($Letta) { Write-Step "Letta: restaurar el volcado en el contenedor $container. La base de ahora se guarda como «letta_antes_<fecha>»" }
+  if ($Memory) { Write-Step "memoria: poner la de la copia en $MemoryDb. La que hay se aparta a «antes-<fecha>», al lado" }
   if (-not $Yes) {
     Write-Step 'No se ha cambiado nada. Para hacerlo, repite con -Yes'
     return
   }
+  $stamp = "$(Invoke-Helper name)".Trim()
+  if ($stamp -cnotmatch '^\d{8}T\d{6}Z\z') { throw "fecha inesperada: $stamp" }
 
   # Letta primero: es lo que puede fallar, y si falla no cambia nada.
   if ($Letta) { Restore-Letta $container $stamp $summary }
-  if ($Memory) { Restore-Memory $stamp $manifest }
+  if ($Memory) {
+    try {
+      Restore-Memory $stamp $manifest
+    } catch {
+      if (-not $script:lettaOld) { throw }
+      throw ("Letta ya es el de la copia (la base anterior quedó como «$($script:lettaOld)»), pero la memoria no: " +
+        "$($_.Exception.Message). Repite solo con -Memory, o vuelve atrás en Letta con -LettaUndo $($script:lettaOld)")
+    }
+  }
 
   if ($Memory -and $Letta) {
     Write-Step 'la memoria y Letta son ahora los de la misma copia'
@@ -326,5 +380,10 @@ try {
   Write-Host "[restaurar] ERROR: $($_.Exception.Message)"
 } finally {
   if ($script:rowsFile) { Remove-Item -LiteralPath $script:rowsFile -Force -ErrorAction SilentlyContinue }
+}
+# Un aviso no deshace lo hecho, pero tampoco se da por bueno sin mirarlo.
+foreach ($warning in $script:warnings) {
+  Write-Host "[restaurar] AVISO: $warning"
+  $exitCode = 1
 }
 exit $exitCode
