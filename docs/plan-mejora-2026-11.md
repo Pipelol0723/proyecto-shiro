@@ -733,6 +733,11 @@ flowchart LR
 - **Agentes distintos de Claude** (Codex u otros): leen AGENTS.md, que es un extracto generado de CLAUDE.md y comprobado en `verify` (P-19b).
 - **Self-dev:** apagado desde P-01 hasta P-29. Tras reactivarse, solo lotes S de docs y tests de la cola. Cada diff se revisa como código ajeno. Antes de usarlo con frecuencia: L-PROD-11 (tope de tokens) y L-PERF-09 (coste del loop).
 - **Gemini:** como mucho 1-2 lecturas grandes por semana, opcionales. Usos previstos: segunda opinión de P-05, P-23, P-40 y del ADR 0033. Nunca para trabajo en volumen. Ningún gate lo exige.
+- **ChatGPT (Codex CLI):** segundo modelo disponible desde el 2026-11-24, con la cuenta del dueño y una skill local de Claude Code (`chatgpt`). Trabaja en solo lectura.
+  - **Usos previstos:** hacer de segundo agente en los PRs que tocan una frontera de confianza o datos del dueño (los de la tabla SEC-xx, P-22 a P-27, P-32, P-40 y los de copia y restauración); una segunda opinión sobre un borrador de ADR antes de enseñárselo a Pipe; y revisar un diff cuando la revisión del subagente de Claude deja dudas.
+  - **Qué sale de la máquina:** el repositorio es público, así que el código puede enviarse. Las claves y los datos del dueño, nunca: la skill lo impide con permisos del sistema, no con una instrucción.
+  - **Cómo se usa lo que devuelve:** es un informe que se comprueba (leer la línea citada, ejecutar el test), no una prueba. Una revisión enfocada no dice nada del resto.
+  - **Cuota:** tiene un límite cada cinco horas y otro semanal. Como mucho una revisión por PR, y nunca trabajo en volumen. Si se agota, se sigue con los subagentes de Claude; ningún gate lo exige y no sustituye al CI.
 
 ## 10. Riesgos del plan y señales de replanificación
 
