@@ -96,15 +96,59 @@ El ensayo se repite cada trimestre (P-43 del plan de mejora) y antes de cualquie
 
 ## Restaurar de verdad
 
-**Todavía no hay una orden para esto, y no conviene hacerlo a mano.** Llega con `npm run backup:restore`, la parte de P-11a que sigue a esta.
+La restauración la hace una orden. **No la hagas a mano**: más abajo está por qué.
 
-Por qué no a mano. Al escribir este documento se ensayaron los pasos y se revisaron uno a uno, y en los dos sitios hay maneras de estropear la restauración sin que nada avise:
+Primero ensaya la copia que vas a restaurar (`npm run backup:check`). Después, con **Shiro cerrado**, esto dice lo que haría, sin cambiar nada:
 
-- **La memoria local.** Si al lado de la `memory.db` restaurada se queda un `memory.db-wal` de la memoria anterior, SQLite lo aplica encima: la app abre sin errores y enseña los turnos de antes, no los de la copia. Hay que apartar los tres archivos (`memory.db`, `memory.db-wal` y `memory.db-shm`) y comprobar que no queda ninguno antes de copiar.
-- **Letta.** Restaurar encima de la base en uso con `pg_restore --clean` termina con cientos de errores y la base sin tablas (probado el 2026-11-20 en un Letta temporal). Lo que funciona es restaurar en una base aparte, cambiarla por la que hay en una sola transacción y reiniciar Letta. Hecho a mano, una orden que falla no para a las siguientes.
-- **Las dos a la vez.** La memoria local anota qué turnos se han enviado ya a Letta. Si se restaura una memoria y un Letta de copias distintas, hay turnos que constan como enviados y que ese Letta no tiene: no se reenvían solos. Para eso está `reindex-memory`, más abajo. Con la memoria y el Letta de una misma copia no pasa: la copia saca primero la memoria, así que un turno enviado mientras se copiaba queda como pendiente y, al restaurar, se reenvía (puede quedar repetido en Letta, no perdido).
+```powershell
+npm run backup:restore -- -Backup <carpeta de la copia> -Memory -Letta
+```
 
-Si necesitas restaurar antes de que exista la orden, pide ayuda con la copia delante y **no borres nada**: ni la memoria que hay, ni el volumen de Letta, ni las copias.
+Y con `-Yes` lo hace:
+
+```powershell
+npm run backup:restore -- -Backup <carpeta de la copia> -Memory -Letta -Yes
+```
+
+- `-Memory` restaura la memoria local y `-Letta`, el Letta en marcha. Lo normal es restaurar las dos cosas de la misma copia.
+- Por defecto, la memoria es la de desarrollo. Con `-Installed`, la de la app instalada; con `-MemoryDb <ruta>`, la que digas.
+- Antes de tocar nada comprueba la copia (archivos, memoria y turnos) y que Shiro está cerrado.
+- **No borra nada.** La memoria que había queda al lado, en una carpeta `antes-<fecha>`. La base de Letta que había queda guardada dentro de Letta con el nombre `letta_antes_<fecha>`. La orden dice los dos nombres **al terminar**: apúntalos.
+- Letta tiene que estar en marcha (`docker compose up -d`) y ser de la misma imagen que el de la copia. Con otra imagen la orden se niega: restaura solo la memoria y rellena Letta con `reindex-memory`.
+- Restaura Letta primero. Si Letta falla, la base en uso no cambia y la memoria no se toca.
+- Si hay más de un contenedor de Letta, di cuál con `-LettaContainer <nombre>`.
+- Si la memoria de la copia no se puede poner, la que había vuelve a su sitio.
+- Sale con el código 0 si todo fue bien. Con 1 si hubo un error, o si lo hizo pero queda un aviso que mirar (por ejemplo, Letta tarda en volver tras reiniciarlo): lo dice al final.
+
+Si algo falla a medias, la orden dice cómo quedó cada cosa y cómo seguir:
+
+- **El cambio de bases de Letta no entra.** La base en uso no se ha tocado. Repite la orden: vuelve a restaurar el volcado desde el principio.
+- **Letta entra y la memoria no.** Repite solo con `-Memory`, o vuelve atrás en Letta (abajo).
+
+Si restauras solo una de las dos cosas, la memoria y Letta pueden no cuadrar: la memoria anota qué turnos se han enviado ya, y ese Letta puede no tenerlos. La orden lo avisa; se arregla con `reindex-memory`, más abajo. Con las dos de una misma copia no pasa: la copia saca primero la memoria, así que un turno enviado mientras se copiaba queda como pendiente y, al restaurar, se reenvía (puede quedar repetido en Letta, no perdido).
+
+### Volver atrás
+
+- **Letta.** Con el nombre que dio la restauración, tal cual. La base que está en uso se guarda a su vez, como `letta_descartada_<fecha>`. Sin `-Yes` solo dice lo que haría:
+
+  ```powershell
+  npm run backup:restore -- -LettaUndo letta_antes_<fecha> -Yes
+  ```
+
+- **La memoria.** Con Shiro cerrado, en la carpeta de datos: saca de ahí la memoria restaurada (`memory.db` y, si están, `memory.db-wal` y `memory.db-shm`) y devuelve a su sitio los archivos de la carpeta `antes-<fecha>`. Se puede hacer con el explorador de archivos. Los tres archivos van siempre juntos.
+
+Cuando hayas comprobado que Shiro recuerda lo que debe, puedes borrar lo apartado: la carpeta `antes-<fecha>` y, en Letta, las bases guardadas (`letta_antes_<fecha>` y, si volviste atrás, `letta_descartada_<fecha>`):
+
+```powershell
+docker exec <contenedor de Letta> sh -c 'dropdb -U $POSTGRES_USER letta_antes_<fecha>'
+```
+
+### Por qué no a mano
+
+Al preparar esto se ensayaron los pasos y se revisaron uno a uno. En los dos sitios hay maneras de estropear la restauración sin que nada avise, y la orden las evita:
+
+- **La memoria local.** Si al lado de la `memory.db` restaurada se queda un `memory.db-wal` de la memoria anterior, SQLite lo aplica encima: la app abre sin errores y enseña los turnos de antes, no los de la copia. La orden aparta los tres archivos, comprueba que no queda ninguno y solo entonces copia.
+- **Letta.** Restaurar encima de la base en uso con `pg_restore --clean` termina con cientos de errores y la base sin tablas (probado el 2026-11-20 en un Letta temporal). La orden restaura en una base aparte, compara las filas con las de la copia, cambia una base por otra en una sola transacción, comprueba cómo quedaron las bases y reinicia Letta. Si un paso falla, se para ahí.
 
 ## Volver a llenar Letta desde la memoria local
 
@@ -143,4 +187,5 @@ Si no está, la alternativa es copiar el volumen `letta_pgdata` con el contenedo
 ## Lo que no se ha probado
 
 - La primera copia a otro equipo: crear allí la carpeta con sus permisos, enviar con `scp`, comprobar los hashes y rotar. En local y contra un Docker de pruebas sí está probado; contra el otro equipo, solo la llegada por SSH y la forma de la ruta.
+- La restauración sobre el Letta en uso y sobre una memoria con historial de verdad. Está ensayada entera (restaurar, volver atrás y la memoria con su `-wal`) en un Letta temporal y en carpetas temporales, con datos de prueba.
 - Una carpeta de copias remota con espacios en la ruta. La de por defecto no los tiene.
